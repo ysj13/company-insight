@@ -25,7 +25,8 @@ class DartClientTest {
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder().baseUrl("https://dart.test");
 		server = MockRestServiceServer.bindTo(builder).build();
-		client = new DartClient(builder.build(), new DartProperties(SECRET, "https://dart.test", null, null));
+		DartProperties props = new DartProperties(SECRET, "https://dart.test", null, null, 100);
+		client = new DartClient(builder.build(), props, DartConfig.dartRateLimiter(props));
 	}
 
 	@Test
@@ -68,5 +69,54 @@ class DartClientTest {
 			.isInstanceOf(DartTransientException.class)
 			.hasNoCause()
 			.message().doesNotContain(SECRET);
+	}
+
+	@Test
+	void 공시목록을_읽는다() {
+		String body = """
+			{"status":"000","message":"정상","page_no":1,"page_count":100,"total_count":2,"total_page":1,
+			 "list":[{"corp_code":"00126380","corp_name":"삼성전자","stock_code":"005930","corp_cls":"Y",
+			          "report_nm":"주요사항보고서(자기주식취득결정)   ","rcept_no":"20261113000001","flr_nm":"삼성전자",
+			          "rcept_dt":"20261113","rm":"유"}]}
+			""";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andExpect(queryParam("bgn_de", "20261113"))
+			.andExpect(queryParam("end_de", "20261113"))
+			.andExpect(queryParam("page_no", "1"))
+			.andExpect(queryParam("page_count", "100"))
+			.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+		DisclosureListResponse response = client.listDisclosures(java.time.LocalDate.of(2026, 11, 13),
+			java.time.LocalDate.of(2026, 11, 13), 1);
+
+		assertThat(response.totalPage()).isEqualTo(1);
+		assertThat(response.items()).singleElement()
+			.satisfies(item -> {
+				assertThat(item.receiptNo()).isEqualTo("20261113000001");
+				assertThat(item.corpCls()).isEqualTo("Y");
+			});
+	}
+
+	@Test
+	void 공시가_없으면_빈_목록() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
+
+		DisclosureListResponse response = client.listDisclosures(java.time.LocalDate.of(2026, 11, 15),
+			java.time.LocalDate.of(2026, 11, 15), 1);
+
+		assertThat(response.items()).isEmpty();
+		assertThat(response.totalPage()).isZero();
+	}
+
+	@Test
+	void 한도_초과는_재시도하지_않는_오류() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andRespond(withSuccess("{\"status\":\"020\",\"message\":\"요청 제한을 초과하였습니다.\"}", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.listDisclosures(java.time.LocalDate.of(2026, 11, 13),
+			java.time.LocalDate.of(2026, 11, 13), 1))
+			.isInstanceOf(DartApiException.class)
+			.hasMessageContaining("020");
 	}
 }

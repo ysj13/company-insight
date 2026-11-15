@@ -30,6 +30,7 @@ dependencies {
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 	implementation("com.github.ben-manes.caffeine:caffeine")
+	implementation("io.github.resilience4j:resilience4j-ratelimiter:2.4.0")
 	implementation("io.github.openfeign.querydsl:querydsl-jpa:$querydslVersion")
 	annotationProcessor("io.github.openfeign.querydsl:querydsl-apt:$querydslVersion:jpa")
 	annotationProcessor("jakarta.persistence:jakarta.persistence-api")
