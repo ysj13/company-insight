@@ -57,8 +57,10 @@ public class CompanyRepository {
 
 	/** @return 실제로 추가되거나 바뀐 행 수 */
 	public int upsertAll(List<CorpCode> rows) {
+		// 공시 수집도 company를 upsert한다. 둘이 겹칠 때 서로 다른 순서로 행을 잠그면 데드락이 나므로 항상 corp_code 순으로 쓴다.
+		List<CorpCode> sorted = rows.stream().sorted(java.util.Comparator.comparing(CorpCode::corpCode)).toList();
 		int changed = 0;
-		for (int[] batch : jdbcTemplate.batchUpdate(UPSERT, rows, 500, (ps, row) -> {
+		for (int[] batch : jdbcTemplate.batchUpdate(UPSERT, sorted, 500, (ps, row) -> {
 			ps.setString(1, row.corpCode());
 			ps.setString(2, row.stockCode());
 			ps.setString(3, row.name());

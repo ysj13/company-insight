@@ -130,6 +130,21 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
+	void 직전_폴링이_중단된_채_RUNNING이면_끝까지_읽고_성공_뒤에는_다시_일찍_멈춘다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 2, item("1", "000001", "Y", "20261113000002", "a")));
+		given(dart.listDisclosures(DAY, DAY, 2)).willReturn(page(2, 2, item("2", "000002", "K", "20261113000001", "b")));
+		collector.reconcile(DAY, DAY);
+		jdbc.sql("INSERT INTO collection_run (source, started_at, status) VALUES (:s, now(), 'RUNNING')")
+			.param("s", DisclosureCollector.SOURCE_POLL).update();
+
+		DisclosureCollector.CollectResult afterCrash = pollAt(DAY);
+		DisclosureCollector.CollectResult afterSuccess = pollAt(DAY);
+
+		assertThat(afterCrash.pages()).isEqualTo(2);
+		assertThat(afterSuccess.pages()).isEqualTo(1);
+	}
+
+	@Test
 	void 너무_긴_값은_잘라서_저장하고_형식이_틀린_공시는_건너뛴다() {
 		String longName = "가".repeat(400);
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,

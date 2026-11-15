@@ -1,5 +1,6 @@
 package com.companyinsight.common.schedule;
 
+import com.companyinsight.common.external.ExternalApiException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -35,8 +36,12 @@ public class ExclusiveJobRunner {
 		try {
 			task.run();
 		}
-		catch (RuntimeException e) {
+		catch (ExternalApiException e) {
+			// 메시지에 소스·분류·코드가 들어 있다. 스택은 필요 없다.
 			log.error("{} 실패: {}", job, e.getMessage());
+		}
+		catch (RuntimeException e) {
+			log.error("{} 실패", job, e);
 		}
 		finally {
 			running.remove(group);

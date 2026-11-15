@@ -43,7 +43,7 @@ com.companyinsight
 
 - 스키마는 Flyway로만 바꾼다. Hibernate는 `ddl-auto: validate`.
 - 테이블과 컬럼에는 한글 `COMMENT`를 단다. 테이블·컬럼을 만드는 마이그레이션 파일에서 함께 작성하고, 코드값이 있으면 값의 의미도 적는다.
-- 모든 테이블에 `created_at`, 수정되는 테이블에는 `updated_at`을 둔다.
+- 모든 테이블에 `created_at`, 수정되는 테이블에는 `updated_at`을 둔다. 실행 기록 테이블(`collection_run`)은 `started_at`·`finished_at`이 그 역할을 한다.
 - 외부에서 받은 문자열은 컬럼 길이에 맞춰 잘라 저장한다. 형식이 틀린 한 건은 건너뛰고 경고 로그를 남긴다.
 - 응답에 엔티티를 그대로 내보내지 않는다. DTO(record)로 바꾼다.
 

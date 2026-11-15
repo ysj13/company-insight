@@ -35,6 +35,19 @@ class CorpCodeParserTest {
 	}
 
 	@Test
+	void 고유번호가_너무_긴_회사는_건너뛰고_긴_이름은_자른다() {
+		String xml = "<result><list><corp_code>123456789</corp_code><corp_name>길다</corp_name><stock_code>111111</stock_code></list>"
+				+ "<list><corp_code>00000002</corp_code><corp_name>" + "가".repeat(250) + "</corp_name><stock_code>222222</stock_code></list></result>";
+
+		List<CorpCode> rows = parser.parseListed(CorpCodeZipFixture.zip(xml));
+
+		assertThat(rows).singleElement().satisfies(row -> {
+			assertThat(row.corpCode()).isEqualTo("00000002");
+			assertThat(row.name()).hasSize(200);
+		});
+	}
+
+	@Test
 	void 외부_엔티티를_처리하지_않는다() {
 		String xml = """
 			<?xml version="1.0"?>

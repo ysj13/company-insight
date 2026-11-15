@@ -12,7 +12,7 @@
 #
 # Environment variables (optional):
 #   CI_SETUP_DIR         clone location when run outside the repo (default ~/workspace/company-insight)
-#   CI_SETUP_SKIP_IDE    set to 1 to skip IntelliJ IDEA
+#   CI_SETUP_SKIP_IDE    set to 1 to skip IntelliJ IDEA and DBeaver
 #   CI_SETUP_SKIP_BUILD  set to 1 to skip the Gradle build
 
 set -euo pipefail
@@ -63,6 +63,7 @@ fi
 install_cask docker-desktop "Docker.app"
 if [ "${CI_SETUP_SKIP_IDE:-0}" != "1" ]; then
   install_cask intellij-idea "IntelliJ IDEA.app"
+  install_cask dbeaver-community "DBeaver.app"
 fi
 JAVA_HOME="$(/usr/libexec/java_home -v 25)"
 export JAVA_HOME
