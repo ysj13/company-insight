@@ -145,7 +145,7 @@ if (-not $dockerOk) {
 # 7. Build -------------------------------------------------------------------
 if ($dockerOk -and $env:CI_SETUP_SKIP_BUILD -ne '1') {
     Step 'Build and test'
-    .\gradlew.bat build
+    .\gradlew.bat build --no-daemon
     if ($LASTEXITCODE -ne 0) { throw 'Gradle build failed' }
 }
 
