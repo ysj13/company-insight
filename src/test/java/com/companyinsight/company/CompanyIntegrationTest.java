@@ -44,6 +44,7 @@ class CompanyIntegrationTest {
 	void clean() {
 		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
+		jdbc.sql("DELETE FROM collection_run").update();
 		given(dartClient.isConfigured()).willReturn(true);
 	}
 
@@ -58,6 +59,30 @@ class CompanyIntegrationTest {
 		assertThat(first.changed()).isEqualTo(3);
 		assertThat(second.changed()).isZero();
 		assertThat(repository.count()).isEqualTo(3);
+		assertThat(jdbc.sql("SELECT status, fetched, saved FROM collection_run WHERE source = :s ORDER BY id")
+			.param("s", CompanySyncService.JOB).query().listOfRows())
+			.extracting(r -> r.get("status") + ":" + r.get("fetched") + ":" + r.get("saved"))
+			.containsExactly("SUCCESS:3:3", "SUCCESS:3:0");
+	}
+
+	@Test
+	void 동기화가_실패하면_수집_기록에_분류와_코드를_남긴다() {
+		given(dartClient.downloadCorpCodeZip()).willThrow(com.companyinsight.common.external.ExternalApiException
+			.of(DartClient.SOURCE, com.companyinsight.common.external.ErrorKind.BAD_REQUEST, "100", "필드 오류"));
+
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> syncService.sync())
+			.isInstanceOf(com.companyinsight.common.external.ExternalApiException.class);
+
+		assertThat(jdbc.sql("SELECT status, error_kind, error_code FROM collection_run").query().singleRow())
+			.containsEntry("status", "FAILED").containsEntry("error_kind", "BAD_REQUEST").containsEntry("error_code", "100");
+	}
+
+	@Test
+	void 비어_있을_때만_시작_동기화를_한다() {
+		given(dartClient.downloadCorpCodeZip()).willReturn(CorpCodeZipFixture.zip());
+
+		assertThat(syncService.syncIfEmpty().skipped()).isFalse();
+		assertThat(syncService.syncIfEmpty().skipped()).isTrue();
 	}
 
 	@Test

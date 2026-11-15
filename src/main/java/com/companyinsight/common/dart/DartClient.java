@@ -4,7 +4,6 @@ import com.companyinsight.common.external.ErrorKind;
 import com.companyinsight.common.external.ExternalApiException;
 import com.companyinsight.common.external.RetryableExternalApiException;
 import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -42,6 +41,10 @@ public class DartClient {
 
 	static final String STATUS_OK = "000";
 
+	/** 재시도 간격. 2초 → 4초, ±0.5초. 테스트에서 줄일 수 있게 설정으로 뺐다. */
+	private static final String RETRY_DELAY = "${app.dart.retry-delay:2s}";
+	private static final String RETRY_JITTER = "${app.dart.retry-jitter:500ms}";
+
 	/** 공시검색 한 페이지 최대 건수 (DART 제한). */
 	public static final int MAX_PAGE_COUNT = 100;
 
@@ -75,7 +78,8 @@ public class DartClient {
 	}
 
 	/** 전체 기업 고유번호 파일(zip, 안에 CORPCODE.xml)을 받는다. */
-	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2, delay = 2000, multiplier = 2, jitter = 500)
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
 	public byte[] downloadCorpCodeZip() {
 		byte[] body = get("/api/corpCode.xml", Map.of(), byte[].class);
 		if (body == null) {
@@ -92,7 +96,8 @@ public class DartClient {
 	}
 
 	/** 기간 내 전체 공시 목록 한 페이지. 최신 접수번호가 먼저 온다. 데이터가 없으면 빈 목록. */
-	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2, delay = 2000, multiplier = 2, jitter = 500)
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
 	public DisclosureListResponse listDisclosures(LocalDate from, LocalDate to, int pageNo) {
 		Map<String, Object> params = Map.of(
 			"bgn_de", from.format(YYYYMMDD),
@@ -114,10 +119,8 @@ public class DartClient {
 	}
 
 	private <T> T get(String path, Map<String, Object> params, Class<T> type) {
-		try {
-			rateLimiter.acquirePermission();
-		}
-		catch (RequestNotPermitted e) {
+		// acquirePermission()은 예외를 던지지 않고, 대기 시간 안에 허가를 못 받으면 false를 돌려준다.
+		if (!rateLimiter.acquirePermission()) {
 			throw ExternalApiException.of(SOURCE, ErrorKind.RATE_LIMITED, "local", "호출 속도 제한 대기 시간 초과 " + path);
 		}
 		try {

@@ -32,8 +32,9 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ysj
 
 필요: JDK 25, Docker
 
+`.env.example`을 `.env`로 복사하고 `POSTGRES_PASSWORD`와 `DB_PASSWORD`에 같은 값을 넣는다. (설치 스크립트를 썼다면 이미 만들어져 있다.)
+
 ```bash
-cp .env.example .env
 docker compose up -d
 ./gradlew bootRun
 ```

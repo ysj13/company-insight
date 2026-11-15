@@ -105,7 +105,8 @@ step "Local .env"
 if [ -f .env ]; then
   info ".env exists, not changed"
 else
-  pw="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+  # tr </dev/urandom | head 는 pipefail에서 SIGPIPE로 실패하므로 쓰지 않는다.
+  pw="$(openssl rand -hex 16)"
   sed -e "s/^POSTGRES_PASSWORD=\$/POSTGRES_PASSWORD=$pw/" \
       -e "s/^DB_PASSWORD=\$/DB_PASSWORD=$pw/" .env.example > .env
   chmod 600 .env

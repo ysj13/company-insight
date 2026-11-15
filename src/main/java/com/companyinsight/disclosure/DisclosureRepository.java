@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class DisclosureRepository {
 
+	private static final Logger log = LoggerFactory.getLogger(DisclosureRepository.class);
+
 	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+
+	// 컬럼 길이. 외부 값이 이보다 길면 잘라서 저장한다. 한 건 때문에 페이지 전체 저장이 실패하면 안 된다.
+	private static final int REPORT_NAME_MAX = 300;
+	private static final int FILER_NAME_MAX = 200;
+	private static final int REMARK_MAX = 20;
+	private static final int COMPANY_NAME_MAX = 200;
 
 	/**
 	 * 공시에 나온 회사를 먼저 맞춘다. 고유번호 동기화 전에 새로 상장한 회사의 공시가 올 수 있어
@@ -53,7 +63,7 @@ public class DisclosureRepository {
 	 */
 	@Transactional
 	public int saveListed(List<Item> items) {
-		List<Item> listed = items.stream().filter(DisclosureRepository::isListed).toList();
+		List<Item> listed = items.stream().filter(DisclosureRepository::isListed).filter(DisclosureRepository::isStorable).toList();
 		if (listed.isEmpty()) {
 			return 0;
 		}
@@ -63,10 +73,10 @@ public class DisclosureRepository {
 		int[] counts = jdbc.batchUpdate(INSERT_DISCLOSURE, listed, listed.size(), (ps, item) -> {
 			ps.setString(1, item.receiptNo());
 			ps.setString(2, item.corpCode());
-			ps.setString(3, normalize(item.reportName()));
-			ps.setString(4, item.filerName());
+			ps.setString(3, truncate(normalize(item.reportName()), REPORT_NAME_MAX));
+			ps.setString(4, truncate(item.filerName(), FILER_NAME_MAX));
 			ps.setDate(5, Date.valueOf(parseDate(item.receiptDate())));
-			ps.setString(6, emptyToNull(item.rm()));
+			ps.setString(6, truncate(emptyToNull(item.rm()), REMARK_MAX));
 		})[0];
 		for (int c : counts) {
 			if (c > 0) {
@@ -88,7 +98,7 @@ public class DisclosureRepository {
 		jdbc.batchUpdate(UPSERT_COMPANY, companies, companies.size(), (ps, item) -> {
 			ps.setString(1, item.corpCode());
 			ps.setString(2, item.stockCode().trim());
-			ps.setString(3, item.corpName());
+			ps.setString(3, truncate(item.corpName(), COMPANY_NAME_MAX));
 			ps.setString(4, item.corpCls());
 			ps.setDate(5, Date.valueOf(parseDate(item.receiptDate())));
 		});
@@ -99,6 +109,39 @@ public class DisclosureRepository {
 		String cls = item.corpCls();
 		String stock = item.stockCode() == null ? "" : item.stockCode().trim();
 		return stock.length() == 6 && ("Y".equals(cls) || "K".equals(cls) || "N".equals(cls));
+	}
+
+	/**
+	 * 저장에 꼭 필요한 값(접수번호 14자리, 고유번호 8자리 이내, 접수일, 회사명)이 올바른지.
+	 * 형식이 틀린 한 건이 같은 페이지의 나머지 공시 저장까지 막지 않도록, 틀린 건은 건너뛰고 경고를 남긴다.
+	 */
+	static boolean isStorable(Item item) {
+		boolean ok = item.receiptNo() != null && item.receiptNo().length() == 14
+				&& item.corpCode() != null && !item.corpCode().isBlank() && item.corpCode().length() <= 8
+				&& item.corpName() != null && !item.corpName().isBlank()
+				&& isDate(item.receiptDate());
+		if (!ok) {
+			log.warn("형식이 올바르지 않은 공시를 건너뜁니다: rcept_no={}, corp_code={}, rcept_dt={}", item.receiptNo(),
+				item.corpCode(), item.receiptDate());
+		}
+		return ok;
+	}
+
+	private static boolean isDate(String yyyymmdd) {
+		if (yyyymmdd == null) {
+			return false;
+		}
+		try {
+			parseDate(yyyymmdd);
+			return true;
+		}
+		catch (java.time.format.DateTimeParseException e) {
+			return false;
+		}
+	}
+
+	static String truncate(String s, int max) {
+		return s == null || s.length() <= max ? s : s.substring(0, max);
 	}
 
 	/** DART 공시 제목에는 뒤쪽 공백이 많이 붙어 온다. 연속 공백을 하나로 줄인다. */

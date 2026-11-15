@@ -31,8 +31,23 @@ function Refresh-Path {
     if ($jh) { $env:JAVA_HOME = $jh }
 }
 
+# Windows PowerShell 5.1 turns native stderr into a terminating error when
+# $ErrorActionPreference is Stop and stderr is redirected. Commands that report
+# "not logged in" / "not running" on stderr must run with Continue.
+function Test-NativeOk([scriptblock]$Command) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command *> $null } catch { $global:LASTEXITCODE = 1 }
+    finally { $ErrorActionPreference = $old }
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Install-Package($id, $name) {
-    $installed = winget list --id $id -e --accept-source-agreements 2>$null | Select-String -SimpleMatch $id
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $listed = winget list --id $id -e --accept-source-agreements 2>$null
+    $ErrorActionPreference = $old
+    $installed = $listed | Select-String -SimpleMatch $id
     if ($installed) { Info "${name}: already installed"; return }
     Info "${name}: installing ($id)"
     winget install --id $id -e --source winget --accept-package-agreements --accept-source-agreements --silent
@@ -72,8 +87,7 @@ if ($cs.HypervisorPresent -or $cpu.VirtualizationFirmwareEnabled) {
 
 # 3. GitHub login ----------------------------------------------------------
 Step 'GitHub login'
-gh auth status 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-NativeOk { gh auth status })) {
     Info 'A browser will open. Enter the one-time code shown here.'
     gh auth login --hostname github.com --git-protocol https --web
     if ($LASTEXITCODE -ne 0) { throw 'GitHub login failed' }
@@ -120,19 +134,16 @@ if (Test-Path '.env') {
 
 # 6. Docker + DB -------------------------------------------------------------
 Step 'Docker engine'
-docker info 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-NativeOk { docker info })) {
     $exe = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
     if (Test-Path $exe) { Start-Process $exe }
     Info 'waiting for Docker Desktop (accept its terms on first run)...'
     for ($i = 0; $i -lt 60; $i++) {
         Start-Sleep -Seconds 5
-        docker info 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) { break }
+        if (Test-NativeOk { docker info }) { break }
     }
 }
-docker info 2>$null | Out-Null
-$dockerOk = ($LASTEXITCODE -eq 0)
+$dockerOk = Test-NativeOk { docker info }
 if (-not $dockerOk) {
     Warn 'Docker engine is not running. Fix it (see virtualization above), then run this script again.'
 } else {
