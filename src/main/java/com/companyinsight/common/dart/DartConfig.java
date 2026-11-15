@@ -1,6 +1,9 @@
 package com.companyinsight.common.dart;
 
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import java.net.http.HttpClient;
+import java.time.Duration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +27,16 @@ public class DartConfig {
 			.baseUrl(properties.baseUrl())
 			.requestFactory(requestFactory)
 			.build();
-		return new DartClient(restClient, properties);
+		return new DartClient(restClient, properties, dartRateLimiter(properties));
+	}
+
+	/** 초당 호출 수 제한. 허가를 기다리다 시간이 넘으면 일시 오류로 처리한다. */
+	static RateLimiter dartRateLimiter(DartProperties properties) {
+		RateLimiterConfig config = RateLimiterConfig.custom()
+			.limitForPeriod(properties.requestsPerSecond())
+			.limitRefreshPeriod(Duration.ofSeconds(1))
+			.timeoutDuration(Duration.ofSeconds(30))
+			.build();
+		return RateLimiter.of("dart", config);
 	}
 }

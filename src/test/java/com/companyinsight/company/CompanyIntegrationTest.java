@@ -42,6 +42,7 @@ class CompanyIntegrationTest {
 
 	@BeforeEach
 	void clean() {
+		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
 		given(dartClient.isConfigured()).willReturn(true);
 	}
