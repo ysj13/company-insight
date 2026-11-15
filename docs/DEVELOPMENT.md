@@ -116,7 +116,7 @@ com.companyinsight
 | 1 | 11/17 | 뼈대 | Gradle, Boot 4.1, Compose(PostgreSQL), Flyway V1, 헬스체크, CI, `.env.example`, `.gitattributes`, 문서를 `docs/`로 이동 | 로컬에서 앱과 DB가 뜨고 CI 통과 |
 | 2 | 11/18 | 배포 | Dockerfile, GHCR, VM에 Compose, Caddy HTTPS, main 합치면 자동 배포 | 공개 주소 `/actuator/health` 응답 |
 | 3 | 11/18 | 기업 목록 | 고유번호 zip 받아 `company` 적재(하루 1회), 이름 검색 | 상장사 약 2,700곳이 DB에 있음 |
-| 4 | 11/19 | 공시 수집 | 평일 5분 폴링, rcept_no 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
+| 4 | 11/19 | 공시 수집 | 상장폐지 기업 구분(고유번호 파일에 함께 들어 있음), 평일 5분 폴링, rcept_no 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
 | 5 | 11/20 | 규칙 분류 | 공시 제목 규칙으로 종류·tone·영향도 판정, 나머지는 작업 등록. 재무 수집 | 규칙 처리 비율 측정 |
 | 6 | 11/21 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
 | 7 | 11/22 | LLM 분석 | 원문 받아 텍스트 추출 → Gemini 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 주요 30개 종목 공시에 핵심 3줄이 붙음 |
