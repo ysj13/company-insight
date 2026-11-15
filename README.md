@@ -10,6 +10,16 @@
 
 Java 25, Spring Boot 4.1, PostgreSQL 18, Spring Data JPA, QueryDSL, Spring Batch, Flyway, Docker Compose, GitHub Actions
 
+## 개발 환경 설치 (Windows)
+
+새 컴퓨터에서 PowerShell로 한 번 실행하면 Git, GitHub CLI, JDK 25, Docker Desktop, IntelliJ IDEA 설치부터 저장소 clone, `.env` 생성, 로컬 DB 실행, 빌드까지 진행한다. 이미 설치된 항목은 건너뛴다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ysj13/company-insight/main/scripts/setup-windows.ps1 | iex"
+```
+
+직접 해야 하는 것: GitHub 로그인 승인, Docker Desktop 첫 실행 시 약관 동의, BIOS에서 CPU 가상화 켜기(꺼져 있을 때), `.env`에 API 키 입력.
+
 ## 로컬 실행
 
 필요: JDK 25, Docker

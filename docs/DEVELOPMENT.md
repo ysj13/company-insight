@@ -63,12 +63,34 @@ com.companyinsight
 | API 호출 확인 | `.http` 파일 (키는 `.env`에서 읽음) |
 | 버전 관리 | Git, GitHub CLI |
 
-### 개발 방식
+### 브랜치 전략 (GitHub Flow)
 
-- **기능 하나 = 브랜치 하나 = PR 하나.** 아래 3절의 단계가 PR 단위다.
-- PR마다 GitHub Actions가 빌드와 테스트를 돌린다. 테스트가 통과해야 main에 합친다.
-- 에이전트가 코드를 쓰고, 사용자는 PR diff를 보고 합친다. 합치기 전에 `/code-review`로 한 번 검토한다.
-- 커밋 메시지는 `feat:`, `fix:`, `docs:`, `chore:`, `test:` 접두어를 쓴다.
+- `main`은 항상 배포 가능한 상태다. 직접 push할 수 없고, PR로만 합친다.
+- 작업은 `main`에서 브랜치를 만들어 하고, 3절의 단계 하나를 브랜치 하나·PR 하나로 한다.
+- 브랜치 이름은 커밋 접두어와 같다.
+
+| 접두어 | 용도 | 예 |
+|---|---|---|
+| `feat/` | 기능 | `feat/disclosure-polling` |
+| `fix/` | 버그 수정 | `fix/duplicate-rcept-no` |
+| `chore/` | 설정, 빌드, 배포 | `chore/deploy-pipeline` |
+| `docs/` | 문서 | `docs/readme-architecture` |
+| `test/` | 테스트 | `test/job-queue-concurrency` |
+
+- 커밋 메시지도 같은 접두어(`feat:`, `fix:`, `chore:`, `docs:`, `test:`)로 시작한다.
+- PR은 CI(`build`)가 통과하고 브랜치가 최신 `main`을 반영해야 합칠 수 있다.
+- 합칠 때는 Squash merge만 쓴다. 합친 브랜치는 자동 삭제된다.
+- 공개 오픈 시점에 `v0.1.0` 태그를 붙이고, 이후 큰 기능마다 버전을 올린다.
+
+### 역할
+
+| 단계 | 담당 |
+|---|---|
+| 브랜치 생성, 코드 작성, 테스트, 커밋, push, PR 생성 | 에이전트 |
+| CI 실패 수정 | 에이전트 |
+| PR 검토와 Merge | 사용자 |
+
+- 합치기 전에 `/code-review`로 한 번 검토한다.
 - 비밀 값은 `.env`에만 둔다.
 
 ### PR 완료 기준
