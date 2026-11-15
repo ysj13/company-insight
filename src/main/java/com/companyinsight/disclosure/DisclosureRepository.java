@@ -63,7 +63,14 @@ public class DisclosureRepository {
 	 */
 	@Transactional
 	public int saveListed(List<Item> items) {
-		List<Item> listed = items.stream().filter(DisclosureRepository::isListed).filter(DisclosureRepository::isStorable).toList();
+		List<Item> listed = items.stream().filter(DisclosureRepository::isListed).filter(item -> {
+			boolean ok = isStorable(item);
+			if (!ok) {
+				log.warn("형식이 올바르지 않은 공시를 건너뜁니다: rcept_no={}, corp_code={}, rcept_dt={}", item.receiptNo(),
+					item.corpCode(), item.receiptDate());
+			}
+			return ok;
+		}).toList();
 		if (listed.isEmpty()) {
 			return 0;
 		}
@@ -94,7 +101,9 @@ public class DisclosureRepository {
 			latestByCorp.merge(item.corpCode(), item,
 				(a, b) -> a.receiptDate().compareTo(b.receiptDate()) >= 0 ? a : b);
 		}
+		// 기업 목록 동기화와 같은 순서(corp_code)로 써서 데드락을 피한다.
 		List<Item> companies = new ArrayList<>(latestByCorp.values());
+		companies.sort(java.util.Comparator.comparing(Item::corpCode));
 		jdbc.batchUpdate(UPSERT_COMPANY, companies, companies.size(), (ps, item) -> {
 			ps.setString(1, item.corpCode());
 			ps.setString(2, item.stockCode().trim());
@@ -116,15 +125,10 @@ public class DisclosureRepository {
 	 * 형식이 틀린 한 건이 같은 페이지의 나머지 공시 저장까지 막지 않도록, 틀린 건은 건너뛰고 경고를 남긴다.
 	 */
 	static boolean isStorable(Item item) {
-		boolean ok = item.receiptNo() != null && item.receiptNo().length() == 14
+		return item.receiptNo() != null && item.receiptNo().length() == 14
 				&& item.corpCode() != null && !item.corpCode().isBlank() && item.corpCode().length() <= 8
 				&& item.corpName() != null && !item.corpName().isBlank()
 				&& isDate(item.receiptDate());
-		if (!ok) {
-			log.warn("형식이 올바르지 않은 공시를 건너뜁니다: rcept_no={}, corp_code={}, rcept_dt={}", item.receiptNo(),
-				item.corpCode(), item.receiptDate());
-		}
-		return ok;
 	}
 
 	private static boolean isDate(String yyyymmdd) {
@@ -140,8 +144,13 @@ public class DisclosureRepository {
 		}
 	}
 
+	/** 길이에 맞춰 자른다. PostgreSQL 문자열은 NUL 문자를 저장하지 못하므로 함께 지운다. */
 	static String truncate(String s, int max) {
-		return s == null || s.length() <= max ? s : s.substring(0, max);
+		if (s == null) {
+			return null;
+		}
+		String clean = s.indexOf(0) < 0 ? s : s.replace("\u0000", "");
+		return clean.length() <= max ? clean : clean.substring(0, max);
 	}
 
 	/** DART 공시 제목에는 뒤쪽 공백이 많이 붙어 온다. 연속 공백을 하나로 줄인다. */

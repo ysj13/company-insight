@@ -11,7 +11,7 @@
 
   Environment variables (optional):
     CI_SETUP_DIR      clone location when run outside the repo (default C:\workspace\company-insight)
-    CI_SETUP_SKIP_IDE set to 1 to skip IntelliJ IDEA
+    CI_SETUP_SKIP_IDE set to 1 to skip IntelliJ IDEA and DBeaver
     CI_SETUP_SKIP_BUILD set to 1 to skip the Gradle build
 #>
 
@@ -63,7 +63,10 @@ Install-Package 'Git.Git' 'Git'
 Install-Package 'GitHub.cli' 'GitHub CLI'
 Install-Package 'EclipseAdoptium.Temurin.25.JDK' 'JDK 25 (Temurin)'
 Install-Package 'Docker.DockerDesktop' 'Docker Desktop'
-if ($env:CI_SETUP_SKIP_IDE -ne '1') { Install-Package 'JetBrains.IntelliJIDEA.Ultimate' 'IntelliJ IDEA' }
+if ($env:CI_SETUP_SKIP_IDE -ne '1') {
+    Install-Package 'JetBrains.IntelliJIDEA.Ultimate' 'IntelliJ IDEA'
+    Install-Package 'DBeaver.DBeaver.Community' 'DBeaver'
+}
 Refresh-Path
 
 $jdk = Get-ChildItem 'C:\Program Files\Eclipse Adoptium' -Directory -ErrorAction SilentlyContinue |

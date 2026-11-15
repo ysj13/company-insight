@@ -38,5 +38,8 @@ management:
 app:
   dart:
     api-key: ${DART_API_KEY:}
+    requests-per-second: 5
+    retry-delay: 2s      # 일시 오류 재시도 간격. 2초 → 4초
+    retry-jitter: 500ms
   gemini:
     api-key: ${GEMINI_API_KEY:}

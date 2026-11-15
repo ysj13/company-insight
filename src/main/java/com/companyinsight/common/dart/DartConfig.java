@@ -30,7 +30,7 @@ public class DartConfig {
 		return new DartClient(restClient, properties, dartRateLimiter(properties));
 	}
 
-	/** 초당 호출 수 제한. 허가를 기다리다 시간이 넘으면 일시 오류로 처리한다. */
+	/** 초당 호출 수 제한. 허가를 30초 안에 받지 못하면 호출하지 않고 RATE_LIMITED 오류로 처리한다. */
 	static RateLimiter dartRateLimiter(DartProperties properties) {
 		RateLimiterConfig config = RateLimiterConfig.custom()
 			.limitForPeriod(properties.requestsPerSecond())
