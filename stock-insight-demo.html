@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
 <style>
-/* Layout: 공개용. 시세 없음. ① 결론(호재/악재 막대, 계산 근거) ② 판단 근거(접힘) ③ 판단 추이 차트 ④ 실적·체크리스트(접힘) ⑤ 타임라인(일정 → 오늘 → 소식, 펼치면 핵심 3줄 + 원문). */
+/* Layout: 공개용. ① 결론(호재/악재 막대, 계산 근거) ② 판단 근거(접힘) ③ 판단 추이 차트 ④ 실적·체크리스트(접힘) ⑤ 타임라인(일정 → 오늘 → 소식, 펼치면 핵심 3줄 + 원문). */
 :root{
   --page:#f2f4f6; --surface:#ffffff; --sunken:#f5f6f8; --line:#e8eaee;
   --fg:#191f28; --muted:#7b8594;
@@ -176,7 +176,7 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-block:0 32px;
 <footer class="gutter">
   데모 화면 · 종목, 수치, 소식은 모두 예시예요<br>
   공시·재무 금융감독원 전자공시시스템(DART) · 뉴스 네이버 검색 API · 분석 Gemini/Groq<br>
-  시세는 이용 조건상 표시하지 않아요. AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.
+  AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.
 </footer>
 
 <script>
@@ -192,13 +192,13 @@ const DB = {
   watch:[["2026-11-13","3분기 실적 발표 콘퍼런스콜","공시"],["2026-11-20","반도체특별법 시행령 입법예고 의견 마감","법령"],["2026-12-01","미국 반도체 장비 수출 규제 최종안 발표 예정","글로벌"]],
   events:[
    {d:"2026-11-05",tone:"up",imp:3,src:"뉴스",t:"HBM 신규 고객사와 장기 공급 계약 체결 보도",s:["북미 고객사와 HBM 장기 공급 계약을 맺었다는 보도","계약 규모와 기간은 공시 전이라 확인되지 않음","회사 공식 공시가 나오면 판단을 다시 계산함"]},
-   {d:"2026-11-04",tone:"up",imp:1,src:"뉴스",t:"3분기 실적 앞두고 증권가 목표주가 상향"},
+   {d:"2026-11-04",tone:"up",imp:1,src:"뉴스",t:"3분기 HBM 출하 확대 전망"},
    {d:"2026-11-03",tone:"down",imp:2,src:"글로벌",t:"美 상무부, 반도체 장비 대중 수출 규제 확대 검토",s:["미국이 중국향 반도체 장비 수출 규제 대상 확대를 검토","중국 공장 장비 반입에 영향을 줄 수 있음","최종안은 12월 초 발표 예정"]},
    {d:"2026-11-03",tone:"up",imp:2,src:"뉴스",t:"파운드리 대형 고객사 수주 보도"},
-   {d:"2026-11-02",tone:"down",imp:2,src:"뉴스",t:"환율 상승에 외국인 3거래일 연속 순매도"},
+   {d:"2026-11-02",tone:"down",imp:2,src:"뉴스",t:"환율 상승에 수출 채산성 우려"},
    {d:"2026-10-31",tone:"up",imp:3,src:"공시",t:"분기보고서 (2026.09)",s:["3분기 누적 영업이익 10.4조 원, 전년 대비 13% 증가","메모리 부문 이익 개선이 주도","영업이익률 13.1%, 전년 12.4%에서 개선"]},
    {d:"2026-10-28",tone:"flat",imp:1,src:"법령",t:"반도체특별법 시행령 일부개정령안 입법예고",s:["국가첨단전략산업 세액공제 대상과 요건을 정하는 시행령","공제 범위가 확정되지 않아 영향은 아직 중립","의견 제출 마감 11월 20일"]},
-   {d:"2026-10-28",tone:"up",imp:1,src:"공시",t:"연결재무제표 기준 영업(잠정)실적(공정공시)",s:["3분기 잠정 매출과 영업이익을 공개","영업이익이 시장 기대치를 소폭 상회"]},
+   {d:"2026-10-28",tone:"up",imp:1,src:"공시",t:"연결재무제표 기준 영업(잠정)실적(공정공시)",s:["3분기 잠정 매출과 영업이익을 공개","영업이익이 전년 대비 증가"]},
    {d:"2026-10-20",tone:"up",imp:1,src:"법령",t:"국가첨단전략산업 세액공제 확대안 상임위 통과"},
    {d:"2026-10-15",tone:"up",imp:1,src:"공시",t:"주요사항보고서 (자기주식 취득 결정)",s:["보통주 자기주식 취득 결정","주주환원 정책의 일환","규칙 분류: 자기주식 취득은 호재로 판정"]},
    {d:"2026-09-18",tone:"down",imp:2,src:"글로벌",t:"중국 메모리 업체 증설 발표"},
@@ -212,12 +212,12 @@ const DB = {
   events:[
    {d:"2026-11-04",tone:"up",imp:3,src:"뉴스",t:"HBM4 양산 시점 앞당긴다… 고객사 요청 반영"},
    {d:"2026-11-03",tone:"down",imp:2,src:"글로벌",t:"美 상무부, 반도체 장비 대중 수출 규제 확대 검토"},
-   {d:"2026-11-01",tone:"down",imp:1,src:"뉴스",t:"외국인 차익 실현 매물 출회"},
+   {d:"2026-11-01",tone:"down",imp:1,src:"뉴스",t:"경쟁사 HBM 양산 본격화"},
    {d:"2026-10-30",tone:"up",imp:3,src:"글로벌",t:"글로벌 AI 서버 투자 확대 전망"},
    {d:"2026-10-29",tone:"up",imp:3,src:"공시",t:"분기보고서 (2026.09)",s:["3분기 누적 영업이익 9.9조 원, 전년 대비 71% 증가","HBM 판매 비중 확대","영업이익률 44.8%"]},
-   {d:"2026-10-29",tone:"up",imp:1,src:"뉴스",t:"증권가, 목표주가 일제히 상향"},
+   {d:"2026-10-29",tone:"up",imp:1,src:"뉴스",t:"업계, 메모리 수요 회복 전망"},
    {d:"2026-10-28",tone:"flat",imp:1,src:"법령",t:"반도체특별법 시행령 일부개정령안 입법예고"},
-   {d:"2026-10-22",tone:"up",imp:3,src:"공시",t:"영업(잠정)실적(공정공시)",s:["3분기 잠정 영업이익 사상 최대","시장 기대치 상회"]},
+   {d:"2026-10-22",tone:"up",imp:3,src:"공시",t:"영업(잠정)실적(공정공시)",s:["3분기 잠정 영업이익 사상 최대","전년 대비 큰 폭 증가"]},
    {d:"2026-09-10",tone:"down",imp:2,src:"뉴스",t:"메모리 현물가 단기 조정"},
    {d:"2026-07-24",tone:"up",imp:3,src:"공시",t:"반기보고서 (2026.06)",s:["2분기 영업이익 전년 대비 55% 증가"]},
    {d:"2026-06-20",tone:"up",imp:2,src:"뉴스",t:"HBM 공급 계약 연장"}]},
@@ -230,10 +230,10 @@ const DB = {
    {d:"2026-11-01",tone:"down",imp:3,src:"글로벌",t:"美 수입차 관세 인상 발효",s:["미국 수입차 관세 인상이 11월 1일부로 발효","북미 판매 마진 축소 가능성","한·미 실무 협상이 11월 15일 예정"]},
    {d:"2026-10-30",tone:"up",imp:2,src:"뉴스",t:"하이브리드 판매 호조… 북미 재고 감소"},
    {d:"2026-10-28",tone:"up",imp:1,src:"글로벌",t:"EU, 중국산 전기차 관세 유지 결정"},
-   {d:"2026-10-24",tone:"up",imp:2,src:"공시",t:"주요사항보고서 (자기주식 소각 결정)",s:["보통주 자기주식 소각 결정","발행주식 수 감소로 주당 가치 상승 효과","규칙 분류: 자기주식 소각은 호재로 판정"]},
+   {d:"2026-10-24",tone:"up",imp:2,src:"공시",t:"주요사항보고서 (자기주식 소각 결정)",s:["보통주 자기주식 소각 결정","발행주식 수 감소","규칙 분류: 자기주식 소각은 호재로 판정"]},
    {d:"2026-10-23",tone:"down",imp:3,src:"공시",t:"연결재무제표 기준 영업(잠정)실적(공정공시)",s:["3분기 영업이익 전년 대비 14% 감소","관세 비용과 유럽 판매 둔화 영향","영업이익률 7.2%, 전년 8.4%"]},
    {d:"2026-10-15",tone:"flat",imp:1,src:"법령",t:"자동차관리법 시행규칙 개정 (전기차 안전 기준)"},
-   {d:"2026-07-24",tone:"up",imp:2,src:"공시",t:"반기보고서 (2026.06)",s:["2분기 실적 시장 기대 상회"]},
+   {d:"2026-07-24",tone:"up",imp:2,src:"공시",t:"반기보고서 (2026.06)",s:["2분기 영업이익 전년 대비 증가"]},
    {d:"2026-06-05",tone:"down",imp:3,src:"글로벌",t:"美 자동차 관세 인상 발표"}]},
  "035420":{name:"NAVER",market:"코스피",sector:"인터넷",
   lede:"AI 검색과 광고 성장은 긍정적이지만 플랫폼 규제 입법이 불확실성으로 남아 있어요. 호재와 악재가 비슷하게 맞서 있어요.",
@@ -372,7 +372,7 @@ function render(){
       <div class="row"><span>AI 종합 판단</span><b class="${vCls}">${vText}</b></div>
       <div class="bar" role="img" aria-label="호재·악재 정도: ${vText}"><i class="fill ${vCls}" style="left:${fillL}%;width:${fillW}%"></i><i class="mid"></i></div>
       <div class="ticks"><span>강한 악재</span><span>중립</span><span>강한 호재</span></div>
-      <div class="when num">${md(ASOF)} 장마감 기준 · 최근 30일 소식 ${recent.length}건(호재 ${nUp} · 악재 ${nDn} · 중립 ${nFl})의 영향도를 더해 계산 · 새 소식이 들어오면 다시 계산해요</div>
+      <div class="when num">${md(ASOF)} 기준 · 최근 30일 소식 ${recent.length}건(호재 ${nUp} · 악재 ${nDn} · 중립 ${nFl})의 영향도를 더해 계산 · 새 소식이 들어오면 다시 계산해요</div>
     </div>
     <p class="lede">${co.lede}</p>
     <p class="ai-note">AI가 쓴 요약이라 틀릴 수 있어요. 아래 소식마다 원문을 확인할 수 있어요.</p>
@@ -415,7 +415,7 @@ function render(){
     <ul class="tl num">
       <li><span></span><span></span><span class="lbl">다가오는 일정 ${plans.length}건</span></li>
       ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d">${md(d)}</span><span class="n plan"></span><span><span class="t">${t}<span class="pill plan">예정</span></span><span class="s">${s}</span></span></li>`).join("")}
-      <li class="today-row"><span class="d">${md(ASOF)}</span><span class="n today"></span><span><span class="t">오늘 · <span class="${vCls}">${vText}</span></span><span class="s">장마감 기준 판단</span></span></li>
+      <li class="today-row"><span class="d">${md(ASOF)}</span><span class="n today"></span><span><span class="t">오늘 · <span class="${vCls}">${vText}</span></span><span class="s">오늘 기준 판단</span></span></li>
       ${shownPast.map(e=>{ const key=e.d+e.t, op=!!state.open[key];
         return `<li><span class="d">${md(e.d)}</span><span class="n ${e.tone}"></span><div>
           <button type="button" class="item" data-open="${key.replace(/"/g,"&quot;")}" aria-expanded="${op}"><span class="t">${e.t}<span class="pill ${e.tone}">${TONE[e.tone]}</span></span><span class="s">${e.src} · 영향 ${e.imp}/3 ${CHEV}</span></button>
