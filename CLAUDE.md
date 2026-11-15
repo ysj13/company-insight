@@ -1,12 +1,18 @@
 # company-insight
 
 국내 상장사의 공시와 뉴스를 읽고, 지금 분위기가 호재 쪽인지 악재 쪽인지를 근거와 함께 보여주는 공개 웹 서비스.
-상세 기획은 `PLAN.md`, 개발 계획(버전·순서)은 `DEVELOPMENT.md`, 화면 데모는 `stock-insight-demo.html`. (개발 뼈대를 만들 때 `docs/`로 옮기고 이 줄을 고친다.)
+상세 기획은 `docs/PLAN.md`, 개발 계획(버전·순서)은 `docs/DEVELOPMENT.md`, 화면 데모는 `docs/demo.html`.
+
+## 명령어
+
+- 로컬 DB: `docker compose up -d` (`.env.example`을 `.env`로 복사해 값 입력)
+- 실행: `./gradlew bootRun`
+- 빌드·테스트: `./gradlew build` (Testcontainers 사용, Docker 실행 필요)
 
 ## 응답 규칙
 
 - 설명과 답변은 한국어로 한다.
-- 결정이 바뀌면 `PLAN.md` 또는 `DEVELOPMENT.md`를 함께 고친다.
+- 결정이 바뀌면 `docs/PLAN.md` 또는 `docs/DEVELOPMENT.md`를 함께 고친다.
 
 ## 반드시 지킬 것
 
@@ -18,7 +24,7 @@
 
 ## 기술 스택
 
-Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Docker Compose, GitHub Actions, Sentry. 버전과 용도는 `DEVELOPMENT.md` 1절.
+Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Docker Compose, GitHub Actions, Sentry. 버전은 `docs/DEVELOPMENT.md` 1절.
 
 ## 설계 원칙
 

@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: company-insight
+  config:
+    import: optional:file:.env[.properties]
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/company_insight}
+    username: ${DB_USERNAME:company_insight}
+    password: ${DB_PASSWORD:company_insight}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  dart:
+    api-key: ${DART_API_KEY:}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
