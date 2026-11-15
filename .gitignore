@@ -1,0 +1,35 @@
+# Env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Gradle / Java
+.gradle/
+build/
+out/
+*.class
+*.log
+hs_err_pid*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.zip
+*.sql.gz
+
+# Local
+.claude/launch.json
+.claude/settings.local.json
+private/
+CLAUDE.local.md
