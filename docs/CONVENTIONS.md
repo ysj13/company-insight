@@ -1,0 +1,143 @@
+# 코드 규칙
+
+## 1. 패키지
+
+기능별로 나눈다. 여러 기능이 함께 쓰는 코드만 `common`에 둔다.
+
+```
+com.companyinsight
+├── company      기업 목록, 검색
+├── disclosure   공시 수집, 분류
+├── analysis     작업 큐, LLM 요약
+├── score        호재/악재 점수
+├── financial    재무
+├── backfill     과거 데이터 배치
+├── web          화면 (Thymeleaf 컨트롤러)
+├── ops          수집 기록, 운영 알림
+└── common       외부 API 클라이언트, 공통 오류, 설정
+```
+
+## 2. 계층
+
+- 호출은 한 방향: `Controller → Service → Repository`. Controller는 Repository를 직접 부르지 않는다. 단순 조회도 같다.
+- 트랜잭션(`@Transactional`)은 Service 또는 Repository에 둔다. Controller에는 두지 않는다.
+- 정기 실행은 `XxxScheduler`가 시간에 맞춰 Service를 부르기만 한다. 로직은 Service에 둔다.
+
+| 역할 | 이름 |
+|---|---|
+| HTTP API | `XxxController` (`@RestController`, `/api/**`) |
+| 화면 | `XxxPageController` (`@Controller`, Thymeleaf) |
+| 업무 로직 | `XxxService`, 수집은 `XxxCollector` |
+| DB 접근 | `XxxRepository` |
+| 외부 API | `XxxClient` |
+| 정기 실행 | `XxxScheduler` |
+| 설정 | `XxxProperties` (record + `@ConfigurationProperties("app.xxx")`), `XxxConfig` |
+
+## 3. 데이터 접근
+
+| 용도 | 도구 |
+|---|---|
+| 엔티티 단건 조회·저장, 연관관계 | Spring Data JPA |
+| 조건을 조합하는 동적 조회 | QueryDSL |
+| 대량 저장(배치), `ON CONFLICT`·`ILIKE`·`SKIP LOCKED` 등 PostgreSQL 전용 문법 | `JdbcTemplate`, `JdbcClient` |
+
+- 스키마는 Flyway로만 바꾼다. Hibernate는 `ddl-auto: validate`.
+- 응답에 엔티티를 그대로 내보내지 않는다. DTO(record)로 바꾼다.
+
+## 4. 이름
+
+| 대상 | 규칙 | 예 |
+|---|---|---|
+| 테이블 | 단수 명사, snake_case | `company`, `collection_run` |
+| 컬럼 | snake_case | `rcept_date`, `last_disclosed_on` |
+| 인덱스 | `{테이블}_{컬럼}_idx` | `disclosure_corp_date_idx` |
+| 마이그레이션 | `V{번호}__{설명}.sql`. 적용된 파일은 수정하지 않고 새 버전을 추가 | `V4__collection_run_error_kind.sql` |
+| API 경로 | `/api/{복수 명사}`, kebab-case | `/api/companies` |
+| 화면 경로 | `/{복수 명사}/{식별자}` | `/companies/005930` |
+| JSON 필드 | camelCase | `stockCode` |
+| DTO | record. `XxxRequest`, `XxxResponse`, 목록 항목은 `XxxSummary` | `CompanySummary` |
+| 설정 키 | `app.{기능}.{항목}`, kebab-case | `app.dart.api-key` |
+| 상수 | UPPER_SNAKE_CASE | `MAX_PAGE_COUNT` |
+| 테스트 메서드 | 한글로 동작을 설명, 단어는 `_`로 연결 | `같은_공시가_다시_와도_한_번만_저장된다` |
+
+## 5. API 응답
+
+- 성공: JSON 본문. 목록은 배열 또는 페이지 객체.
+- 오류: RFC 9457 Problem Details (`application/problem+json`). Spring `ProblemDetail`을 쓴다.
+
+| 상황 | 상태 코드 |
+|---|---|
+| 파라미터 검증 실패 | 400 |
+| 대상 없음 | 404 |
+| 서버 오류 | 500 (내부 메시지·스택은 응답에 넣지 않음) |
+
+- 외부 API 오류를 사용자 응답으로 그대로 내보내지 않는다. 저장된 데이터로 응답하고, 실패는 수집 기록과 운영 알림으로 다룬다.
+
+## 6. 외부 API 오류 처리
+
+### 분류
+
+외부 API 클라이언트는 응답을 아래 분류(`ErrorKind`)로 바꿔 `ExternalApiException`으로 던진다. 다시 시도할 수 있는 분류는 `RetryableExternalApiException`이다.
+
+| 분류 | 의미 | 행동 |
+|---|---|---|
+| (데이터 없음) | 결과 0건 | 예외 없이 빈 결과 |
+| `TRANSIENT` | 네트워크, 타임아웃, 5xx, 점검 | 지수 백오프로 최대 2번 재시도, 실패하면 다음 주기에 다시 |
+| `RATE_LIMITED` | 짧은 시간 과다 호출 | 재시도, 속도 제한 설정 점검 |
+| `QUOTA_EXCEEDED` | 하루 한도 소진 | 해당 소스를 자정(KST)까지 정지 |
+| `AUTH` | 키 없음·틀림·만료·IP 차단 | 해당 소스를 1시간 정지 |
+| `BAD_REQUEST` | 요청 파라미터 오류 | 재시도 안 함 |
+| `PARSE` | 응답 형식 해석 실패 | 재시도 안 함 |
+| `UNKNOWN` | 그 외 | 재시도 안 함 |
+
+### 소스별 매핑
+
+| 분류 | DART (HTTP 200 + `status`) | 네이버 검색 API | Gemini API |
+|---|---|---|---|
+| 데이터 없음 | `013`, `014` | 빈 `items` | - |
+| `TRANSIENT` | `800`, `900`, 네트워크, 5xx | 500, 네트워크 | 500, 503, 504 |
+| `RATE_LIMITED` | 429 | 429 (초당) | 429 (분당) |
+| `QUOTA_EXCEEDED` | `020`, `021` | 429 (일 한도) | 429 (일 한도) |
+| `AUTH` | `010`, `011`, `012`, `901`, 401, 403 | 401, 403 | 401, 403 |
+| `BAD_REQUEST` | `100`, `101`, 그 외 4xx | 400 | 400 |
+
+DART는 오류도 HTTP 200으로 준다. HTTP 상태만 보지 않고 본문(`status`, zip 여부)을 확인한다.
+
+### 공통 규칙
+
+- 모든 외부 호출에 연결·응답 타임아웃을 둔다.
+- 재시도는 `TRANSIENT`, `RATE_LIMITED`만 한다.
+- 호출 속도는 소스별 `RateLimiter`로 제한한다.
+- 정지된 소스는 호출하지 않고 건너뛴다(`SourcePauseRegistry`). 정지는 메모리에만 두며 재시작하면 풀린다.
+- 예외 메시지와 로그에 요청 URL, 헤더, 인증키를 넣지 않는다.
+- 한 소스가 실패해도 다른 소스 수집은 계속한다. 한 건 실패가 배치 전체를 멈추지 않는다.
+- 수집 실행 결과는 `collection_run`에 남긴다. 실패하면 `error_kind`(분류 또는 `INTERNAL`)와 `error_code`(원래 코드)를 함께 남긴다.
+
+## 7. 시간
+
+- 시각은 `timestamptz`, 날짜만 필요하면 `date`.
+- "오늘"은 `Clock` 빈(Asia/Seoul)으로 계산한다. `LocalDate.now()`를 직접 부르지 않는다.
+- 스케줄 cron에는 `zone = "Asia/Seoul"`을 명시한다.
+
+## 8. 테스트
+
+| 대상 | 방식 |
+|---|---|
+| 순수 로직 (파서, 점수 계산, 분류 규칙) | 단위 테스트 |
+| 외부 API 클라이언트 | `MockRestServiceServer`로 응답 형태별 검증 |
+| DB 쿼리, 저장, 작업 큐 | Testcontainers(PostgreSQL 18) 통합 테스트 |
+| 서비스 + 외부 API | 클라이언트를 `@MockitoBean`으로 대체 |
+
+- 테스트에서는 실제 외부 API를 호출하지 않는다. 스케줄과 시작 시 동기화는 `src/test/resources/config/application.properties`에서 끈다.
+
+## 9. 화면
+
+- Thymeleaf로 서버에서 HTML을 만든다. 검색 엔진과 링크 미리보기가 읽을 내용(판단, 요약, 공시 목록)은 HTML 텍스트로 넣는다.
+- 그래프는 Chart.js. 외부 CDN을 쓰지 않고 `src/main/resources/static/vendor/`에 버전을 고정해 포함한다.
+- 프런트 빌드 단계 없이 정적 파일로 서빙한다.
+
+## 10. 코드 스타일
+
+- 들여쓰기는 탭. `.editorconfig`를 따른다.
+- DTO와 설정은 record. Lombok은 JPA 엔티티에만 필요한 만큼 쓴다.
+- 로그와 예외 메시지에 비밀 값, 개인정보를 넣지 않는다.

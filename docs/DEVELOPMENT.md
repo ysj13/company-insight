@@ -17,7 +17,7 @@
 | 외부 API 호출 | Spring `RestClient`, 가상 스레드, `@Retryable`, `@ConcurrencyLimit`, Resilience4j RateLimiter |
 | LLM | Gemini API (`LlmClient` 인터페이스) |
 | API 문서 | springdoc-openapi |
-| 화면 | 정적 HTML + JS (`src/main/resources/static`) |
+| 화면 | Thymeleaf(서버 렌더링), JavaScript, Chart.js (`static/vendor`에 고정 버전으로 포함) |
 | 테스트 | JUnit 5, AssertJ, Testcontainers (PostgreSQL), `MockRestServiceServer` |
 | 배포 | Docker Compose (앱, PostgreSQL, Caddy), GHCR, GitHub Actions |
 | 서버 | 클라우드 VM 1대 |
@@ -122,7 +122,7 @@ com.companyinsight
 | 7 | 11/22 | LLM 분석 | 원문 받아 텍스트 추출 → Gemini 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 주요 30개 종목 공시에 핵심 3줄이 붙음 |
 | 8 | 11/23 | 점수·백필 | 점수 계산, 일별 추이 저장, Spring Batch 3개월 백필 | 주요 30개 종목 판단 추이가 계산됨 |
 | 9 | 11/24 | 조회 API | 종목 요약, 타임라인(QueryDSL), 홈 피드, 검색 | `.http`로 모든 API 확인 |
-| 10 | 11/25 | 화면 | 데모를 실제 API에 연결한 종목 화면, 홈(검색·공시 피드) | 실제 데이터로 화면이 뜸 |
+| 10 | 11/25 | 화면 | Thymeleaf로 종목 화면(판단 추이는 Chart.js)과 홈(검색·공시 피드) | 실제 데이터로 화면이 뜸 |
 | 11 | 11/26~27 | 공개 오픈 | Sentry, 운영자 텔레그램 알림, DB 백업, 개인정보·면책 문구 | 장애가 나면 알림이 옴 |
 | 12 | 11/28~30 | 품질 | 오분류 점검, 버그 수정, README와 설계 결정 기록 | MVP 완료 |
 
