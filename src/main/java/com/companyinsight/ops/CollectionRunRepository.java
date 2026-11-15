@@ -29,6 +29,16 @@ public class CollectionRunRepository {
 			.single();
 	}
 
+	/** 이 작업의 가장 최근 실행이 성공으로 끝났는지. 기록이 없으면 true. RUNNING(중단됨)과 FAILED는 false. */
+	public boolean lastRunSucceeded(String source) {
+		return jdbc.sql("SELECT status FROM collection_run WHERE source = :source ORDER BY started_at DESC, id DESC LIMIT 1")
+			.param("source", source)
+			.query(String.class)
+			.optional()
+			.map("SUCCESS"::equals)
+			.orElse(true);
+	}
+
 	public void finishSuccess(long id, Instant finishedAt, int fetched, int saved, int pages) {
 		finish(id, finishedAt, "SUCCESS", fetched, saved, pages, null, null, null);
 	}

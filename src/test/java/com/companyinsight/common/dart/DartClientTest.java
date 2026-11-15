@@ -157,4 +157,28 @@ class DartClientTest {
 		assertThat(DartClient.classify("900")).isEqualTo(ErrorKind.TRANSIENT);
 		assertThat(DartClient.classify("999")).isEqualTo(ErrorKind.UNKNOWN);
 	}
+
+	@Test
+	void 속도_제한_허가를_못_받으면_호출하지_않고_RATE_LIMITED() {
+		io.github.resilience4j.ratelimiter.RateLimiter oneCall = io.github.resilience4j.ratelimiter.RateLimiter.of("test",
+			io.github.resilience4j.ratelimiter.RateLimiterConfig.custom()
+				.limitForPeriod(1)
+				.limitRefreshPeriod(java.time.Duration.ofMinutes(1))
+				.timeoutDuration(java.time.Duration.ZERO)
+				.build());
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://dart.test");
+		MockRestServiceServer limitedServer = MockRestServiceServer.bindTo(builder).build();
+		DartClient limited = new DartClient(builder.build(), new DartProperties(SECRET, "https://dart.test", null, null, 1), oneCall);
+		limitedServer.expect(org.springframework.test.web.client.ExpectedCount.once(),
+				requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"없음\"}", MediaType.APPLICATION_JSON));
+		java.time.LocalDate day = java.time.LocalDate.of(2026, 11, 13);
+
+		limited.listDisclosures(day, day, 1);
+
+		assertThatThrownBy(() -> limited.listDisclosures(day, day, 1))
+			.isInstanceOfSatisfying(RetryableExternalApiException.class,
+				e -> assertThat(e.kind()).isEqualTo(ErrorKind.RATE_LIMITED));
+		limitedServer.verify();
+	}
 }

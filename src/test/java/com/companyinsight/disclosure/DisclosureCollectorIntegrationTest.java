@@ -115,6 +115,36 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
+	void 직전_폴링이_실패했으면_멈추지_않고_끝까지_읽는다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 2, item("1", "000001", "Y", "20261113000002", "a")));
+		given(dart.listDisclosures(DAY, DAY, 2))
+			.willThrow(ExternalApiException.of(DartClient.SOURCE, ErrorKind.TRANSIENT, "HTTP503", "서버 오류"))
+			.willReturn(page(2, 2, item("2", "000002", "K", "20261113000001", "b")));
+		assertThatThrownBy(() -> pollAt(DAY)).isInstanceOf(ExternalApiException.class); // 1페이지만 저장됨
+
+		DisclosureCollector.CollectResult result = pollAt(DAY); // 1페이지에 새 공시가 없어도 2페이지까지 읽어야 한다
+
+		assertThat(result.pages()).isEqualTo(2);
+		assertThat(result.saved()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT count(*) FROM disclosure").query(Long.class).single()).isEqualTo(2);
+	}
+
+	@Test
+	void 너무_긴_값은_잘라서_저장하고_형식이_틀린_공시는_건너뛴다() {
+		String longName = "가".repeat(400);
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("1", "000001", "Y", "20261113000003", longName),
+			new Item("2", "회사2", "000002", "K", "날짜가 틀린 공시", "20261113000002", "제출인", "2026-11-13", ""),
+			item("3", "000003", "Y", "20261113000001", "정상")));
+
+		DisclosureCollector.CollectResult result = collector.reconcile(DAY, DAY);
+
+		assertThat(result.saved()).isEqualTo(2);
+		assertThat(jdbc.sql("SELECT length(report_name) FROM disclosure WHERE rcept_no = '20261113000003'")
+			.query(Integer.class).single()).isEqualTo(300);
+	}
+
+	@Test
 	void 외부_오류는_분류와_코드를_기록하고_소스를_정지시킨다() {
 		ExternalApiException quota = ExternalApiException.of(DartClient.SOURCE, ErrorKind.QUOTA_EXCEEDED, "020", "요청 제한을 초과하였습니다.");
 		given(dart.listDisclosures(any(), any(), eq(1))).willThrow(quota);

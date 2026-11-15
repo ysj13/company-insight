@@ -42,6 +42,9 @@ com.companyinsight
 | 대량 저장(배치), `ON CONFLICT`·`ILIKE`·`SKIP LOCKED` 등 PostgreSQL 전용 문법 | `JdbcTemplate`, `JdbcClient` |
 
 - 스키마는 Flyway로만 바꾼다. Hibernate는 `ddl-auto: validate`.
+- 테이블과 컬럼에는 한글 `COMMENT`를 단다. 테이블·컬럼을 만드는 마이그레이션 파일에서 함께 작성하고, 코드값이 있으면 값의 의미도 적는다.
+- 모든 테이블에 `created_at`, 수정되는 테이블에는 `updated_at`을 둔다.
+- 외부에서 받은 문자열은 컬럼 길이에 맞춰 잘라 저장한다. 형식이 틀린 한 건은 건너뛰고 경고 로그를 남긴다.
 - 응답에 엔티티를 그대로 내보내지 않는다. DTO(record)로 바꾼다.
 
 ## 4. 이름
@@ -50,6 +53,12 @@ com.companyinsight
 |---|---|---|
 | 테이블 | 단수 명사, snake_case | `company`, `collection_run` |
 | 컬럼 | snake_case | `rcept_date`, `last_disclosed_on` |
+| 기본 키 | 자연키가 있으면 그 이름, 없으면 `id` (bigint identity) | `company.corp_code`, `disclosure.id` |
+| 외부에서 온 값 | 원본 필드명을 따르되 줄임말은 풀어 쓴다 | `rcept_no`, `rcept_dt` → `rcept_date` |
+| 시각 컬럼 | `_at` | `created_at`, `started_at` |
+| 날짜 컬럼 (직접 만든 값) | `_on` | `last_disclosed_on` |
+| 참·거짓 컬럼 | `is_`, `has_` | `is_verified` |
+| 상태·분류 컬럼 | `varchar` + 대문자 코드값 | `status = 'FAILED'` |
 | 인덱스 | `{테이블}_{컬럼}_idx` | `disclosure_corp_date_idx` |
 | 마이그레이션 | `V{번호}__{설명}.sql`. 적용된 파일은 수정하지 않고 새 버전을 추가 | `V4__collection_run_error_kind.sql` |
 | API 경로 | `/api/{복수 명사}`, kebab-case | `/api/companies` |
@@ -111,6 +120,7 @@ DART는 오류도 HTTP 200으로 준다. HTTP 상태만 보지 않고 본문(`st
 - 정지된 소스는 호출하지 않고 건너뛴다(`SourcePauseRegistry`). 정지는 메모리에만 두며 재시작하면 풀린다.
 - 예외 메시지와 로그에 요청 URL, 헤더, 인증키를 넣지 않는다.
 - 한 소스가 실패해도 다른 소스 수집은 계속한다. 한 건 실패가 배치 전체를 멈추지 않는다.
+- 정기 작업은 `ExclusiveJobRunner`로 실행해 같은 그룹의 작업이 겹치지 않게 한다.
 - 수집 실행 결과는 `collection_run`에 남긴다. 실패하면 `error_kind`(분류 또는 `INTERNAL`)와 `error_code`(원래 코드)를 함께 남긴다.
 
 ## 7. 시간
