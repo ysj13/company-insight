@@ -12,15 +12,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/companies")
 public class CompanyController {
 
-	private final CompanyRepository repository;
+	private final CompanySearchService searchService;
 
-	public CompanyController(CompanyRepository repository) {
-		this.repository = repository;
+	public CompanyController(CompanySearchService searchService) {
+		this.searchService = searchService;
 	}
 
 	/** 기업명 일부 또는 종목코드 앞부분으로 검색. 최대 20건. */
 	@GetMapping
 	public List<CompanySummary> search(@RequestParam @NotBlank @Size(max = 50) String q) {
-		return repository.search(q.trim());
+		return searchService.search(q);
 	}
 }

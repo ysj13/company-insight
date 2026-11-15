@@ -24,7 +24,7 @@
 
 ## 기술 스택
 
-Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Docker Compose, GitHub Actions, Sentry. 버전은 `docs/DEVELOPMENT.md` 1절.
+Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Thymeleaf, Chart.js, Docker Compose, GitHub Actions, Sentry. 버전은 `docs/DEVELOPMENT.md` 1절. 코드 규칙은 `docs/CONVENTIONS.md`.
 
 ## 설계 원칙
 

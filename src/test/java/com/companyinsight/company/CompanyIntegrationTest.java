@@ -111,7 +111,11 @@ class CompanyIntegrationTest {
 	}
 
 	@Test
-	void 검색어가_비면_400() throws Exception {
-		mvc.perform(get("/api/companies").param("q", " ")).andExpect(status().isBadRequest());
+	void 검색어가_비면_400_Problem_Details() throws Exception {
+		mvc.perform(get("/api/companies").param("q", " "))
+			.andExpect(status().isBadRequest())
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+				.contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.status").value(400));
 	}
 }

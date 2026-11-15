@@ -29,11 +29,25 @@ public class CollectionRunRepository {
 			.single();
 	}
 
-	public void finish(long id, Instant finishedAt, String status, int fetched, int saved, int pages, String error) {
+	public void finishSuccess(long id, Instant finishedAt, int fetched, int saved, int pages) {
+		finish(id, finishedAt, "SUCCESS", fetched, saved, pages, null, null, null);
+	}
+
+	/**
+	 * @param errorKind 외부 API 오류면 분류(ErrorKind 이름), 아니면 "INTERNAL"
+	 * @param errorCode 소스의 원래 코드 (예: DART "020")
+	 */
+	public void finishFailed(long id, Instant finishedAt, int fetched, int saved, int pages, String errorKind,
+			String errorCode, String error) {
+		finish(id, finishedAt, "FAILED", fetched, saved, pages, errorKind, errorCode, error);
+	}
+
+	private void finish(long id, Instant finishedAt, String status, int fetched, int saved, int pages,
+			String errorKind, String errorCode, String error) {
 		jdbc.sql("""
 				UPDATE collection_run
 				   SET finished_at = :finishedAt, status = :status, fetched = :fetched, saved = :saved,
-				       pages = :pages, error = :error
+				       pages = :pages, error_kind = :errorKind, error_code = :errorCode, error = :error
 				 WHERE id = :id
 				""")
 			.param("finishedAt", OffsetDateTime.ofInstant(finishedAt, ZoneOffset.UTC))
@@ -41,6 +55,8 @@ public class CollectionRunRepository {
 			.param("fetched", fetched)
 			.param("saved", saved)
 			.param("pages", pages)
+			.param("errorKind", errorKind)
+			.param("errorCode", errorCode)
 			.param("error", error == null ? null : error.substring(0, Math.min(error.length(), ERROR_MAX)))
 			.param("id", id)
 			.update();

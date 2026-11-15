@@ -2,6 +2,8 @@ package com.companyinsight.disclosure;
 
 import com.companyinsight.common.dart.DartClient;
 import com.companyinsight.common.dart.DisclosureListResponse;
+import com.companyinsight.common.external.ExternalApiException;
+import com.companyinsight.common.external.SourcePauseRegistry;
 import com.companyinsight.ops.CollectionRunRepository;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -29,10 +31,12 @@ public class DisclosureCollector {
 	private final DartClient dart;
 	private final DisclosureRepository repository;
 	private final CollectionRunRepository runs;
+	private final SourcePauseRegistry pauses;
 	private final Clock clock;
 
 	public DisclosureCollector(DartClient dart, DisclosureRepository repository, CollectionRunRepository runs,
-			Clock clock) {
+			SourcePauseRegistry pauses, Clock clock) {
+		this.pauses = pauses;
 		this.dart = dart;
 		this.repository = repository;
 		this.runs = runs;
@@ -54,6 +58,11 @@ public class DisclosureCollector {
 	private CollectResult collect(String source, LocalDate from, LocalDate to, boolean stopWhenNothingNew) {
 		if (!dart.isConfigured()) {
 			log.warn("DART_API_KEY가 없어 공시 수집을 건너뜁니다");
+			return CollectResult.skip();
+		}
+		var pause = pauses.pausedNow(DartClient.SOURCE);
+		if (pause.isPresent()) {
+			log.debug("DART 정지 중({})이라 공시 수집을 건너뜁니다", pause.get());
 			return CollectResult.skip();
 		}
 		long runId = runs.start(source, clock.instant());
@@ -79,12 +88,17 @@ public class DisclosureCollector {
 			}
 			while (page <= totalPage);
 
-			runs.finish(runId, clock.instant(), "SUCCESS", fetched, saved, pages, null);
+			runs.finishSuccess(runId, clock.instant(), fetched, saved, pages);
 			log.info("공시 수집({} {}~{}): {}페이지, 받은 {}건, 새로 저장 {}건", source, from, to, pages, fetched, saved);
 			return new CollectResult(false, pages, fetched, saved);
 		}
+		catch (ExternalApiException e) {
+			pauses.pauseFor(e);
+			runs.finishFailed(runId, clock.instant(), fetched, saved, pages, e.kind().name(), e.code(), e.getMessage());
+			throw e;
+		}
 		catch (RuntimeException e) {
-			runs.finish(runId, clock.instant(), "FAILED", fetched, saved, pages, e.getMessage());
+			runs.finishFailed(runId, clock.instant(), fetched, saved, pages, "INTERNAL", null, e.toString());
 			throw e;
 		}
 	}

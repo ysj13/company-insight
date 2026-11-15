@@ -10,6 +10,9 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/company_insight}
     username: ${DB_USERNAME:company_insight}
     password: ${DB_PASSWORD:company_insight}
+  mvc:
+    problemdetails:
+      enabled: true
   jpa:
     open-in-view: false
     hibernate:

@@ -1,6 +1,8 @@
 package com.companyinsight.company;
 
 import com.companyinsight.common.dart.DartClient;
+import com.companyinsight.common.external.ExternalApiException;
+import com.companyinsight.common.external.SourcePauseRegistry;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +17,11 @@ public class CompanySyncService {
 	private final DartClient dartClient;
 	private final CorpCodeParser parser;
 	private final CompanyRepository repository;
+	private final SourcePauseRegistry pauses;
 
-	public CompanySyncService(DartClient dartClient, CorpCodeParser parser, CompanyRepository repository) {
+	public CompanySyncService(DartClient dartClient, CorpCodeParser parser, CompanyRepository repository,
+			SourcePauseRegistry pauses) {
+		this.pauses = pauses;
 		this.dartClient = dartClient;
 		this.parser = parser;
 		this.repository = repository;
@@ -27,8 +32,19 @@ public class CompanySyncService {
 			log.warn("DART_API_KEY가 없어 기업 목록 동기화를 건너뜁니다");
 			return SyncResult.skip();
 		}
+		if (pauses.pausedNow(DartClient.SOURCE).isPresent()) {
+			log.warn("DART 정지 중이라 기업 목록 동기화를 건너뜁니다");
+			return SyncResult.skip();
+		}
 		long started = System.currentTimeMillis();
-		byte[] zip = dartClient.downloadCorpCodeZip();
+		byte[] zip;
+		try {
+			zip = dartClient.downloadCorpCodeZip();
+		}
+		catch (ExternalApiException e) {
+			pauses.pauseFor(e);
+			throw e;
+		}
 		List<CorpCode> listed = parser.parseListed(zip);
 		int changed = repository.upsertAll(listed);
 		long elapsed = System.currentTimeMillis() - started;

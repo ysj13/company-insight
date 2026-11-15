@@ -8,6 +8,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.nio.charset.StandardCharsets;
+import com.companyinsight.common.external.ErrorKind;
+import com.companyinsight.common.external.ExternalApiException;
+import com.companyinsight.common.external.RetryableExternalApiException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -46,8 +49,11 @@ class DartClientTest {
 			.andRespond(withSuccess(body.getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_XML));
 
 		assertThatThrownBy(client::downloadCorpCodeZip)
-			.isInstanceOf(DartApiException.class)
-			.hasMessageContaining("010")
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> {
+				assertThat(e.kind()).isEqualTo(ErrorKind.AUTH);
+				assertThat(e.code()).isEqualTo("010");
+				assertThat(e).isNotInstanceOf(RetryableExternalApiException.class);
+			})
 			.hasMessageContaining("등록되지 않은 키");
 	}
 
@@ -57,7 +63,8 @@ class DartClientTest {
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/corpCode.xml")))
 			.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
-		assertThatThrownBy(client::downloadCorpCodeZip).isInstanceOf(DartTransientException.class);
+		assertThatThrownBy(client::downloadCorpCodeZip)
+			.isInstanceOfSatisfying(RetryableExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.TRANSIENT));
 	}
 
 	@Test
@@ -66,7 +73,7 @@ class DartClientTest {
 			.andRespond(withServerError());
 
 		assertThatThrownBy(client::downloadCorpCodeZip)
-			.isInstanceOf(DartTransientException.class)
+			.isInstanceOf(RetryableExternalApiException.class)
 			.hasNoCause()
 			.message().doesNotContain(SECRET);
 	}
@@ -110,13 +117,44 @@ class DartClientTest {
 	}
 
 	@Test
-	void 한도_초과는_재시도하지_않는_오류() {
+	void 한도_초과는_QUOTA_EXCEEDED() {
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
 			.andRespond(withSuccess("{\"status\":\"020\",\"message\":\"요청 제한을 초과하였습니다.\"}", MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client.listDisclosures(java.time.LocalDate.of(2026, 11, 13),
 			java.time.LocalDate.of(2026, 11, 13), 1))
-			.isInstanceOf(DartApiException.class)
-			.hasMessageContaining("020");
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> {
+				assertThat(e.kind()).isEqualTo(ErrorKind.QUOTA_EXCEEDED);
+				assertThat(e.code()).isEqualTo("020");
+				assertThat(e).isNotInstanceOf(RetryableExternalApiException.class);
+			});
+	}
+
+	@Test
+	void HTTP_429는_RATE_LIMITED이고_재시도_대상() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+				.withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS));
+
+		assertThatThrownBy(() -> client.listDisclosures(java.time.LocalDate.of(2026, 11, 13),
+			java.time.LocalDate.of(2026, 11, 13), 1))
+			.isInstanceOfSatisfying(RetryableExternalApiException.class,
+				e -> assertThat(e.kind()).isEqualTo(ErrorKind.RATE_LIMITED));
+	}
+
+	@Test
+	void 상태코드_분류표() {
+		assertThat(DartClient.classify("013")).isNull();
+		assertThat(DartClient.classify("014")).isNull();
+		assertThat(DartClient.classify("020")).isEqualTo(ErrorKind.QUOTA_EXCEEDED);
+		assertThat(DartClient.classify("021")).isEqualTo(ErrorKind.QUOTA_EXCEEDED);
+		assertThat(DartClient.classify("010")).isEqualTo(ErrorKind.AUTH);
+		assertThat(DartClient.classify("011")).isEqualTo(ErrorKind.AUTH);
+		assertThat(DartClient.classify("012")).isEqualTo(ErrorKind.AUTH);
+		assertThat(DartClient.classify("901")).isEqualTo(ErrorKind.AUTH);
+		assertThat(DartClient.classify("100")).isEqualTo(ErrorKind.BAD_REQUEST);
+		assertThat(DartClient.classify("800")).isEqualTo(ErrorKind.TRANSIENT);
+		assertThat(DartClient.classify("900")).isEqualTo(ErrorKind.TRANSIENT);
+		assertThat(DartClient.classify("999")).isEqualTo(ErrorKind.UNKNOWN);
 	}
 }

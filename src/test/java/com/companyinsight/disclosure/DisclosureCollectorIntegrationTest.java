@@ -10,10 +10,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.companyinsight.TestcontainersConfiguration;
-import com.companyinsight.common.dart.DartApiException;
 import com.companyinsight.common.dart.DartClient;
 import com.companyinsight.common.dart.DisclosureListResponse;
 import com.companyinsight.common.dart.DisclosureListResponse.Item;
+import com.companyinsight.common.external.ErrorKind;
+import com.companyinsight.common.external.ExternalApiException;
+import com.companyinsight.common.external.SourcePauseRegistry;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -40,12 +42,16 @@ class DisclosureCollectorIntegrationTest {
 	@MockitoBean
 	DartClient dart;
 
+	@MockitoBean
+	SourcePauseRegistry pauses;
+
 	@BeforeEach
 	void setUp() {
 		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
 		jdbc.sql("DELETE FROM collection_run").update();
 		given(dart.isConfigured()).willReturn(true);
+		given(pauses.pausedNow(any())).willReturn(java.util.Optional.empty());
 	}
 
 	@Test
@@ -109,16 +115,30 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
-	void 실패하면_수집_기록에_남기고_예외를_던진다() {
-		given(dart.listDisclosures(any(), any(), eq(1))).willThrow(new DartApiException("020", "요청 제한을 초과하였습니다."));
+	void 외부_오류는_분류와_코드를_기록하고_소스를_정지시킨다() {
+		ExternalApiException quota = ExternalApiException.of(DartClient.SOURCE, ErrorKind.QUOTA_EXCEEDED, "020", "요청 제한을 초과하였습니다.");
+		given(dart.listDisclosures(any(), any(), eq(1))).willThrow(quota);
 
-		assertThatThrownBy(() -> collector.reconcile(DAY, DAY)).isInstanceOf(DartApiException.class);
+		assertThatThrownBy(() -> collector.reconcile(DAY, DAY)).isSameAs(quota);
 
-		Map<String, Object> run = jdbc.sql("SELECT source, status, error, finished_at FROM collection_run").query().singleRow();
+		Map<String, Object> run = jdbc.sql("SELECT source, status, error_kind, error_code, finished_at FROM collection_run")
+			.query().singleRow();
 		assertThat(run.get("source")).isEqualTo(DisclosureCollector.SOURCE_RECONCILE);
 		assertThat(run.get("status")).isEqualTo("FAILED");
-		assertThat((String) run.get("error")).contains("020");
+		assertThat(run.get("error_kind")).isEqualTo("QUOTA_EXCEEDED");
+		assertThat(run.get("error_code")).isEqualTo("020");
 		assertThat(run.get("finished_at")).isNotNull();
+		verify(pauses).pauseFor(quota);
+	}
+
+	@Test
+	void 정지된_소스는_호출하지_않는다() {
+		given(pauses.pausedNow(DartClient.SOURCE)).willReturn(java.util.Optional.of(
+			new SourcePauseRegistry.Pause(java.time.Instant.MAX, ErrorKind.QUOTA_EXCEEDED, "020")));
+
+		assertThat(collector.reconcile(DAY, DAY).skipped()).isTrue();
+		verify(dart, never()).listDisclosures(any(), any(), org.mockito.ArgumentMatchers.anyInt());
+		assertThat(jdbc.sql("SELECT count(*) FROM collection_run").query(Long.class).single()).isZero();
 	}
 
 	@Test
