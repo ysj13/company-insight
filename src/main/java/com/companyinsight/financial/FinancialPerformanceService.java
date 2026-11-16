@@ -25,7 +25,7 @@ public class FinancialPerformanceService {
 	 * @param companyId 회사 ID
 	 * @return 최근 기간이 먼저. 수집된 재무가 없으면 빈 목록. 회사가 없으면 비어 있음
 	 */
-	public Optional<List<PeriodPerformance>> find(long companyId) {
+	public Optional<List<PerformanceSummary>> find(long companyId) {
 		return companies.find(companyId)
 			.map(company -> PerformanceCalculator.calculate(repository.findByCompany(companyId)));
 	}

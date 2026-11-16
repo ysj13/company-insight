@@ -52,6 +52,9 @@ class FinancialIntegrationTest {
 	@Autowired
 	MockMvc mvc;
 
+	@Autowired
+	java.time.Clock clock;
+
 	@MockitoBean
 	DartClient dart;
 
@@ -93,7 +96,7 @@ class FinancialIntegrationTest {
 		verify(dart, times(2)).listMajorAccounts("00126380", 2025, "11012");
 		verify(dart, times(2)).listMajorAccounts("00126380", 2025, "11014");
 		verify(dart, times(2)).listMajorAccounts("00126380", 2025, "11011");
-		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 14, 6));
+		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 6));
 		assertThat(second.saved()).isZero();
 		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(6);
 
@@ -161,6 +164,48 @@ class FinancialIntegrationTest {
 		assertThat(run.get("error_code")).isEqualTo("020");
 		assertThat(run.get("saved")).isEqualTo(1);
 		verify(dart, never()).listMajorAccounts("00126380", 2025, "11014");
+	}
+
+	@Test
+	void 보고서_한_건의_응답만_잘못되면_그_보고서만_건너뛰고_계속_받는다() {
+		given(dart.listMajorAccounts("00126380", 2025, "11013"))
+			.willThrow(ExternalApiException.of("DART", ErrorKind.PARSE, "convert", "응답 처리 실패"));
+		given(dart.listMajorAccounts("00126380", 2025, "11012")).willReturn(response(
+			line("20250814000001", "매출액", "CFS", "1,000", "1")));
+
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 1, 1, 1, 1));
+		verify(dart).listMajorAccounts("00126380", 2025, "11011");
+		assertThat(jdbc.sql("SELECT status FROM collection_run").query(String.class).single()).isEqualTo("SUCCESS");
+	}
+
+	@Test
+	void 종목코드로_지정한_회사를_올해부터_거슬러_받고_없는_종목코드는_건너뛴다() {
+		int thisYear = java.time.LocalDate.now(clock).getYear();
+
+		collector.collectByStockCodes(List.of("999999", "005930"), 2);
+
+		verify(dart, times(8)).listMajorAccounts(eq("00126380"), anyInt(), anyString());
+		verify(dart).listMajorAccounts("00126380", thisYear - 1, "11013");
+		verify(dart).listMajorAccounts("00126380", thisYear, "11011");
+	}
+
+	@Test
+	void 종목코드가_같은_회사가_여럿이면_받지_않고_한_회사가_실패해도_다음_회사는_받는다() {
+		jdbc.sql("""
+			INSERT INTO company (country, source, source_key, stock_code, name) VALUES
+			('KR', 'DART', '00000001', '111111', '옛 회사'), ('KR', 'DART', '00000002', '111111', '새 회사'),
+			('KR', 'DART', '00164779', '000660', 'SK하이닉스')
+			""").update();
+		given(dart.listMajorAccounts(eq("00126380"), anyInt(), anyString()))
+			.willThrow(ExternalApiException.of("DART", ErrorKind.TRANSIENT, "IO", "연결 실패"));
+
+		collector.collectByStockCodes(List.of("111111", "005930", "000660"), 1);
+
+		verify(dart, never()).listMajorAccounts(eq("00000001"), anyInt(), anyString());
+		verify(dart, never()).listMajorAccounts(eq("00000002"), anyInt(), anyString());
+		verify(dart, times(4)).listMajorAccounts(eq("00164779"), anyInt(), anyString());
 	}
 
 	@Test

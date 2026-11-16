@@ -4,17 +4,23 @@ import com.companyinsight.common.dart.DartClient;
 import com.companyinsight.common.dart.DartText;
 import com.companyinsight.common.dart.MajorAccountResponse;
 import com.companyinsight.common.dart.MajorAccountResponse.Item;
+import com.companyinsight.common.external.ErrorKind;
+import com.companyinsight.common.external.ExternalApiException;
 import com.companyinsight.common.external.SourcePauseRegistry;
 import com.companyinsight.common.source.Source;
 import com.companyinsight.company.CompanyRepository;
 import com.companyinsight.ops.CollectionRunRecorder;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,6 +46,12 @@ public class FinancialCollector {
 	/** 손익계산서 구분 코드 (sj_div). */
 	private static final String INCOME_STATEMENT = "IS";
 
+	/**
+	 * 보고서 한 건에만 해당하는 오류. 그 보고서만 건너뛰고 나머지를 계속 받는다.
+	 * 한도 초과, 인증 오류, 재시도 뒤에도 남은 일시 오류는 다음 호출도 실패하므로 수집을 멈춘다.
+	 */
+	private static final Set<ErrorKind> SKIPPABLE = Set.of(ErrorKind.PARSE, ErrorKind.BAD_REQUEST, ErrorKind.UNKNOWN);
+
 	private static final Comparator<Item> BY_ORDER = Comparator.comparingInt(FinancialCollector::order);
 
 	private final DartClient dart;
@@ -47,14 +59,44 @@ public class FinancialCollector {
 	private final FinancialRepository repository;
 	private final CollectionRunRecorder recorder;
 	private final SourcePauseRegistry pauses;
+	private final Clock clock;
 
 	public FinancialCollector(DartClient dart, CompanyRepository companies, FinancialRepository repository,
-			CollectionRunRecorder recorder, SourcePauseRegistry pauses) {
+			CollectionRunRecorder recorder, SourcePauseRegistry pauses, Clock clock) {
 		this.dart = dart;
 		this.companies = companies;
 		this.repository = repository;
 		this.recorder = recorder;
 		this.pauses = pauses;
+		this.clock = clock;
+	}
+
+	/**
+	 * 종목코드로 지정한 회사들의 재무를 올해부터 거슬러 받는다. 한 회사가 실패해도 나머지는 계속한다.
+	 *
+	 * <p>종목코드에 해당하는 회사가 없거나 여럿이면(상장폐지된 회사의 종목코드가 남아 있는 경우) 그 종목코드는 건너뛴다.
+	 * 기업 목록이 아직 없는 새 DB에서는 받을 회사를 찾지 못한다.
+	 *
+	 * @param stockCodes 종목코드 목록
+	 * @param years      받을 사업연도 수. 올해를 포함해 거슬러 올라간다. 2015년 이전은 받지 않는다
+	 */
+	public void collectByStockCodes(List<String> stockCodes, int years) {
+		int toYear = LocalDate.now(clock).getYear();
+		int fromYear = Math.max(FIRST_YEAR, toYear - years + 1);
+		for (String stockCode : stockCodes) {
+			List<Long> ids = companies.findIdsByStockCode(stockCode);
+			if (ids.size() != 1) {
+				log.warn("재무 수집: 종목코드 {}에 해당하는 회사가 {}곳이라 건너뜁니다", stockCode, ids.size());
+				continue;
+			}
+			try {
+				collect(ids.getFirst(), fromYear, toYear);
+			}
+			catch (RuntimeException e) {
+				// DART 호출 실패는 collection_run에도 남는다
+				log.warn("재무 수집 실패(종목코드 {}): {}", stockCode, e.getMessage());
+			}
+		}
 	}
 
 	/**
@@ -65,7 +107,8 @@ public class FinancialCollector {
 	 * @param toYear    끝 사업연도 (포함)
 	 * @return 수집 결과. 키가 없거나 DART가 정지 중이면 건너뛴 결과
 	 * @throws IllegalArgumentException 연도 범위가 틀렸거나 DART에서 받은 회사가 아닌 경우
-	 * @throws com.companyinsight.common.external.ExternalApiException DART 호출이 실패한 경우. 그때까지 받은 보고서는 저장되어 있다
+	 * @throws ExternalApiException 한도 초과·인증 오류처럼 다음 호출도 실패할 오류. 그때까지 받은 보고서는 저장되어 있다.
+	 *                              보고서 한 건의 응답만 잘못된 경우는 그 보고서만 건너뛰고 계속한다
 	 */
 	public CollectResult collect(long companyId, int fromYear, int toYear) {
 		if (fromYear < FIRST_YEAR || fromYear > toYear) {
@@ -83,9 +126,22 @@ public class FinancialCollector {
 		}
 		return recorder.record(JOB, progress -> {
 			int reports = 0;
+			int failedReports = 0;
 			for (int year = fromYear; year <= toYear; year++) {
 				for (ReportType reportType : ReportType.values()) {
-					MajorAccountResponse response = dart.listMajorAccounts(corpCode, year, reportType.dartCode());
+					MajorAccountResponse response;
+					try {
+						response = dart.listMajorAccounts(corpCode, year, reportType.dartCode());
+					}
+					catch (ExternalApiException e) {
+						if (!SKIPPABLE.contains(e.kind())) {
+							throw e;
+						}
+						failedReports++;
+						log.warn("재무 수집: 회사 {} {}년 {} 보고서를 받지 못해 건너뜁니다: {}", companyId, year, reportType,
+							e.getMessage());
+						continue;
+					}
 					progress.addFetched(response.items().size());
 					List<FinancialRecord> records = toRecords(year, reportType, response.items());
 					if (!response.items().isEmpty()) {
@@ -97,9 +153,9 @@ public class FinancialCollector {
 					progress.addSaved(repository.upsertAll(companyId, records));
 				}
 			}
-			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받은 계정 {}줄, 추가·변경 {}행", companyId, fromYear, toYear,
-				reports, progress.fetched(), progress.saved());
-			return new CollectResult(false, reports, progress.fetched(), progress.saved());
+			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받지 못한 보고서 {}건, 받은 계정 {}줄, 추가·변경 {}행", companyId,
+				fromYear, toYear, reports, failedReports, progress.fetched(), progress.saved());
+			return new CollectResult(false, reports, failedReports, progress.fetched(), progress.saved());
 		});
 	}
 
@@ -135,12 +191,22 @@ public class FinancialCollector {
 				DartText.clean(receiptNo, 40));
 			String key = statementType.get() + "/" + account.get();
 			FinancialRecord first = byKey.putIfAbsent(key, record);
-			if (first != null && first.amount().compareTo(record.amount()) != 0) {
+			if (first != null && !sameAmounts(first, record)) {
 				log.warn("재무 수집: {}년 {} {} {} 계정이 두 줄인데 금액이 다릅니다. 앞선 줄을 씁니다", fiscalYear, reportType,
 					statementType.get(), account.get());
 			}
 		}
 		return new ArrayList<>(byKey.values());
+	}
+
+	private static boolean sameAmounts(FinancialRecord a, FinancialRecord b) {
+		return same(a.amount(), b.amount()) && same(a.cumulativeAmount(), b.cumulativeAmount())
+				&& same(a.priorAmount(), b.priorAmount())
+				&& same(a.priorCumulativeAmount(), b.priorCumulativeAmount());
+	}
+
+	private static boolean same(BigDecimal a, BigDecimal b) {
+		return a == null || b == null ? Objects.equals(a, b) : a.compareTo(b) == 0;
 	}
 
 	/** 표시 순서(ord). 숫자가 아니면 맨 뒤로 보낸다. */
@@ -157,13 +223,14 @@ public class FinancialCollector {
 	 * 수집 결과.
 	 *
 	 * @param skipped 키가 없거나 소스가 정지 중이라 실행하지 않았으면 true
-	 * @param reports 데이터가 있던 보고서 수
-	 * @param fetched DART에서 받은 계정 줄 수 (저장하지 않는 계정 포함)
-	 * @param saved   새로 저장하거나 값이 바뀐 행 수
+	 * @param reports       데이터가 있던 보고서 수
+	 * @param failedReports 응답이 잘못되어 건너뛴 보고서 수
+	 * @param fetched       DART에서 받은 계정 줄 수 (저장하지 않는 계정 포함)
+	 * @param saved         새로 저장하거나 값이 바뀐 행 수
 	 */
-	public record CollectResult(boolean skipped, int reports, int fetched, int saved) {
+	public record CollectResult(boolean skipped, int reports, int failedReports, int fetched, int saved) {
 		static CollectResult skip() {
-			return new CollectResult(true, 0, 0, 0);
+			return new CollectResult(true, 0, 0, 0, 0);
 		}
 	}
 }

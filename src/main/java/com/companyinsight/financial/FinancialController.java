@@ -27,7 +27,7 @@ public class FinancialController {
 	 * @return 최근 기간이 먼저. 같은 사업연도에서는 연간, 4분기, 3분기, 2분기, 1분기 순. 수집된 재무가 없으면 빈 배열
 	 */
 	@GetMapping
-	public List<PeriodPerformance> list(@PathVariable long companyId) {
+	public List<PerformanceSummary> list(@PathVariable long companyId) {
 		return performanceService.find(companyId)
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "회사를 찾을 수 없습니다"));
 	}
