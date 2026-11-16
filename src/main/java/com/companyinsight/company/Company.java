@@ -1,6 +1,8 @@
 package com.companyinsight.company;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -21,11 +23,12 @@ import org.hibernate.annotations.Immutable;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Company {
 
-	/** DART 고유번호 */
+	/** 회사 ID. 출처와 무관한 내부 번호 */
 	@Id
-	private String corpCode;
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-	/** 종목코드 6자리 */
+	/** 종목코드. 한국은 6자리 */
 	private String stockCode;
 
 	/** 회사명 */

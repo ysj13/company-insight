@@ -1,13 +1,15 @@
 package com.companyinsight.disclosure;
 
+import com.companyinsight.common.source.Source;
 import java.time.LocalDate;
 
 /**
  * 공시 목록의 한 줄.
  *
- * <p>공시 원문은 담지 않는다. 제목과 분류 결과, 그리고 DART 원문으로 가는 링크만 보여준다.
+ * <p>공시 원문은 담지 않는다. 제목과 분류 결과, 그리고 출처의 원문으로 가는 링크만 보여준다.
  *
- * @param receiptNo   DART 접수번호
+ * @param source      공시를 받은 출처
+ * @param sourceKey   출처의 공시 번호. DART는 접수번호
  * @param receiptDate 접수일
  * @param companyName 회사명
  * @param stockCode   종목코드
@@ -18,10 +20,8 @@ import java.time.LocalDate;
  * @param correction  이미 낸 공시의 정정·첨부 추가인지
  * @param withdrawn   철회된 공시인지
  */
-public record DisclosureSummary(String receiptNo, LocalDate receiptDate, String companyName, String stockCode,
-		String reportName, DisclosureKind kind, Tone tone, Integer impact, boolean correction, boolean withdrawn) {
-
-	private static final String DART_VIEWER = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=";
+public record DisclosureSummary(Source source, String sourceKey, LocalDate receiptDate, String companyName,
+		String stockCode, String reportName, DisclosureKind kind, Tone tone, Integer impact, boolean correction, boolean withdrawn) {
 
 	/** 영향도가 이 값 이상이면 "큼"으로 보여준다. */
 	private static final int HIGH_IMPACT = 3;
@@ -46,8 +46,8 @@ public record DisclosureSummary(String receiptNo, LocalDate receiptDate, String 
 		return impact == 2 ? "보통" : "작음";
 	}
 
-	/** DART 공시 뷰어의 원문 주소. */
-	public String dartUrl() {
-		return DART_VIEWER + receiptNo;
+	/** 출처에서 공시 원문을 볼 수 있는 주소. DART는 공시 뷰어. */
+	public String originalUrl() {
+		return source.documentUrl(sourceKey);
 	}
 }

@@ -2,6 +2,8 @@ package com.companyinsight.disclosure;
 
 import com.companyinsight.common.dart.DartText;
 import com.companyinsight.common.dart.DisclosureListResponse.Item;
+import com.companyinsight.common.source.Source;
+import com.companyinsight.company.Country;
 import com.companyinsight.company.Market;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -18,7 +20,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 공시 저장. 대량 insert와 ON CONFLICT를 쓰기 위해 JDBC로 한다. */
+/**
+ * DART 공시 저장. 대량 insert와 ON CONFLICT를 쓰기 위해 JDBC로 한다.
+ * 회사와 공시를 한국(KR), DART 출처로 저장하고, 중복은 "출처 + 출처의 번호"로 막는다.
+ */
 @Repository
 public class DisclosureRepository {
 
@@ -30,14 +35,17 @@ public class DisclosureRepository {
 	private static final int REMARK_MAX = 20;
 	private static final int COMPANY_NAME_MAX = 200;
 
+	/** 이 저장소가 다루는 출처. company.source, disclosure.source에 넣는 값 */
+	private static final String SOURCE = Source.DART.name();
+
 	/**
 	 * 공시에 나온 회사를 먼저 맞춘다. 고유번호 동기화 전에 새로 상장한 회사의 공시가 올 수 있어
 	 * 없으면 넣고, 있으면 시장 구분과 마지막 공시일만 갱신한다.
 	 */
 	private static final String UPSERT_COMPANY = """
-		INSERT INTO company (corp_code, stock_code, name, market, last_disclosed_on)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT (corp_code) DO UPDATE
+		INSERT INTO company (country, source, source_key, stock_code, name, market, last_disclosed_on)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (source, source_key) DO UPDATE
 		   SET market = EXCLUDED.market,
 		       last_disclosed_on = GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on),
 		       updated_at = now()
@@ -45,12 +53,15 @@ public class DisclosureRepository {
 		    OR company.last_disclosed_on IS DISTINCT FROM GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on)
 		""";
 
-	/** 같은 공시가 다시 오면 아무것도 하지 않는다. 반환값 1이면 새로 저장된 것. */
+	/**
+	 * 같은 공시(출처와 접수번호가 같은 것)가 다시 오면 아무것도 하지 않는다. 반환값 1이면 새로 저장된 것.
+	 * 회사는 출처의 번호(고유번호)로 내부 번호를 찾아 참조한다. 회사가 없으면 NOT NULL 위반으로 실패한다.
+	 */
 	private static final String INSERT_DISCLOSURE = """
-		INSERT INTO disclosure (rcept_no, corp_code, report_name, filer_name, rcept_date, remark,
+		INSERT INTO disclosure (source, source_key, company_id, report_name, filer_name, rcept_date, remark,
 		                        kind, tone, impact, classified_by, rule_version, is_correction, is_withdrawn)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (rcept_no) DO NOTHING
+		VALUES (?, ?, (SELECT id FROM company WHERE source = ? AND source_key = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (source, source_key) DO NOTHING
 		""";
 
 	/**
@@ -65,7 +76,8 @@ public class DisclosureRepository {
 		       tone = CASE WHEN ? THEN 'NEUTRAL' ELSE tone END,
 		       impact = CASE WHEN ? THEN NULL ELSE impact END,
 		       classified_by = CASE WHEN ? THEN 'RULE' ELSE classified_by END
-		 WHERE rcept_no = ?
+		 WHERE source = ?
+		   AND source_key = ?
 		   AND remark IS DISTINCT FROM ?
 		""";
 
@@ -117,16 +129,18 @@ public class DisclosureRepository {
 
 		int saved = 0;
 		int[] counts = jdbc.batchUpdate(INSERT_DISCLOSURE, listed, listed.size(), (ps, item) -> {
-			ps.setString(1, item.receiptNo());
-			ps.setString(2, item.corpCode());
+			ps.setString(1, SOURCE);
+			ps.setString(2, item.receiptNo());
+			ps.setString(3, SOURCE);
+			ps.setString(4, item.corpCode());
 			String reportName = reportName(item);
 			String remark = remark(item);
 			Classification c = classifier.classify(reportName, remark);
-			ps.setString(3, reportName);
-			ps.setString(4, DartText.clean(item.filerName(), FILER_NAME_MAX));
-			ps.setDate(5, Date.valueOf(receiptDate(item)));
-			ps.setString(6, remark);
-			setClassification(ps, 7, c);
+			ps.setString(5, reportName);
+			ps.setString(6, DartText.clean(item.filerName(), FILER_NAME_MAX));
+			ps.setDate(7, Date.valueOf(receiptDate(item)));
+			ps.setString(8, remark);
+			setClassification(ps, 9, c);
 		})[0];
 		for (int c : counts) {
 			if (c > 0) {
@@ -143,8 +157,9 @@ public class DisclosureRepository {
 			ps.setBoolean(3, withdrawn);
 			ps.setBoolean(4, withdrawn);
 			ps.setBoolean(5, withdrawn);
-			ps.setString(6, item.receiptNo());
-			ps.setString(7, remark);
+			ps.setString(6, SOURCE);
+			ps.setString(7, item.receiptNo());
+			ps.setString(8, remark);
 		});
 		return saved;
 	}
@@ -214,7 +229,7 @@ public class DisclosureRepository {
 	public record Outdated(long id, String reportName, String remark) {
 	}
 
-	/** 공시에 나온 회사를 추가하거나 시장 구분·마지막 공시일을 갱신한다. 공시보다 먼저 실행해 외래키를 지킨다. */
+	/** 공시에 나온 회사를 추가하거나 시장 구분·마지막 공시일을 갱신한다. 공시보다 먼저 실행해야 공시가 회사의 내부 번호를 찾는다. */
 	private void upsertCompanies(List<Item> listed) {
 		// 같은 회사가 여러 번 나오면 한 번만. 한 배치에서 같은 키를 두 번 ON CONFLICT 하면 오류가 난다.
 		Map<String, Item> latestByCorp = new LinkedHashMap<>();
@@ -222,15 +237,17 @@ public class DisclosureRepository {
 			latestByCorp.merge(item.corpCode(), item,
 				(a, b) -> a.receiptDate().compareTo(b.receiptDate()) >= 0 ? a : b); // yyyyMMdd라 문자열 비교가 날짜 순서와 같다
 		}
-		// 기업 목록 동기화와 같은 순서(corp_code)로 써서 데드락을 피한다.
+		// 기업 목록 동기화와 같은 순서(고유번호)로 써서 데드락을 피한다.
 		List<Item> companies = new ArrayList<>(latestByCorp.values());
 		companies.sort(java.util.Comparator.comparing(Item::corpCode));
 		jdbc.batchUpdate(UPSERT_COMPANY, companies, companies.size(), (ps, item) -> {
-			ps.setString(1, item.corpCode());
-			ps.setString(2, item.stockCode().trim());
-			ps.setString(3, DartText.clean(item.corpName(), COMPANY_NAME_MAX));
-			ps.setString(4, item.corpCls());
-			ps.setDate(5, Date.valueOf(receiptDate(item)));
+			ps.setString(1, Country.KR.name());
+			ps.setString(2, SOURCE);
+			ps.setString(3, item.corpCode());
+			ps.setString(4, item.stockCode().trim());
+			ps.setString(5, DartText.clean(item.corpName(), COMPANY_NAME_MAX));
+			ps.setString(6, item.corpCls());
+			ps.setDate(7, Date.valueOf(receiptDate(item)));
 		});
 	}
 

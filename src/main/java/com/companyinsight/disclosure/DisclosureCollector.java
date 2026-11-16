@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
  * <li>{@link #poll()}: 오늘 공시를 최신부터 읽다가, 새 공시가 하나도 없는 페이지를 만나면 멈춘다. 5분마다 실행.
  * 직전 폴링이 성공하지 못했으면 뒤쪽 페이지에 빠진 공시가 있을 수 있으므로 멈추지 않고 끝까지 읽는다.</li>
  * <li>{@link #reconcile(LocalDate, LocalDate)}: 기간 전체를 끝까지 읽는다. 서버 중단이나 폴링 실패로 빠진 공시를
- * 채우기 위해 매일 새벽 최근 며칠을 다시 훑는다. 저장은 접수번호 unique라 중복되지 않는다.</li>
+ * 채우기 위해 매일 새벽 최근 며칠을 다시 훑는다. 저장은 "출처 + 접수번호" unique라 중복되지 않는다.</li>
  * </ul>
  */
 @Service

@@ -44,8 +44,10 @@ com.companyinsight
 
 미국·일본 상장사를 MVP 이후에 추가한다. 그때 구조를 뜯어고치지 않도록 다음을 지킨다.
 
-- 회사는 내부 번호를 기준 키로 쓰고, 나라와 출처, 그 출처에서의 번호(DART 고유번호 등)를 따로 저장한다.
-- 공시의 중복 방지는 "출처 + 그 출처의 공시 번호"로 한다. 지금의 접수번호(rcept_no) unique는 DART 출처에 대한 같은 규칙이다.
+- 회사는 내부 번호(`id`)를 기준 키로 쓰고, 나라(`country`)와 출처(`source`), 그 출처에서의 번호(`source_key`. DART는 고유번호)를 따로 저장한다. 다른 테이블은 회사를 내부 번호로 참조한다.
+- 공시의 중복 방지는 "출처 + 그 출처의 공시 번호"(`source`, `source_key`. DART는 접수번호) unique로 한다.
+- 출처와 나라의 값은 코드(enum `Source`, `Country`)가 정한다. DB에는 값 목록을 CHECK로 두지 않아, 출처를 추가할 때 스키마를 고치지 않는다.
+- 회사 검색 API와 공시 목록 화면은 회사를 내부 번호로 가리킨다. 출처의 번호는 밖으로 내보내지 않는다. 내부 번호는 DB를 새로 만들면 달라지므로, 오래 남는 공개 주소(종목 화면)에 쓸 회사 식별자는 종목 화면을 만드는 단계에서 정한다.
 - 수집기와 제목 규칙은 출처별로 나눠, 새 출처를 추가할 때 기존 코드를 고치지 않게 한다.
 - 새로 만드는 테이블(재무, 분석, 판단)은 회사의 내부 번호를 참조하고, 금액에는 통화를 함께 저장한다.
 - 수집 기능은 회사 한 곳을 지정해 받을 수 있게 만든다. 기능을 완성한 뒤 테스트 회사 몇 곳으로 확인하고, 이상이 없으면 전 종목 데이터를 채운다.
@@ -54,15 +56,15 @@ com.companyinsight
 
 | 테이블 | 핵심 컬럼 |
 |---|---|
-| `company` | id(PK), 나라, 출처, 출처에서의 번호(출처와 묶어 **unique**), stock_code, name, market |
-| `disclosure` | id, 출처, 출처의 공시 번호(출처와 묶어 **unique**. DART는 rcept_no), company_id, report_name, rcept_date, kind, tone, impact, classified_by(RULE/LLM), rule_version, is_correction, is_withdrawn |
+| `company` | id(PK), country, source, source_key(source와 묶어 **unique**. DART는 고유번호), stock_code, name, market |
+| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, kind, tone, impact, classified_by(RULE/LLM), rule_version, is_correction, is_withdrawn |
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
 | `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
 | `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
 | `financial` | company_id, year, quarter, revenue, op_income, net_income, currency |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `collection_run`은 만들어져 있다. `company`와 `disclosure`의 기준 키는 지금 DART 고유번호와 접수번호이고, 위 표의 구조로 바꾸는 것이 3절의 "구조 변경" 단계다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `collection_run`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -145,15 +147,15 @@ com.companyinsight
 |---|---|---|---|---|
 | 1 | 11/16 | 뼈대 | Gradle, Boot 4.1, Compose(PostgreSQL), Flyway V1, 헬스체크, CI, `.env.example`, `.gitattributes`, 문서를 `docs/`로 이동 | 로컬에서 앱과 DB가 뜨고 CI 통과 |
 | 3 | 11/16 | 기업 목록 | 고유번호 zip 받아 `company` 적재(하루 1회), 이름 검색 | 상장사 목록이 DB에 있음 |
-| 4 | 11/16 | 공시 수집 | 상장폐지 기업 구분(고유번호 파일에 함께 들어 있음), 평일 5분 폴링, rcept_no 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
+| 4 | 11/16 | 공시 수집 | 상장폐지 기업 구분(고유번호 파일에 함께 들어 있음), 평일 5분 폴링, 접수번호 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
 | 5 | 11/16 | 규칙 분류 | 공시 제목 규칙으로 종류·tone·영향도 판정, 정정·철회 공시 처리, 나머지는 판정을 비워 분석 대상으로 남김(작업 등록은 6단계) | 규칙 처리 비율 측정 (74.0%, `PLAN.md` 6절) |
 | 5-1 | 11/16 | 공시 목록 화면 | 수집한 공시와 분류 결과를 최근 접수 순으로 보여주는 한 페이지(`/disclosures`), 검색창 자동완성으로 회사 한 곳 고르기, DART 원문 링크. 분류 결과 확인용이고 서비스 화면에는 연결하지 않는다. 자동완성과 화면 틀은 종목 화면에 쓴다 | 분류 결과를 실제 데이터로 화면에서 확인 |
+| 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 회사 참조를 내부 번호로, 기존 데이터 이전(Flyway V7) | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
 
 **MVP (~ 11/22)**
 
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 기존 데이터 이전 | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
 | 5-3 | 11/17~18 | 재무 수집 | OpenDART 주요계정으로 분기별 매출액·영업이익·순이익 수집(회사 한 곳을 지정해 받기), 전년 동기 대비 증감 계산 | 테스트 회사의 재무가 저장되고 증감이 실제 공시 수치와 맞음 |
 | 6 | 11/18 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
 | 7 | 11/19 | LLM 분석 | 원문 받아 텍스트 추출 → LLM 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |

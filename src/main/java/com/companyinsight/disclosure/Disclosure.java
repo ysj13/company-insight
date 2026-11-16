@@ -1,5 +1,6 @@
 package com.companyinsight.disclosure;
 
+import com.companyinsight.common.source.Source;
 import com.companyinsight.company.Company;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -37,13 +38,16 @@ public class Disclosure {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	/** DART 접수번호 14자리. 원문 링크를 만드는 값 */
-	@Column(name = "rcept_no")
-	private String receiptNo;
+	/** 공시를 받은 출처 */
+	@Enumerated(EnumType.STRING)
+	private Source source;
+
+	/** 출처의 공시 번호. DART는 접수번호 14자리. 원문 링크를 만드는 값 */
+	private String sourceKey;
 
 	/** 공시를 낸 회사 */
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "corp_code")
+	@JoinColumn(name = "company_id")
 	private Company company;
 
 	/** 보고서명 (공시 제목) */

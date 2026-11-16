@@ -68,10 +68,12 @@ class DisclosureCollectorIntegrationTest {
 
 		assertThat(result.fetched()).isEqualTo(3);
 		assertThat(result.saved()).isEqualTo(2);
-		assertThat(jdbc.sql("SELECT report_name FROM disclosure WHERE rcept_no = '20261113000003'")
+		assertThat(jdbc.sql("SELECT report_name FROM disclosure WHERE source_key = '20261113000003'")
 			.query(String.class).single()).isEqualTo("주요사항보고서(자기주식취득결정)");
-		Map<String, Object> company = jdbc.sql("SELECT market, last_disclosed_on FROM company WHERE corp_code = '00126380'")
+		Map<String, Object> company = jdbc.sql("SELECT country, source, market, last_disclosed_on FROM company WHERE source_key = '00126380'")
 			.query().singleRow();
+		assertThat(company.get("country")).isEqualTo("KR");
+		assertThat(company.get("source")).isEqualTo("DART");
 		assertThat(company.get("market")).isEqualTo("Y");
 		assertThat(company.get("last_disclosed_on").toString()).isEqualTo("2026-11-13");
 	}
@@ -86,6 +88,64 @@ class DisclosureCollectorIntegrationTest {
 
 		assertThat(second.saved()).isZero();
 		assertThat(jdbc.sql("SELECT count(*) FROM disclosure").query(Long.class).single()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT count(*) FROM company").query(Long.class).single()).isEqualTo(1);
+	}
+
+	@Test
+	void 공시는_출처의_번호가_아니라_회사의_내부_번호를_참조한다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("00126380", "005930", "Y", "20261113000002", "주요사항보고서(자기주식취득결정)"),
+			item("00164779", "000660", "K", "20261113000001", "기업설명회(IR)개최")));
+
+		collector.reconcile(DAY, DAY);
+
+		assertThat(jdbc.sql("""
+			SELECT d.source || ':' || d.source_key || ' -> ' || c.source || ':' || c.source_key
+			  FROM disclosure d JOIN company c ON c.id = d.company_id
+			 ORDER BY d.source_key
+			""").query(String.class).list())
+			.containsExactly("DART:20261113000001 -> DART:00164779", "DART:20261113000002 -> DART:00126380");
+	}
+
+	@Test
+	void 같은_번호라도_출처가_다르면_다른_회사와_다른_공시로_저장된다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("00126380", "005930", "Y", "20261113000001", "공시")));
+		collector.reconcile(DAY, DAY);
+
+		// 아직 없는 출처를 직접 넣는다. 다른 나라의 회사 번호와 공시 번호가 DART의 값과 우연히 같은 경우다
+		long other = jdbc.sql("""
+			INSERT INTO company (country, source, source_key, stock_code, name)
+			VALUES ('US', 'OTHER', '00126380', 'ABC', 'Other Corp') RETURNING id
+			""").query(Long.class).single();
+		jdbc.sql("""
+			INSERT INTO disclosure (source, source_key, company_id, report_name, rcept_date)
+			VALUES ('OTHER', '20261113000001', :company, 'Annual report', DATE '2026-11-13')
+			""").param("company", other).update();
+		// DART를 다시 받아도 다른 출처의 행을 건드리지 않고, DART 공시는 여전히 한 번만 있다
+		DisclosureCollector.CollectResult again = collector.reconcile(DAY, DAY);
+
+		assertThat(again.saved()).isZero();
+		assertThat(jdbc.sql("SELECT source FROM disclosure ORDER BY source").query(String.class).list())
+			.containsExactly("DART", "OTHER");
+		assertThat(jdbc.sql("SELECT source FROM company ORDER BY source").query(String.class).list())
+			.containsExactly("DART", "OTHER");
+	}
+
+	@Test
+	void 출처와_번호가_같은_공시와_회사는_DB가_막는다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("00126380", "005930", "Y", "20261113000001", "공시")));
+		collector.reconcile(DAY, DAY);
+
+		assertThatThrownBy(() -> jdbc.sql("""
+			INSERT INTO disclosure (source, source_key, company_id, report_name, rcept_date)
+			SELECT 'DART', '20261113000001', id, '중복', DATE '2026-11-13' FROM company
+			""").update()).isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+		assertThatThrownBy(() -> jdbc.sql("""
+			INSERT INTO company (country, source, source_key, stock_code, name)
+			VALUES ('KR', 'DART', '00126380', '005930', '중복')
+			""").update()).isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
 	}
 
 	@Test
@@ -158,7 +218,7 @@ class DisclosureCollectorIntegrationTest {
 		DisclosureCollector.CollectResult result = collector.reconcile(DAY, DAY);
 
 		assertThat(result.saved()).isEqualTo(2);
-		assertThat(jdbc.sql("SELECT length(report_name) FROM disclosure WHERE rcept_no = '20261113000003'")
+		assertThat(jdbc.sql("SELECT length(report_name) FROM disclosure WHERE source_key = '20261113000003'")
 			.query(Integer.class).single()).isEqualTo(300);
 	}
 
@@ -256,7 +316,7 @@ class DisclosureCollectorIntegrationTest {
 			""").update();
 		jdbc.sql("""
 			UPDATE disclosure SET tone = 'POSITIVE', impact = 3, classified_by = 'LLM'
-			 WHERE rcept_no = '20261113000002'
+			 WHERE source_key = '20261113000002'
 			""").update();
 
 		int reclassified = classification.reclassifyOutdated();
@@ -327,7 +387,7 @@ class DisclosureCollectorIntegrationTest {
 	private Map<String, Object> classificationOf(String rceptNo) {
 		return jdbc.sql("""
 			SELECT kind, tone, impact::int AS impact, classified_by, rule_version::int AS rule_version, is_correction, is_withdrawn, remark
-			  FROM disclosure WHERE rcept_no = :no
+			  FROM disclosure WHERE source = 'DART' AND source_key = :no
 			""").param("no", rceptNo).query().singleRow();
 	}
 }

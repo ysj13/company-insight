@@ -25,12 +25,12 @@ public class CompanySearchService {
 	}
 
 	/**
-	 * 고유번호로 회사 한 곳을 찾는다.
+	 * 회사 ID로 회사 한 곳을 찾는다.
 	 *
-	 * @param corpCode DART 고유번호
+	 * @param id 회사 ID
 	 * @return 없으면 비어 있음
 	 */
-	public Optional<CompanySummary> find(String corpCode) {
-		return repository.findByCorpCode(corpCode);
+	public Optional<CompanySummary> find(long id) {
+		return repository.findById(id);
 	}
 }

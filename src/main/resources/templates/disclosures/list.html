@@ -20,13 +20,13 @@
 
 		<form class="filters" method="get" th:action="@{/disclosures}">
 			<input type="hidden" name="tone" th:if="${condition.tone != null}" th:value="${condition.tone.name()}">
-			<input type="hidden" name="corp" th:if="${condition.corpCode != null}" th:value="${condition.corpCode}">
+			<input type="hidden" name="company" th:if="${condition.companyId != null}" th:value="${condition.companyId}">
 			<div class="field grow">
 				<label for="company-q">회사</label>
 				<div class="combo" data-company-search th:attr="data-api=@{/api/companies}">
 					<input id="company-q" type="search" name="q" maxlength="50" autocomplete="off"
 						   role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="company-suggestions"
-						   th:placeholder="${condition.corpCode != null} ? '다른 회사 찾기' : '회사명 또는 종목코드'"
+						   th:placeholder="${condition.companyId != null} ? '다른 회사 찾기' : '회사명 또는 종목코드'"
 						   th:value="${condition.keyword}">
 					<ul id="company-suggestions" class="sug" role="listbox" aria-label="회사 목록" hidden></ul>
 					<p class="sug none" role="status" hidden>맞는 회사가 없습니다.</p>
@@ -43,7 +43,7 @@
 			<button type="submit" class="btn">찾기</button>
 		</form>
 
-		<p class="picked" th:if="${condition.corpCode != null}">
+		<p class="picked" th:if="${condition.companyId != null}">
 			<th:block th:if="${result.company != null}">
 				<b th:text="${result.company.name}">회사명</b>
 				<span class="num" th:text="${result.company.stockCode}">000000</span>
@@ -92,7 +92,7 @@
 					<span class="impact" th:if="${d.impactLabel() != null}" th:text="${'영향 ' + d.impactLabel()}">영향 큼</span>
 				</div>
 				<div class="what">
-					<a class="title" th:classappend="${d.withdrawn} ? 'withdrawn'" th:href="${d.dartUrl()}" target="_blank" rel="noopener noreferrer"
+					<a class="title" th:classappend="${d.withdrawn} ? 'withdrawn'" th:href="${d.originalUrl()}" target="_blank" rel="noopener noreferrer"
 					   th:text="${d.reportName}">공시 제목</a>
 					<p class="sub">
 						<span class="company" th:text="${d.companyName}">회사명</span>

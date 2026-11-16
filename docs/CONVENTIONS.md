@@ -48,7 +48,7 @@ com.companyinsight
 
 ### 코드값
 
-- 정해진 값 집합(시장 구분, 실행 상태, 오류 분류, 공시 종류 등)은 Java `enum`으로 둔다. 문자열 리터럴을 코드에 흩어 쓰지 않는다.
+- 정해진 값 집합(출처, 나라, 시장 구분, 실행 상태, 오류 분류, 공시 종류 등)은 Java `enum`으로 둔다. 문자열 리터럴을 코드에 흩어 쓰지 않는다.
 - DB에는 `varchar`로 저장한다. 값은 enum 이름을 쓰되, 외부 시스템의 코드를 그대로 보관해야 하면 enum에 그 코드를 필드로 둔다(예: `Market.dartCode()`).
 - 컬럼 `COMMENT`에 값과 의미를 적는다.
 
@@ -73,13 +73,14 @@ com.companyinsight
 |---|---|---|
 | 테이블 | 단수 명사, snake_case | `company`, `collection_run` |
 | 컬럼 | snake_case | `rcept_date`, `last_disclosed_on` |
-| 기본 키 | 자연키가 있으면 그 이름, 없으면 `id` (bigint identity) | `company.corp_code`, `disclosure.id` |
-| 외부에서 온 값 | 원본 필드명을 따르되 줄임말은 풀어 쓴다 | `rcept_no`, `rcept_dt` → `rcept_date` |
+| 기본 키 | `id` (bigint identity). 외부 시스템의 번호를 기본 키로 쓰지 않는다 | `company.id`, `disclosure.id` |
+| 외부 시스템의 식별 번호 | `source`(출처) + `source_key`(그 출처에서의 번호)로 저장하고 둘을 묶어 unique | `company.source_key`(DART 고유번호), `disclosure.source_key`(DART 접수번호) |
+| 외부에서 온 값 | 원본 필드명을 따르되 줄임말은 풀어 쓴다 | `rcept_dt` → `rcept_date`, `report_nm` → `report_name` |
 | 시각 컬럼 | `_at` | `created_at`, `started_at` |
 | 날짜 컬럼 (직접 만든 값) | `_on` | `last_disclosed_on` |
 | 참·거짓 컬럼 | `is_`, `has_` | `is_verified` |
 | 상태·분류 컬럼 | `varchar` + 대문자 코드값 | `status = 'FAILED'` |
-| 인덱스 | `{테이블}_{컬럼}_idx` | `disclosure_corp_date_idx` |
+| 인덱스 | `{테이블}_{컬럼}_idx`, unique 제약은 `{테이블}_{컬럼}_uq` | `disclosure_company_date_idx`, `disclosure_source_key_uq` |
 | 마이그레이션 | `V{번호}__{설명}.sql`. 적용된 파일은 수정하지 않고 새 버전을 추가 | `V4__collection_run_error_kind.sql` |
 | API 경로 | `/api/{복수 명사}`, kebab-case | `/api/companies` |
 | 화면 경로 | `/{복수 명사}/{식별자}` | `/companies/005930` |

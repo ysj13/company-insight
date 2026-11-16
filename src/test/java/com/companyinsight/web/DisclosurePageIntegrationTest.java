@@ -48,11 +48,14 @@ class DisclosurePageIntegrationTest {
 	@MockitoBean
 	DartClient dart;
 
+	/** 삼성전자의 회사 ID. 내부 번호는 넣을 때마다 달라지므로 넣은 뒤에 받아 둔다 */
+	long samsung;
+
 	@BeforeEach
 	void setUp() {
 		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
-		company("00126380", "005930", "삼성전자");
+		samsung = company("00126380", "005930", "삼성전자");
 		company("00164779", "000660", "SK하이닉스");
 		company("00999001", "123456", "100%_테스트&<b>");
 
@@ -69,7 +72,7 @@ class DisclosurePageIntegrationTest {
 
 		assertThat(page.days()).extracting(DisclosurePage.Day::label)
 			.containsExactly("2026년 11월 16일 (월)", "2026년 11월 13일 (금)", "2026년 11월 12일 (목)");
-		assertThat(page.days().getFirst().items()).extracting(DisclosureSummary::receiptNo)
+		assertThat(page.days().getFirst().items()).extracting(DisclosureSummary::sourceKey)
 			.containsExactly("20261116000301", "20261116000205");
 		assertThat(page.total()).isEqualTo(5);
 		assertThat(page.toneCounts()).containsEntry(ToneFilter.POSITIVE, 1L).containsEntry(ToneFilter.NEGATIVE, 1L)
@@ -81,32 +84,32 @@ class DisclosurePageIntegrationTest {
 		DisclosurePage undecided = service.search(new DisclosureSearchCondition(ToneFilter.UNDECIDED, null, null), 1);
 		DisclosurePage neutral = service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, null, null), 1);
 
-		assertThat(items(undecided)).extracting(DisclosureSummary::receiptNo).containsExactly("20261116000205");
+		assertThat(items(undecided)).extracting(DisclosureSummary::sourceKey).containsExactly("20261116000205");
 		assertThat(undecided.matched()).isEqualTo(1);
 		assertThat(undecided.total()).isEqualTo(5);
 		assertThat(undecided.toneCounts()).containsEntry(ToneFilter.NEUTRAL, 2L);
-		assertThat(items(neutral)).extracting(DisclosureSummary::receiptNo)
+		assertThat(items(neutral)).extracting(DisclosureSummary::sourceKey)
 			.containsExactly("20261113000410", "20261112000077");
 	}
 
 	@Test
 	void 종류와_회사로_거른다() {
 		assertThat(items(service.search(new DisclosureSearchCondition(null, DisclosureKind.MARKET, null), 1)))
-			.extracting(DisclosureSummary::receiptNo).containsExactly("20261113000122");
+			.extracting(DisclosureSummary::sourceKey).containsExactly("20261113000122");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, " sk하이 "), 1)))
 			.extracting(DisclosureSummary::companyName).containsExactly("SK하이닉스", "SK하이닉스");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "0059"), 1)))
 			.extracting(DisclosureSummary::stockCode).containsExactly("005930", "005930");
 		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.POSITIVE, DisclosureKind.MAJOR, "삼성"), 1)))
-			.extracting(DisclosureSummary::receiptNo).containsExactly("20261116000301");
+			.extracting(DisclosureSummary::sourceKey).containsExactly("20261116000301");
 	}
 
 	@Test
 	void 검색어의_LIKE_특수문자는_글자_그대로_찾는다() {
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "%"), 1)))
-			.extracting(DisclosureSummary::receiptNo).containsExactly("20261113000122");
+			.extracting(DisclosureSummary::sourceKey).containsExactly("20261113000122");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "_"), 1)))
-			.extracting(DisclosureSummary::receiptNo).containsExactly("20261113000122");
+			.extracting(DisclosureSummary::sourceKey).containsExactly("20261113000122");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "없는회사"), 1))).isEmpty();
 	}
 
@@ -130,7 +133,7 @@ class DisclosurePageIntegrationTest {
 		// 페이지를 넘겨도 같은 공시가 두 번 나오거나 빠지지 않는다
 		DisclosurePage second = service.search(new DisclosureSearchCondition(null, null, null), 2);
 		assertThat(List.of(first, second, last).stream().flatMap(p -> items(p).stream())
-			.map(DisclosureSummary::receiptNo).distinct()).hasSize(105);
+			.map(DisclosureSummary::sourceKey).distinct()).hasSize(105);
 	}
 
 	@Test
@@ -253,54 +256,58 @@ class DisclosurePageIntegrationTest {
 		disclosure("20261116000555", "00126371", "기업설명회(IR)개최(안내공시)", "2026-11-16", "IR", "NEUTRAL", null, false, false);
 
 		DisclosurePage byName = service.search(new DisclosureSearchCondition(null, null, "삼성전"), 1);
-		DisclosurePage picked = service.search(new DisclosureSearchCondition(null, null, null, "00126380"), 1);
+		DisclosurePage picked = service.search(new DisclosureSearchCondition(null, null, null, samsung), 1);
 
 		assertThat(items(byName)).extracting(DisclosureSummary::companyName)
 			.containsExactlyInAnyOrder("삼성전자", "삼성전자", "삼성전기");
-		assertThat(items(picked)).extracting(DisclosureSummary::receiptNo)
+		assertThat(items(picked)).extracting(DisclosureSummary::sourceKey)
 			.containsExactly("20261116000301", "20261112000077");
 		assertThat(picked.total()).isEqualTo(2);
 		assertThat(picked.toneCounts()).containsEntry(ToneFilter.POSITIVE, 1L).containsEntry(ToneFilter.NEUTRAL, 1L)
 			.containsEntry(ToneFilter.NEGATIVE, 0L).containsEntry(ToneFilter.UNDECIDED, 0L);
 		assertThat(picked.company().name()).isEqualTo("삼성전자");
-		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, DisclosureKind.OWNERSHIP, null, "00126380"), 1)))
-			.extracting(DisclosureSummary::receiptNo).containsExactly("20261112000077");
+		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, DisclosureKind.OWNERSHIP, null, samsung), 1)))
+			.extracting(DisclosureSummary::sourceKey).containsExactly("20261112000077");
 	}
 
 	@Test
 	void 고른_회사를_화면에_보여주고_링크는_고른_회사를_유지한다() throws Exception {
-		jdbc.sql("UPDATE company SET market = 'Y' WHERE corp_code = '00126380'").update();
+		jdbc.sql("UPDATE company SET market = 'Y' WHERE source_key = '00126380'").update();
 
-		mvc.perform(get("/disclosures").param("corp", "00126380").param("kind", "MAJOR"))
+		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)).param("kind", "MAJOR"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("<b>삼성전자</b>")))
 			.andExpect(content().string(containsString("<span class=\"market\">KOSPI</span>")))
 			.andExpect(content().string(containsString("의 공시만 보고 있습니다.")))
-			.andExpect(content().string(containsString("name=\"corp\" value=\"00126380\"")))
-			.andExpect(content().string(containsString("href=\"/disclosures?tone=POSITIVE&amp;kind=MAJOR&amp;corp=00126380\"")))
+			.andExpect(content().string(containsString("name=\"company\" value=\"" + samsung + "\"")))
+			.andExpect(content().string(containsString("href=\"/disclosures?tone=POSITIVE&amp;kind=MAJOR&amp;company=" + samsung + "\"")))
+			// 출처의 번호(DART 고유번호)는 화면 주소에 쓰지 않는다
+			.andExpect(content().string(not(containsString("00126380"))))
 			// 모든 회사 보기: 종류는 유지하고 회사만 푼다
 			.andExpect(content().string(containsString("href=\"/disclosures?kind=MAJOR\"")));
 	}
 
 	@Test
 	void 회사를_고른_채로_검색어를_넣으면_검색어가_우선한다() throws Exception {
-		mvc.perform(get("/disclosures").param("corp", "00126380").param("q", "하이닉스"))
+		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)).param("q", "하이닉스"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("연결재무제표기준영업(잠정)실적(공정공시)")))
 			.andExpect(content().string(not(containsString("의 공시만 보고 있습니다."))))
-			.andExpect(content().string(not(containsString("name=\"corp\""))));
+			.andExpect(content().string(not(containsString("name=\"company\""))));
 	}
 
 	@Test
-	void 형식이_틀린_고유번호는_무시하고_없는_회사는_안내한다() throws Exception {
-		// 따옴표, 7자리, 9자리, 전각 숫자, 앞뒤 공백. 모두 고르지 않은 것으로 보고 전체를 보여준다
-		for (String wrong : List.of("1' OR '1'='1", "0012638", "001263800", "００１２６３８０", " 00126380")) {
-			mvc.perform(get("/disclosures").param("corp", wrong))
+	void 형식이_틀린_회사_ID는_무시하고_없는_회사는_안내한다() throws Exception {
+		// 따옴표, 0, 음수, 0으로 시작, 글자, 전각 숫자, 앞뒤 공백, bigint를 넘는 수, 예전 주소의 DART 고유번호.
+		// 모두 고르지 않은 것으로 보고 전체를 보여준다
+		for (String wrong : List.of("1' OR '1'='1", "0", "-1", "01", "abc", "１２", " " + samsung, samsung + " ",
+			"99999999999999999999", "00126380")) {
+			mvc.perform(get("/disclosures").param("company", wrong))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("연결재무제표기준영업(잠정)실적(공정공시)")))
 				.andExpect(content().string(not(containsString("class=\"picked\""))));
 		}
-		mvc.perform(get("/disclosures").param("corp", "99999999"))
+		mvc.perform(get("/disclosures").param("company", "999999999999999999"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("고른 회사를 찾을 수 없습니다.")))
 			.andExpect(content().string(containsString("조건에 맞는 공시가 없습니다.")));
@@ -308,11 +315,14 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 공백이나_제어_문자뿐인_검색어는_고른_회사를_풀지_않는다() throws Exception {
-		mvc.perform(get("/disclosures").param("corp", "00126380").param("q", "\u0001 "))
+		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)).param("q", "\u0001 "))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("의 공시만 보고 있습니다.")))
 			.andExpect(content().string(not(containsString("연결재무제표기준영업(잠정)실적(공정공시)"))));
-		assertThat(new DisclosureSearchCondition(null, null, "삼성", "00126380").corpCode()).isNull();
+		assertThat(new DisclosureSearchCondition(null, null, "삼성", samsung).companyId()).isNull();
+		assertThat(new DisclosureSearchCondition(null, null, null, 0L).companyId()).isNull();
+		assertThat(DisclosureSearchCondition.companyIdOf(null)).isNull();
+		assertThat(DisclosureSearchCondition.companyIdOf("42")).isEqualTo(42L);
 	}
 
 	@Test
@@ -322,20 +332,23 @@ class DisclosurePageIntegrationTest {
 				null, false, false);
 		}
 
-		mvc.perform(get("/disclosures").param("corp", "00126380"))
-			.andExpect(content().string(containsString("href=\"/disclosures?corp=00126380&amp;page=2\"")));
+		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)))
+			.andExpect(content().string(containsString("href=\"/disclosures?company=" + samsung + "&amp;page=2\"")));
 	}
 
 	@Test
-	void 회사_검색_API는_시장_구분을_함께_준다() throws Exception {
-		company("01344336", "226330", "신테카바이오");
+	void 회사_검색_API는_회사_ID와_시장_구분을_함께_준다() throws Exception {
+		long syntekabio = company("01344336", "226330", "신테카바이오");
 		company("00999002", "654321", "기타법인테스트");
-		jdbc.sql("UPDATE company SET market = 'K' WHERE corp_code = '01344336'").update();
-		jdbc.sql("UPDATE company SET market = 'E' WHERE corp_code = '00999002'").update();
+		jdbc.sql("UPDATE company SET market = 'K' WHERE source_key = '01344336'").update();
+		jdbc.sql("UPDATE company SET market = 'E' WHERE source_key = '00999002'").update();
 
 		mvc.perform(get("/api/companies").param("q", "신테카바이오"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].corpCode").value("01344336"))
+			.andExpect(jsonPath("$[0].id").value(org.hamcrest.Matchers.is((int) syntekabio)))
+			// 출처의 번호는 응답에 넣지 않는다
+			.andExpect(jsonPath("$[0].corpCode").doesNotExist())
+			.andExpect(jsonPath("$[0].sourceKey").doesNotExist())
 			.andExpect(jsonPath("$[0].market").value("KOSDAQ"));
 		// 공시에서 시장 구분을 아직 받지 못한 회사
 		mvc.perform(get("/api/companies").param("q", "삼성전자"))
@@ -352,17 +365,20 @@ class DisclosurePageIntegrationTest {
 		return page.days().stream().flatMap(day -> day.items().stream()).toList();
 	}
 
-	private void company(String corpCode, String stockCode, String name) {
-		jdbc.sql("INSERT INTO company (corp_code, stock_code, name) VALUES (:c, :s, :n)")
-			.param("c", corpCode).param("s", stockCode).param("n", name).update();
+	/** @return 새로 넣은 회사의 ID */
+	private long company(String corpCode, String stockCode, String name) {
+		return jdbc.sql("INSERT INTO company (country, source, source_key, stock_code, name) "
+				+ "VALUES ('KR', 'DART', :c, :s, :n) RETURNING id")
+			.param("c", corpCode).param("s", stockCode).param("n", name).query(Long.class).single();
 	}
 
 	private void disclosure(String rceptNo, String corpCode, String name, String date, String kind, String tone,
 			Integer impact, boolean correction, boolean withdrawn) {
 		jdbc.sql("""
-			INSERT INTO disclosure (rcept_no, corp_code, report_name, rcept_date, kind, tone, impact, classified_by,
-			                        rule_version, is_correction, is_withdrawn)
-			VALUES (:no, :corp, :name, CAST(:date AS date), :kind, :tone, :impact, :by, 1, :correction, :withdrawn)
+			INSERT INTO disclosure (source, source_key, company_id, report_name, rcept_date, kind, tone, impact,
+			                        classified_by, rule_version, is_correction, is_withdrawn)
+			VALUES ('DART', :no, (SELECT id FROM company WHERE source = 'DART' AND source_key = :corp), :name,
+			        CAST(:date AS date), :kind, :tone, :impact, :by, 1, :correction, :withdrawn)
 			""")
 			.param("no", rceptNo).param("corp", corpCode).param("name", name).param("date", date).param("kind", kind)
 			.param("tone", tone, java.sql.Types.VARCHAR).param("impact", impact, java.sql.Types.SMALLINT)

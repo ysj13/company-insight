@@ -30,9 +30,9 @@ public class DisclosureQueryService {
 	 * @param page 페이지 번호(1부터). 범위를 벗어나면 첫 페이지 또는 마지막 페이지로 맞춘다
 	 */
 	public DisclosurePage search(DisclosureSearchCondition condition, int page) {
-		// 고른 회사가 목록에 없는 고유번호여도 오류로 보지 않는다. 공시가 0건으로 나오고 회사 정보만 비어 있다
-		CompanySummary company = condition.corpCode() == null ? null
-				: companies.find(condition.corpCode()).orElse(null);
+		// 고른 회사가 없는 회사 ID여도 오류로 보지 않는다. 공시가 0건으로 나오고 회사 정보만 비어 있다
+		CompanySummary company = condition.companyId() == null ? null
+				: companies.find(condition.companyId()).orElse(null);
 		Map<ToneFilter, Long> toneCounts = repository.countByTone(condition);
 		long total = toneCounts.values().stream().mapToLong(Long::longValue).sum();
 		long matched = condition.tone() == null ? total : toneCounts.get(condition.tone());

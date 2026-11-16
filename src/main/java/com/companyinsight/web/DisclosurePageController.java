@@ -17,6 +17,9 @@ public class DisclosurePageController {
 
 	static final String PATH = "/disclosures";
 
+	/** 고른 회사의 ID를 담는 주소 파라미터 이름 */
+	static final String COMPANY_PARAM = "company";
+
 	private final DisclosureQueryService queryService;
 
 	public DisclosurePageController(DisclosureQueryService queryService) {
@@ -29,14 +32,15 @@ public class DisclosurePageController {
 	 * @param tone 판정 조건. 없으면 전체
 	 * @param kind 공시 종류 조건. 없으면 전체
 	 * @param q    회사명 일부 또는 종목코드 앞부분. 이름이 맞는 회사를 모두 보여준다
-	 * @param corp 고른 회사의 DART 고유번호. 그 회사의 공시만 보여준다. 검색어를 새로 넣으면 검색어가 우선한다
+	 * @param company 고른 회사의 ID. 그 회사의 공시만 보여준다. 형식이 틀리면 고르지 않은 것으로 본다. 검색어를 새로 넣으면 검색어가 우선한다
 	 * @param page 페이지 번호(1부터)
 	 */
 	@GetMapping(PATH)
 	public String list(@RequestParam(required = false) ToneFilter tone, @RequestParam(required = false) DisclosureKind kind,
-			@RequestParam(required = false) String q, @RequestParam(required = false) String corp,
+			@RequestParam(required = false) String q, @RequestParam(name = COMPANY_PARAM, required = false) String company,
 			@RequestParam(defaultValue = "1") int page, Model model) {
-		DisclosureSearchCondition condition = new DisclosureSearchCondition(tone, kind, q, corp);
+		DisclosureSearchCondition condition = new DisclosureSearchCondition(tone, kind, q,
+			DisclosureSearchCondition.companyIdOf(company));
 		model.addAttribute("condition", condition);
 		model.addAttribute("result", queryService.search(condition, page));
 		model.addAttribute("links", new DisclosureListLinks(condition));
