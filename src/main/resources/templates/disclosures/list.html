@@ -16,7 +16,7 @@
 <main class="inner gutter">
 	<section class="card">
 		<h1>공시 목록</h1>
-		<p class="meta">최근 접수된 순서입니다. 제목을 누르면 DART 원문이 열립니다.</p>
+		<p class="meta">접수일이 최근인 순서입니다. 제목을 누르면 DART 원문이 열립니다.</p>
 
 		<form class="filters" method="get" th:action="@{/disclosures}">
 			<input type="hidden" name="tone" th:if="${condition.tone != null}" th:value="${condition.tone.name()}">
@@ -40,8 +40,7 @@
 			   th:aria-current="${condition.tone == null} ? 'true'">
 				전체 <b class="num" th:text="${#numbers.formatInteger(result.total, 1, 'COMMA')}">0</b>
 			</a>
-			<a th:each="t : ${tones}" th:href="${links.tone(t)}"
-			   th:class="${'tone-' + #strings.toLowerCase(t.name())}" th:classappend="${condition.tone == t} ? 'on'"
+			<a th:each="t : ${tones}" th:href="${links.tone(t)}" th:classappend="${condition.tone == t} ? 'on'"
 			   th:aria-current="${condition.tone == t} ? 'true'">
 				<span th:text="${t.label()}">호재</span>
 				<b class="num" th:text="${#numbers.formatInteger(result.countOf(t), 1, 'COMMA')}">0</b>
@@ -53,8 +52,9 @@
 			<ul>
 				<li><b>호재·악재</b>는 공시 제목만으로 방향이 정해지는 것을 규칙으로 판정한 결과입니다. 옆의 <b>영향</b>은 작음·보통·큼 세 단계입니다.</li>
 				<li><b>중립</b>은 정기보고서나 절차 안내처럼 방향이 없는 공시입니다.</li>
-				<li><b>미판정</b>은 본문을 읽어야 알 수 있어 아직 판정하지 않은 공시입니다.</li>
-				<li><b>정정</b>은 이미 낸 공시를 고치거나 첨부를 더한 공시, <b>철회</b>는 취소된 공시입니다.</li>
+				<li><b>미판정</b>은 제목만으로는 정하지 못해 아직 판정하지 않은 공시입니다.</li>
+				<li><b>후속 공시</b>는 제목 앞에 [기재정정], [첨부추가] 같은 머리말이 붙은 공시입니다. 이미 낸 공시를 고치거나 보탠 것이라 판정은 앞선 공시와 같게 표시하고, 종목 판단을 계산할 때는 같은 소식을 두 번 세지 않도록 뺍니다.</li>
+				<li><b>철회</b>는 취소된 공시입니다. 없던 일이 되므로 호재·악재로 세지 않고 중립으로 둡니다.</li>
 			</ul>
 		</details>
 	</section>
@@ -73,13 +73,13 @@
 					<span class="impact" th:if="${d.impactLabel() != null}" th:text="${'영향 ' + d.impactLabel()}">영향 큼</span>
 				</div>
 				<div class="what">
-					<a class="title" th:href="${d.dartUrl()}" target="_blank" rel="noopener noreferrer"
+					<a class="title" th:classappend="${d.withdrawn} ? 'withdrawn'" th:href="${d.dartUrl()}" target="_blank" rel="noopener noreferrer"
 					   th:text="${d.reportName}">공시 제목</a>
 					<p class="sub">
 						<span class="company" th:text="${d.companyName}">회사명</span>
 						<span class="num" th:text="${d.stockCode}">000000</span>
 						<span th:text="${d.kind.label()}">종류</span>
-						<span class="tag" th:if="${d.correction}">정정</span>
+						<span class="tag" th:if="${d.correction}">후속 공시</span>
 						<span class="tag" th:if="${d.withdrawn}">철회</span>
 					</p>
 				</div>

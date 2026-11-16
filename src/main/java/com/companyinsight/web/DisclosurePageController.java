@@ -24,6 +24,8 @@ public class DisclosurePageController {
 	}
 
 	/**
+	 * 조건에 맞는 공시 목록 한 페이지를 보여준다. 판정·종류 값이 정해진 이름이 아니거나 페이지가 숫자가 아니면 400이다.
+	 *
 	 * @param tone 판정 조건. 없으면 전체
 	 * @param kind 공시 종류 조건. 없으면 전체
 	 * @param q    회사명 일부 또는 종목코드 앞부분

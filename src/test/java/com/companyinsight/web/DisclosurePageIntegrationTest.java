@@ -139,11 +139,79 @@ class DisclosurePageIntegrationTest {
 			.andExpect(content().string(containsString("주요사항보고서(자기주식취득결정)")))
 			.andExpect(content().string(containsString("https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261116000301")))
 			.andExpect(content().string(containsString("영향 보통")))
-			.andExpect(content().string(containsString("미판정")))
-			.andExpect(content().string(containsString("정정")))
-			.andExpect(content().string(containsString("철회")))
 			.andExpect(content().string(containsString("출처: 금융감독원 전자공시시스템(DART)")))
-			.andExpect(content().string(containsString("AI 요약은 틀릴 수 있으며 투자 권유가 아닙니다")));
+			.andExpect(content().string(containsString("AI 요약은 틀릴 수 있으며 투자 권유가 아닙니다")))
+			// 5건뿐이라 페이지 이동이 없다
+			.andExpect(content().string(not(containsString("class=\"pager\""))));
+	}
+
+	// 아래 표시 검증은 종류로 걸러 한 줄만 나오게 한 뒤 마크업으로 확인한다. 도움말에도 같은 낱말이 있어 글자만 찾으면 항상 통과한다.
+
+	@Test
+	void 호재_공시는_호재_배지와_영향을_보여주고_후속_철회_표시는_없다() throws Exception {
+		mvc.perform(get("/disclosures").param("kind", "MAJOR"))
+			.andExpect(content().string(containsString("class=\"pill tone-positive\"")))
+			.andExpect(content().string(containsString("<span class=\"impact\">영향 보통</span>")))
+			.andExpect(content().string(not(containsString("<span class=\"tag\">"))))
+			.andExpect(content().string(not(containsString("title withdrawn"))));
+	}
+
+	@Test
+	void 판정하지_않은_공시는_미판정_배지만_있고_영향은_없다() throws Exception {
+		mvc.perform(get("/disclosures").param("kind", "EARNINGS"))
+			.andExpect(content().string(containsString("class=\"pill tone-undecided\"")))
+			.andExpect(content().string(not(containsString("class=\"impact\""))));
+	}
+
+	@Test
+	void 머리말이_붙은_공시에는_후속_공시_표시가_붙는다() throws Exception {
+		mvc.perform(get("/disclosures").param("kind", "PERIODIC"))
+			.andExpect(content().string(containsString("[기재정정]분기보고서 (2026.09)")))
+			.andExpect(content().string(containsString("<span class=\"tag\">후속 공시</span>")))
+			.andExpect(content().string(not(containsString("<span class=\"tag\">철회</span>"))));
+	}
+
+	@Test
+	void 철회된_공시는_철회_표시와_함께_제목에_취소선을_긋는다() throws Exception {
+		mvc.perform(get("/disclosures").param("kind", "OWNERSHIP"))
+			.andExpect(content().string(containsString("<span class=\"tag\">철회</span>")))
+			.andExpect(content().string(containsString("class=\"title withdrawn\"")))
+			.andExpect(content().string(containsString("class=\"pill tone-neutral\"")))
+			.andExpect(content().string(not(containsString("<span class=\"tag\">후속 공시</span>"))));
+	}
+
+	@Test
+	void 다음_페이지_링크는_조건을_유지한다() throws Exception {
+		for (int i = 0; i < 60; i++) {
+			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "IR", "NEUTRAL",
+				null, false, false);
+		}
+
+		mvc.perform(get("/disclosures").param("kind", "IR").param("q", "삼성"))
+			.andExpect(content().string(containsString("class=\"pager\"")))
+			.andExpect(content().string(containsString("/disclosures?kind=IR&amp;q=%EC%82%BC%EC%84%B1&amp;page=2")));
+	}
+
+	@Test
+	void 공시_제목과_검색어의_HTML_문자도_바꿔서_보여준다() throws Exception {
+		disclosure("20261116000999", "00126380", "<script>alert(1)</script>", "2026-11-16", "ETC", null, null, false, false);
+
+		mvc.perform(get("/disclosures").param("kind", "ETC"))
+			.andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
+			.andExpect(content().string(not(containsString("<script>"))));
+		mvc.perform(get("/disclosures").param("q", "\"><i>"))
+			.andExpect(content().string(containsString("value=\"&quot;&gt;&lt;i&gt;\"")));
+	}
+
+	@Test
+	void 검색어의_제어_문자는_지우고_찾는다() throws Exception {
+		mvc.perform(get("/disclosures").param("q", "\u0000삼성\u0000전자"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("주요사항보고서(자기주식취득결정)")));
+		assertThat(new DisclosureSearchCondition(null, null, "\u0000 \t").keyword()).isNull();
+		assertThat(new DisclosureSearchCondition(null, null, "😀".repeat(60)).keyword()).isEqualTo("😀".repeat(50));
+		// QueryDSL이 LIKE 이스케이프에 쓰는 글자도 그대로 찾는다
+		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "!"), 1))).isEmpty();
 	}
 
 	@Test
@@ -170,11 +238,12 @@ class DisclosurePageIntegrationTest {
 	}
 
 	@Test
-	void 빈_조건은_전체로_보고_모르는_판정_값은_400() throws Exception {
+	void 빈_조건은_전체로_보고_모르는_판정_값과_숫자가_아닌_페이지는_400() throws Exception {
 		mvc.perform(get("/disclosures").param("tone", "").param("kind", "").param("q", ""))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("임원ㆍ주요주주특정증권등거래계획보고서")));
 		mvc.perform(get("/disclosures").param("tone", "GOOD")).andExpect(status().isBadRequest());
+		mvc.perform(get("/disclosures").param("page", "abc")).andExpect(status().isBadRequest());
 	}
 
 	private static List<DisclosureSummary> items(DisclosurePage page) {

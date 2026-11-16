@@ -38,7 +38,7 @@ public record DisclosurePage(List<Day> days, Map<ToneFilter, Long> toneCounts, l
 	 * 같은 날 접수된 공시 묶음.
 	 *
 	 * @param date  접수일
-	 * @param items 그날의 공시. 나중에 접수된 것이 먼저
+	 * @param items 그날의 공시. 접수번호가 큰 것이 먼저
 	 */
 	public record Day(LocalDate date, List<DisclosureSummary> items) {
 

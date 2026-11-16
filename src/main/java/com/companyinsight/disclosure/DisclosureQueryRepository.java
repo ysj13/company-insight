@@ -4,6 +4,7 @@ import com.companyinsight.company.QCompany;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.util.EnumMap;
 import java.util.List;
@@ -27,7 +28,9 @@ public class DisclosureQueryRepository {
 	}
 
 	/**
-	 * 조건에 맞는 공시를 최근 접수 순으로 가져온다. 같은 날짜 안에서는 접수번호가 큰 것(나중에 접수된 것)이 먼저다.
+	 * 조건에 맞는 공시를 접수일이 최근인 순으로 가져온다. 같은 날짜 안에서는 접수번호가 큰 것이 먼저다.
+	 * 접수번호는 제출 경로(금융감독원, 거래소 시장별)마다 번호대가 달라 같은 날 안의 순서는 접수 시각 순서가 아니다.
+	 * 접수번호가 유일해서 페이지를 넘겨도 순서가 흔들리지 않는다.
 	 *
 	 * @param offset 건너뛸 건수
 	 * @param limit  최대 건수
@@ -53,13 +56,12 @@ public class DisclosureQueryRepository {
 	 * @return 네 가지 판정 모두에 대한 건수. 없는 판정은 0
 	 */
 	public Map<ToneFilter, Long> countByTone(DisclosureSearchCondition condition) {
-		List<Tuple> rows = query
-			.select(DISCLOSURE.tone, DISCLOSURE.count())
-			.from(DISCLOSURE)
-			.join(DISCLOSURE.company, COMPANY)
-			.where(kindAndKeyword(condition))
-			.groupBy(DISCLOSURE.tone)
-			.fetch();
+		JPAQuery<Tuple> counting = query.select(DISCLOSURE.tone, DISCLOSURE.count()).from(DISCLOSURE);
+		if (condition.keyword() != null) {
+			// 회사 조건이 없으면 조인하지 않는다. 조건 없는 첫 화면이 가장 자주 열리고 전체 행을 센다
+			counting.join(DISCLOSURE.company, COMPANY);
+		}
+		List<Tuple> rows = counting.where(kindAndKeyword(condition)).groupBy(DISCLOSURE.tone).fetch();
 		Map<ToneFilter, Long> counts = new EnumMap<>(ToneFilter.class);
 		for (ToneFilter filter : ToneFilter.values()) {
 			counts.put(filter, 0L);
