@@ -18,6 +18,8 @@ repositories {
 }
 
 val querydslVersion = "7.7"
+// springdoc 3.2.0이 맞춰 둔 버전
+val therapiVersion = "0.15.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -30,6 +32,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
+	// API 문서의 설명을 Javadoc에서 가져온다. 빌드할 때 Javadoc을 리소스로 담고(scribe), springdoc이 실행 중에 읽는다
+	runtimeOnly("com.github.therapi:therapi-runtime-javadoc:$therapiVersion")
+	annotationProcessor("com.github.therapi:therapi-runtime-javadoc-scribe:$therapiVersion")
 	implementation("com.github.ben-manes.caffeine:caffeine")
 	implementation("io.github.resilience4j:resilience4j-ratelimiter:2.4.0")
 	implementation("io.github.openfeign.querydsl:querydsl-jpa:$querydslVersion")
@@ -57,6 +62,11 @@ dependencies {
 tasks.withType<JavaCompile> {
 	options.encoding = "UTF-8"
 	options.compilerArgs.add("-parameters")
+}
+
+tasks.named<JavaCompile>("compileJava") {
+	// Javadoc을 담는 범위를 이 프로젝트의 코드로 좁힌다. 테스트 코드에는 이 처리기가 없어 본 코드 컴파일에만 준다
+	options.compilerArgs.add("-Ajavadoc.packages=com.companyinsight")
 }
 
 tasks.withType<Test> {

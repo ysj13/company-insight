@@ -94,6 +94,8 @@ com.companyinsight
 
 - 성공: JSON 본문. 목록은 배열 또는 페이지 객체.
 - API 문서는 springdoc-openapi가 자동 생성한다. 컨트롤러에 문서용 애너테이션을 쌓지 않는다. 운영에서는 끈다(`API_DOCS_ENABLED`).
+- API 문서의 설명은 Javadoc에서 나온다. 컨트롤러 클래스와 메서드의 Javadoc, 메서드의 `@param`·`@return`, 응답 record의 `@param`이 그대로 문서에 보이므로 API를 쓰는 사람이 읽을 말로 적는다. 메서드 Javadoc의 첫 문장이 목록에 보이는 요약이다.
+- 문서 제목과 공통 400 응답은 `common.config.OpenApiConfig`에 있다.
 - 오류: RFC 9457 Problem Details (`application/problem+json`). Spring `ProblemDetail`을 쓴다.
 
 | 상황 | 상태 코드 |
