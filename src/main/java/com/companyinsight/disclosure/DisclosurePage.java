@@ -1,5 +1,6 @@
 package com.companyinsight.disclosure;
 
+import com.companyinsight.company.CompanySummary;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Map;
 /**
  * 공시 목록 한 페이지.
  *
+ * @param company    회사 한 곳을 골라 보는 중이면 그 회사. 아니면 null
  * @param days       이 페이지의 공시를 접수일별로 묶은 것. 최근 날짜가 먼저
  * @param toneCounts 판정별 건수. 종류·회사 조건만 적용한 값이다
  * @param total      종류·회사 조건에 맞는 전체 건수 (판정 조건 적용 전)
@@ -16,7 +18,7 @@ import java.util.Map;
  * @param page       지금 페이지 (1부터)
  * @param totalPages 전체 페이지 수. 공시가 없어도 1
  */
-public record DisclosurePage(List<Day> days, Map<ToneFilter, Long> toneCounts, long total, long matched, int page,
+public record DisclosurePage(CompanySummary company, List<Day> days, Map<ToneFilter, Long> toneCounts, long total, long matched, int page,
 		int totalPages) {
 
 	/** 종류·회사 조건에 맞는 공시 중 이 판정인 것의 건수. */

@@ -77,6 +77,10 @@ public class DisclosureQueryRepository {
 		if (condition.kind() != null) {
 			where.and(DISCLOSURE.kind.eq(condition.kind()));
 		}
+		if (condition.corpCode() != null) {
+			// 외래키 컬럼(disclosure.corp_code)으로 비교하므로 company를 조인하지 않아도 된다
+			where.and(DISCLOSURE.company.corpCode.eq(condition.corpCode()));
+		}
 		if (condition.keyword() != null) {
 			// contains·startsWith는 검색어의 %, _를 글자 그대로 찾도록 이스케이프한다
 			where.and(COMPANY.name.containsIgnoreCase(condition.keyword())

@@ -26,6 +26,12 @@ public record DisclosureListLinks(DisclosureSearchCondition condition) {
 		return build(condition.tone(), page);
 	}
 
+	/** 고른 회사를 풀고 나머지 조건은 유지한 주소. */
+	public String allCompanies() {
+		return new DisclosureListLinks(
+			new DisclosureSearchCondition(condition.tone(), condition.kind(), condition.keyword(), null)).page(1);
+	}
+
 	private String build(ToneFilter tone, int page) {
 		UriComponentsBuilder uri = UriComponentsBuilder.fromPath(DisclosurePageController.PATH);
 		if (tone != null) {
@@ -36,6 +42,10 @@ public record DisclosureListLinks(DisclosureSearchCondition condition) {
 		}
 		if (condition.keyword() != null) {
 			uri.queryParam("q", "{q}");
+		}
+		if (condition.corpCode() != null) {
+			// 숫자 8자리만 통과한 값이라 인코딩할 글자가 없다
+			uri.queryParam("corp", condition.corpCode());
 		}
 		if (page > 1) {
 			uri.queryParam("page", page);

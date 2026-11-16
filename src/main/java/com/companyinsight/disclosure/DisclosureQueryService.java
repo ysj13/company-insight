@@ -1,5 +1,7 @@
 package com.companyinsight.disclosure;
 
+import com.companyinsight.company.CompanySearchService;
+import com.companyinsight.company.CompanySummary;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,9 +17,11 @@ public class DisclosureQueryService {
 	static final int PAGE_SIZE = 50;
 
 	private final DisclosureQueryRepository repository;
+	private final CompanySearchService companies;
 
-	public DisclosureQueryService(DisclosureQueryRepository repository) {
+	public DisclosureQueryService(DisclosureQueryRepository repository, CompanySearchService companies) {
 		this.repository = repository;
+		this.companies = companies;
 	}
 
 	/**
@@ -26,6 +30,9 @@ public class DisclosureQueryService {
 	 * @param page 페이지 번호(1부터). 범위를 벗어나면 첫 페이지 또는 마지막 페이지로 맞춘다
 	 */
 	public DisclosurePage search(DisclosureSearchCondition condition, int page) {
+		// 고른 회사가 목록에 없는 고유번호여도 오류로 보지 않는다. 공시가 0건으로 나오고 회사 정보만 비어 있다
+		CompanySummary company = condition.corpCode() == null ? null
+				: companies.find(condition.corpCode()).orElse(null);
 		Map<ToneFilter, Long> toneCounts = repository.countByTone(condition);
 		long total = toneCounts.values().stream().mapToLong(Long::longValue).sum();
 		long matched = condition.tone() == null ? total : toneCounts.get(condition.tone());
@@ -33,7 +40,7 @@ public class DisclosureQueryService {
 		int totalPages = (int) Math.max(1, (matched + PAGE_SIZE - 1) / PAGE_SIZE);
 		int current = Math.clamp(page, 1, totalPages);
 		List<DisclosureSummary> items = repository.find(condition, (long) (current - 1) * PAGE_SIZE, PAGE_SIZE);
-		return new DisclosurePage(groupByDay(items), toneCounts, total, matched, current, totalPages);
+		return new DisclosurePage(company, groupByDay(items), toneCounts, total, matched, current, totalPages);
 	}
 
 	/** 접수일 순으로 정렬된 목록을 날짜별로 묶는다. */

@@ -20,10 +20,17 @@
 
 		<form class="filters" method="get" th:action="@{/disclosures}">
 			<input type="hidden" name="tone" th:if="${condition.tone != null}" th:value="${condition.tone.name()}">
-			<label class="field grow">
-				<span>회사</span>
-				<input type="search" name="q" maxlength="50" placeholder="회사명 또는 종목코드" th:value="${condition.keyword}">
-			</label>
+			<input type="hidden" name="corp" th:if="${condition.corpCode != null}" th:value="${condition.corpCode}">
+			<div class="field grow">
+				<label for="company-q">회사</label>
+				<div class="combo" data-company-search th:attr="data-api=@{/api/companies}">
+					<input id="company-q" type="search" name="q" maxlength="50" autocomplete="off"
+						   role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="company-suggestions"
+						   th:placeholder="${condition.corpCode != null} ? '다른 회사 찾기' : '회사명 또는 종목코드'"
+						   th:value="${condition.keyword}">
+					<ul id="company-suggestions" class="sug" role="listbox" aria-label="회사 목록" hidden></ul>
+				</div>
+			</div>
 			<label class="field">
 				<span>종류</span>
 				<select name="kind">
@@ -34,6 +41,17 @@
 			</label>
 			<button type="submit" class="btn">찾기</button>
 		</form>
+
+		<p class="picked" th:if="${condition.corpCode != null}">
+			<th:block th:if="${result.company != null}">
+				<b th:text="${result.company.name}">회사명</b>
+				<span class="num" th:text="${result.company.stockCode}">000000</span>
+				<span class="market" th:if="${result.company.market != null}" th:text="${result.company.market.name()}">KOSPI</span>
+				<span>의 공시만 보고 있습니다.</span>
+			</th:block>
+			<span th:if="${result.company == null}">고른 회사를 찾을 수 없습니다.</span>
+			<a th:href="${links.allCompanies()}">모든 회사 보기</a>
+		</p>
 
 		<nav class="tones" aria-label="판정으로 거르기">
 			<a th:href="${links.tone(null)}" th:classappend="${condition.tone == null} ? 'on'"
@@ -100,5 +118,6 @@
 		<p>판정은 자동으로 분류한 결과라 틀릴 수 있습니다. AI 요약은 틀릴 수 있으며 투자 권유가 아닙니다.</p>
 	</footer>
 </main>
+<script th:src="@{/js/company-search.js}" defer></script>
 </body>
 </html>

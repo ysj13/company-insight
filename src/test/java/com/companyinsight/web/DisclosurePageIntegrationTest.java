@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.companyinsight.TestcontainersConfiguration;
@@ -244,6 +245,74 @@ class DisclosurePageIntegrationTest {
 			.andExpect(content().string(containsString("임원ㆍ주요주주특정증권등거래계획보고서")));
 		mvc.perform(get("/disclosures").param("tone", "GOOD")).andExpect(status().isBadRequest());
 		mvc.perform(get("/disclosures").param("page", "abc")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void 회사를_고르면_이름이_비슷한_회사는_빼고_그_회사_공시만_보여준다() {
+		company("00126371", "009150", "삼성전기");
+		disclosure("20261116000555", "00126371", "기업설명회(IR)개최(안내공시)", "2026-11-16", "IR", "NEUTRAL", null, false, false);
+
+		DisclosurePage byName = service.search(new DisclosureSearchCondition(null, null, "삼성전"), 1);
+		DisclosurePage picked = service.search(new DisclosureSearchCondition(null, null, null, "00126380"), 1);
+
+		assertThat(items(byName)).extracting(DisclosureSummary::companyName)
+			.containsExactlyInAnyOrder("삼성전자", "삼성전자", "삼성전기");
+		assertThat(items(picked)).extracting(DisclosureSummary::receiptNo)
+			.containsExactly("20261116000301", "20261112000077");
+		assertThat(picked.total()).isEqualTo(2);
+		assertThat(picked.toneCounts()).containsEntry(ToneFilter.POSITIVE, 1L).containsEntry(ToneFilter.NEUTRAL, 1L)
+			.containsEntry(ToneFilter.NEGATIVE, 0L).containsEntry(ToneFilter.UNDECIDED, 0L);
+		assertThat(picked.company().name()).isEqualTo("삼성전자");
+		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, DisclosureKind.OWNERSHIP, null, "00126380"), 1)))
+			.extracting(DisclosureSummary::receiptNo).containsExactly("20261112000077");
+	}
+
+	@Test
+	void 고른_회사를_화면에_보여주고_링크는_고른_회사를_유지한다() throws Exception {
+		jdbc.sql("UPDATE company SET market = 'Y' WHERE corp_code = '00126380'").update();
+
+		mvc.perform(get("/disclosures").param("corp", "00126380").param("kind", "MAJOR"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("<b>삼성전자</b>")))
+			.andExpect(content().string(containsString("<span class=\"market\">KOSPI</span>")))
+			.andExpect(content().string(containsString("의 공시만 보고 있습니다.")))
+			.andExpect(content().string(containsString("name=\"corp\" value=\"00126380\"")))
+			.andExpect(content().string(containsString("href=\"/disclosures?tone=POSITIVE&amp;kind=MAJOR&amp;corp=00126380\"")))
+			// 모든 회사 보기: 종류는 유지하고 회사만 푼다
+			.andExpect(content().string(containsString("href=\"/disclosures?kind=MAJOR\"")));
+	}
+
+	@Test
+	void 회사를_고른_채로_검색어를_넣으면_검색어가_우선한다() throws Exception {
+		mvc.perform(get("/disclosures").param("corp", "00126380").param("q", "하이닉스"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("연결재무제표기준영업(잠정)실적(공정공시)")))
+			.andExpect(content().string(not(containsString("의 공시만 보고 있습니다."))))
+			.andExpect(content().string(not(containsString("name=\"corp\""))));
+	}
+
+	@Test
+	void 형식이_틀린_고유번호는_무시하고_없는_회사는_안내한다() throws Exception {
+		mvc.perform(get("/disclosures").param("corp", "1' OR '1'='1"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("주요사항보고서(자기주식취득결정)")))
+			.andExpect(content().string(not(containsString("class=\"picked\""))));
+		mvc.perform(get("/disclosures").param("corp", "99999999"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("고른 회사를 찾을 수 없습니다.")))
+			.andExpect(content().string(containsString("조건에 맞는 공시가 없습니다.")));
+	}
+
+	@Test
+	void 회사_검색_API는_시장_구분을_함께_준다() throws Exception {
+		jdbc.sql("UPDATE company SET market = 'K' WHERE corp_code = '00164779'").update();
+
+		mvc.perform(get("/api/companies").param("q", "SK하이닉스"))
+			.andExpect(jsonPath("$[0].corpCode").value("00164779"))
+			.andExpect(jsonPath("$[0].market").value("KOSDAQ"));
+		// 최근 공시가 없어 시장을 모르는 회사
+		mvc.perform(get("/api/companies").param("q", "삼성전자"))
+			.andExpect(jsonPath("$[0].market").value(org.hamcrest.Matchers.nullValue()));
 	}
 
 	private static List<DisclosureSummary> items(DisclosurePage page) {

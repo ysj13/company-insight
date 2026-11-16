@@ -2,7 +2,9 @@ package com.companyinsight.company;
 
 import java.sql.Date;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -35,7 +37,7 @@ public class CompanyRepository {
 	 * 종목코드는 앞부분 일치로 찾는다.
 	 */
 	private static final String SEARCH = """
-		SELECT corp_code, stock_code, name
+		SELECT corp_code, stock_code, name, market
 		  FROM company
 		 WHERE name ILIKE '%' || :q || '%' OR stock_code LIKE :q || '%'
 		 ORDER BY CASE
@@ -46,6 +48,10 @@ public class CompanyRepository {
 		          length(name), name
 		 LIMIT :limit
 		""";
+
+	/** market에는 DART 법인 구분 코드가 들어 있다. 최근 공시가 없는 회사는 NULL이다. */
+	private static final RowMapper<CompanySummary> SUMMARY = (rs, i) -> new CompanySummary(rs.getString("corp_code"),
+		rs.getString("stock_code"), rs.getString("name"), Market.fromDartCode(rs.getString("market")).orElse(null));
 
 	private final JdbcTemplate jdbcTemplate;
 	private final JdbcClient jdbcClient;
@@ -95,8 +101,20 @@ public class CompanyRepository {
 			.param("q", escapeLike(keyword))
 			.param("raw", keyword)
 			.param("limit", SEARCH_LIMIT)
-			.query((rs, i) -> new CompanySummary(rs.getString("corp_code"), rs.getString("stock_code"), rs.getString("name")))
+			.query(SUMMARY)
 			.list();
+	}
+
+	/**
+	 * 고유번호로 회사 한 곳을 찾는다.
+	 *
+	 * @return 없으면 비어 있음
+	 */
+	public Optional<CompanySummary> findByCorpCode(String corpCode) {
+		return jdbcClient.sql("SELECT corp_code, stock_code, name, market FROM company WHERE corp_code = :c")
+			.param("c", corpCode)
+			.query(SUMMARY)
+			.optional();
 	}
 
 	/** LIKE 특수문자(%, _, \)를 글자 그대로 찾도록 이스케이프. PostgreSQL LIKE의 기본 이스케이프 문자는 \. */
