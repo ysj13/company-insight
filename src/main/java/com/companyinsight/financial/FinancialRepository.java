@@ -1,110 +1,99 @@
 package com.companyinsight.financial;
 
 import com.companyinsight.common.source.Source;
-import java.util.Comparator;
 import java.util.List;
-import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.Optional;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** financial 테이블 접근. 저장은 PostgreSQL의 ON CONFLICT를 쓰기 위해 JDBC로 한다. */
+/** financial 테이블 접근. 출처에서 받은 재무 응답을 보고서 단위로 저장한다. */
 @Repository
 public class FinancialRepository {
 
 	/**
-	 * 없으면 넣고, 있으면 금액·통화·근거 보고서가 바뀐 경우에만 갱신한다.
-	 * 정정 보고서가 나와 출처의 값이 바뀌면 다시 받을 때 반영된다.
+	 * 없으면 넣고, 있으면 받은 시각을 고친다. 응답 내용이 바뀐 경우에만 수정 시각을 바꾼다.
+	 * 내용은 JSON 값으로 비교한다. 공백이나 키 순서만 다른 응답은 같은 내용이다.
+	 *
+	 * <p>돌려주는 값은 "새로 저장했거나 내용이 바뀌었는가"다. 이 문장을 실행하기 전의 내용(previous)과 비교하므로
+	 * 트랜잭션 안에서 불러도 결과가 같다. 같은 보고서를 두 곳에서 동시에 저장하면 이 값은 둘 다 true일 수 있다
+	 * (저장되는 내용과 수정 시각은 정확하다).
 	 */
 	private static final String UPSERT = """
-		INSERT INTO financial (company_id, fiscal_year, report_type, statement_type, account,
-		                       amount, cumulative_amount, prior_amount, prior_cumulative_amount,
-		                       currency, source, source_key)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (company_id, fiscal_year, report_type, statement_type, account) DO UPDATE
-		   SET amount = EXCLUDED.amount,
-		       cumulative_amount = EXCLUDED.cumulative_amount,
-		       prior_amount = EXCLUDED.prior_amount,
-		       prior_cumulative_amount = EXCLUDED.prior_cumulative_amount,
-		       currency = EXCLUDED.currency,
-		       source = EXCLUDED.source,
-		       source_key = EXCLUDED.source_key,
-		       updated_at = now()
-		 WHERE (financial.amount, financial.cumulative_amount, financial.prior_amount,
-		        financial.prior_cumulative_amount, financial.currency, financial.source, financial.source_key)
-		       IS DISTINCT FROM
-		       (EXCLUDED.amount, EXCLUDED.cumulative_amount, EXCLUDED.prior_amount,
-		        EXCLUDED.prior_cumulative_amount, EXCLUDED.currency, EXCLUDED.source, EXCLUDED.source_key)
+		WITH previous AS (
+		    SELECT payload FROM financial
+		     WHERE company_id = :companyId AND source = :source
+		       AND fiscal_year = :fiscalYear AND report_type = :reportType
+		)
+		INSERT INTO financial AS f (company_id, source, fiscal_year, report_type, payload)
+		VALUES (:companyId, :source, :fiscalYear, :reportType, CAST(:payload AS jsonb))
+		ON CONFLICT (company_id, source, fiscal_year, report_type) DO UPDATE
+		   SET fetched_at = now(),
+		       updated_at = CASE WHEN f.payload IS DISTINCT FROM EXCLUDED.payload THEN now() ELSE f.updated_at END,
+		       payload = EXCLUDED.payload
+		RETURNING NOT EXISTS (SELECT 1 FROM previous WHERE previous.payload = f.payload)
 		""";
 
-	private static final String FIND_BY_COMPANY = """
-		SELECT fiscal_year, report_type, statement_type, account, amount, cumulative_amount,
-		       prior_amount, prior_cumulative_amount, currency, source, source_key
-		  FROM financial
-		 WHERE company_id = :companyId
-		""";
+	private static final RowMapper<FinancialReport> REPORT = (rs, i) -> new FinancialReport(rs.getLong("company_id"),
+		Source.valueOf(rs.getString("source")), rs.getInt("fiscal_year"), ReportType.valueOf(rs.getString("report_type")),
+		rs.getString("payload"));
 
-	private static final RowMapper<FinancialRecord> RECORD = (rs, i) -> new FinancialRecord(rs.getInt("fiscal_year"),
-		ReportType.valueOf(rs.getString("report_type")), StatementType.valueOf(rs.getString("statement_type")),
-		AccountType.valueOf(rs.getString("account")), rs.getBigDecimal("amount"),
-		rs.getBigDecimal("cumulative_amount"), rs.getBigDecimal("prior_amount"),
-		rs.getBigDecimal("prior_cumulative_amount"), rs.getString("currency"), Source.valueOf(rs.getString("source")),
-		rs.getString("source_key"));
-
-	/** 같은 회사를 동시에 저장해도 행을 잠그는 순서가 같도록 unique 키 순으로 쓴다. */
-	private static final Comparator<FinancialRecord> KEY_ORDER = Comparator.comparingInt(FinancialRecord::fiscalYear)
-		.thenComparing(FinancialRecord::reportType)
-		.thenComparing(FinancialRecord::statementType)
-		.thenComparing(FinancialRecord::account);
-
-	private final JdbcTemplate jdbcTemplate;
 	private final JdbcClient jdbcClient;
 
-	public FinancialRepository(JdbcTemplate jdbcTemplate, JdbcClient jdbcClient) {
-		this.jdbcTemplate = jdbcTemplate;
+	public FinancialRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = jdbcClient;
 	}
 
 	/**
-	 * 회사 한 곳의 재무 행을 추가·갱신한다. 여러 번 저장해도 결과가 같다.
+	 * 보고서 한 건의 응답을 저장한다. 여러 번 저장해도 결과가 같다.
 	 *
-	 * @param companyId 회사 ID
-	 * @param records   저장할 행
-	 * @return 새로 저장하거나 값이 바뀐 행 수
+	 * @param report 저장할 응답
+	 * @return 새로 저장했거나 내용이 바뀌었으면 true
+	 * @throws org.springframework.dao.DataIntegrityViolationException DB가 JSON으로 받지 못하는 내용인 경우 (NUL 문자 등)
 	 */
-	public int upsertAll(long companyId, List<FinancialRecord> records) {
-		List<FinancialRecord> sorted = records.stream().sorted(KEY_ORDER).toList();
-		int changed = 0;
-		for (int[] batch : jdbcTemplate.batchUpdate(UPSERT, sorted, 100, (ps, row) -> {
-			ps.setLong(1, companyId);
-			ps.setInt(2, row.fiscalYear());
-			ps.setString(3, row.reportType().name());
-			ps.setString(4, row.statementType().name());
-			ps.setString(5, row.account().name());
-			ps.setBigDecimal(6, row.amount());
-			ps.setBigDecimal(7, row.cumulativeAmount());
-			ps.setBigDecimal(8, row.priorAmount());
-			ps.setBigDecimal(9, row.priorCumulativeAmount());
-			ps.setString(10, row.currency());
-			ps.setString(11, row.source().name());
-			ps.setString(12, row.sourceKey());
-		})) {
-			for (int count : batch) {
-				if (count > 0) {
-					changed += count;
-				}
-			}
-		}
-		return changed;
+	public boolean upsert(FinancialReport report) {
+		return jdbcClient.sql(UPSERT)
+			.param("companyId", report.companyId())
+			.param("source", report.source().name())
+			.param("fiscalYear", report.fiscalYear())
+			.param("reportType", report.reportType().name())
+			.param("payload", report.payload())
+			.query(Boolean.class)
+			.single();
 	}
 
 	/**
-	 * 회사 한 곳의 재무 행 전체.
+	 * 보고서 한 건의 저장된 응답.
+	 *
+	 * @return 저장된 적이 없으면 비어 있음
+	 */
+	public Optional<FinancialReport> find(long companyId, Source source, int fiscalYear, ReportType reportType) {
+		return jdbcClient.sql("""
+			SELECT company_id, source, fiscal_year, report_type, payload
+			  FROM financial
+			 WHERE company_id = :companyId AND source = :source
+			   AND fiscal_year = :fiscalYear AND report_type = :reportType
+			""")
+			.param("companyId", companyId)
+			.param("source", source.name())
+			.param("fiscalYear", fiscalYear)
+			.param("reportType", reportType.name())
+			.query(REPORT)
+			.optional();
+	}
+
+	/**
+	 * 회사 한 곳의 저장된 응답 전체.
 	 *
 	 * @param companyId 회사 ID
-	 * @return 저장된 행. 순서는 정해져 있지 않다
+	 * @return 사업연도 순. 같은 사업연도 안의 순서에는 뜻이 없다
 	 */
-	public List<FinancialRecord> findByCompany(long companyId) {
-		return jdbcClient.sql(FIND_BY_COMPANY).param("companyId", companyId).query(RECORD).list();
+	public List<FinancialReport> findByCompany(long companyId) {
+		return jdbcClient.sql("""
+			SELECT company_id, source, fiscal_year, report_type, payload
+			  FROM financial
+			 WHERE company_id = :companyId
+			 ORDER BY fiscal_year, report_type, source
+			""").param("companyId", companyId).query(REPORT).list();
 	}
 }

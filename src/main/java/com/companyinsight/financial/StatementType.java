@@ -2,7 +2,7 @@ package com.companyinsight.financial;
 
 import java.util.Optional;
 
-/** 재무제표 구분. DB의 {@code financial.statement_type}에 상수 이름을 저장한다. */
+/** 재무제표 구분. */
 public enum StatementType {
 
 	/** 연결재무제표. 종속회사를 합친 실적 */

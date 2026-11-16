@@ -194,8 +194,12 @@ class DartClientTest {
 			.andExpect(queryParam("reprt_code", "11014"))
 			.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
-		MajorAccountResponse response = client.listMajorAccounts("00126380", 2025, "11014");
+		String json = client.fetchMajorAccounts("00126380", 2025, "11014").orElseThrow();
 
+		// 응답 원문을 그대로 돌려준다. 우리가 읽지 않는 필드(기간 문자열, 당기명)도 남아 있다
+		assertThat(json).isEqualTo(body);
+		assertThat(json).contains("\"thstrm_dt\"").contains("2025.01.01 ~ 2025.09.30").contains("제 57 기3분기");
+		MajorAccountResponse response = MajorAccountResponse.fromJson(json);
 		assertThat(response.items()).hasSize(14);
 		assertThat(response.items()).filteredOn(i -> "CFS".equals(i.statementDiv()) && "매출액".equals(i.accountName()))
 			.singleElement()
@@ -212,12 +216,43 @@ class DartClientTest {
 	}
 
 	@Test
-	void 제출되지_않은_보고서의_주요계정은_빈_목록() {
+	void 주요계정_응답의_한글은_헤더에_문자_집합이_없어도_깨지지_않는다() {
+		String body = "{\"status\":\"000\",\"message\":\"정상\",\"list\":[{\"account_nm\":\"매출액\"}]}";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess(body.getBytes(StandardCharsets.UTF_8), MediaType.TEXT_PLAIN));
+
+		assertThat(client.fetchMajorAccounts("00126380", 2025, "11014")).contains(body);
+	}
+
+	@Test
+	void 주요계정_응답_앞의_BOM은_떼고_돌려준다() {
+		String body = "{\"status\":\"000\",\"message\":\"정상\",\"list\":[{\"account_nm\":\"매출액\"}]}";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess(("\uFEFF" + body).getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON));
+
+		assertThat(client.fetchMajorAccounts("00126380", 2025, "11014")).contains(body);
+	}
+
+	@Test
+	void 주요계정_응답이_JSON이_아니면_PARSE_오류() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess("<html>점검 중</html>", MediaType.TEXT_HTML));
+
+		assertThatThrownBy(() -> client.fetchMajorAccounts("00126380", 2025, "11014"))
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> {
+				assertThat(e.kind()).isEqualTo(ErrorKind.PARSE);
+				assertThat(e).isNotInstanceOf(RetryableExternalApiException.class);
+			})
+			.message().doesNotContain(SECRET);
+	}
+
+	@Test
+	void 제출되지_않은_보고서의_주요계정은_비어_있다() {
 		// 실제 응답: 아직 나오지 않은 2026년 사업보고서를 조회했을 때
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
 			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
 
-		assertThat(client.listMajorAccounts("00126380", 2026, "11011").items()).isEmpty();
+		assertThat(client.fetchMajorAccounts("00126380", 2026, "11011")).isEmpty();
 	}
 
 	@Test
@@ -225,7 +260,7 @@ class DartClientTest {
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
 			.andRespond(withSuccess("{\"status\":\"020\",\"message\":\"요청 제한을 초과하였습니다.\"}", MediaType.APPLICATION_JSON));
 
-		assertThatThrownBy(() -> client.listMajorAccounts("00126380", 2025, "11014"))
+		assertThatThrownBy(() -> client.fetchMajorAccounts("00126380", 2025, "11014"))
 			.isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.QUOTA_EXCEEDED));
 	}
 }

@@ -1,0 +1,15 @@
+package com.companyinsight.financial;
+
+import com.companyinsight.common.source.Source;
+
+/**
+ * 출처에서 받은 보고서 한 건의 재무 응답. financial 테이블의 한 행이다.
+ *
+ * @param companyId  회사 ID
+ * @param source     응답을 받은 출처
+ * @param fiscalYear 조회한 사업연도
+ * @param reportType 조회한 보고서 종류
+ * @param payload    출처가 준 응답 전체(JSON). DB는 JSON 값으로 저장하므로 공백과 키 순서는 원문과 다를 수 있다
+ */
+public record FinancialReport(long companyId, Source source, int fiscalYear, ReportType reportType, String payload) {
+}

@@ -4,7 +4,7 @@ import com.companyinsight.common.source.Source;
 import java.math.BigDecimal;
 
 /**
- * 보고서 한 건에 실린 계정 하나의 금액. financial 테이블의 한 행이다.
+ * 보고서 한 건에 실린 계정 하나의 금액. 저장된 재무 응답에서 읽어 만든다({@link FinancialExtractor}).
  *
  * @param fiscalYear            사업연도
  * @param reportType            보고서 종류

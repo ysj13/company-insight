@@ -4,10 +4,10 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 수집하는 재무 계정. DB의 {@code financial.account}에 상수 이름을 저장한다.
+ * 저장된 재무 응답에서 읽는 계정.
  *
  * <p>DART 주요계정의 계정명과 맞춘다. 계정명은 공백을 모두 없애고 비교한다.
- * 여기에 없는 계정명(자산총계, 법인세차감전 순이익 등)은 수집하지 않는다.
+ * 여기에 없는 계정명(자산총계, 법인세차감전 순이익 등)은 응답에 저장되어 있지만 읽지 않는다.
  */
 public enum AccountType {
 
@@ -30,7 +30,7 @@ public enum AccountType {
 	 * DART 주요계정의 계정명으로 찾는다.
 	 *
 	 * @param accountName 계정명 (account_nm). 공백이 섞여 있어도 된다
-	 * @return 수집하지 않는 계정이나 null이면 비어 있음
+	 * @return 읽지 않는 계정이나 null이면 비어 있음
 	 */
 	public static Optional<AccountType> fromDartName(String accountName) {
 		if (accountName == null) {
