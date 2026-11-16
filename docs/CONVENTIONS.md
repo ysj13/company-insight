@@ -60,6 +60,7 @@ com.companyinsight
 | 조건을 조합하는 동적 조회 | QueryDSL |
 | 대량 저장(배치), `ON CONFLICT`·`ILIKE`·`SKIP LOCKED` 등 PostgreSQL 전용 문법 | `JdbcTemplate`, `JdbcClient` |
 
+- 저장을 JDBC로 하는 테이블(`company`, `disclosure`)의 엔티티는 조회 전용(`@Immutable`)으로 두고, 조회에 쓰는 컬럼만 매핑한다. 쓰는 경로를 한 곳으로 유지하기 위해서다.
 - 스키마는 Flyway로만 바꾼다. Hibernate는 `ddl-auto: validate`.
 - 테이블과 컬럼에는 한글 `COMMENT`를 단다. 테이블·컬럼을 만드는 마이그레이션 파일에서 함께 작성하고, 코드값이 있으면 값의 의미도 적는다.
 - 모든 테이블에 `created_at`, 수정되는 테이블에는 `updated_at`을 둔다. 실행 기록 테이블(`collection_run`)은 `started_at`·`finished_at`이 그 역할을 한다.
@@ -165,7 +166,10 @@ DART는 오류도 HTTP 200으로 준다. HTTP 상태만 보지 않고 본문(`st
 
 - Thymeleaf로 서버에서 HTML을 만든다. 검색 엔진과 링크 미리보기가 읽을 내용(판단, 요약, 공시 목록)은 HTML 텍스트로 넣는다.
 - 그래프는 Chart.js. 외부 CDN을 쓰지 않고 `src/main/resources/static/vendor/`에 버전을 고정해 포함한다.
-- 프런트 빌드 단계 없이 정적 파일로 서빙한다.
+- 프런트 빌드 단계 없이 정적 파일로 서빙한다. 템플릿은 `templates/{기능}/`, 공통 스타일은 `static/css/app.css`, 스크립트는 `static/js/`.
+- 화면은 스크립트 없이도 기본 동작(조회, 검색, 페이지 이동)이 되게 만든다. 스크립트는 자동완성처럼 편의를 더하는 데만 쓰고, 외부에서 온 값은 `textContent`로 넣는다.
+- 코드값의 화면 이름은 enum의 `label()`에 둔다. 숫자 코드(영향도 등)는 그대로 내보이지 않고 말로 바꿔 보여준다.
+- 화면 안의 링크 주소에 들어가는 사용자 입력(검색어)은 인코딩한다.
 
 ## 10. 코드 스타일
 

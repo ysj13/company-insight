@@ -1,0 +1,98 @@
+/* 화면 공통 스타일. 밝은 테마가 기본이고 다크 모드는 시스템 설정을 따른다. */
+:root {
+	--page: #f2f4f6; --surface: #ffffff; --sunken: #f5f6f8; --line: #e8eaee;
+	--fg: #191f28; --muted: #5a6472;
+	--up: #c41a2a; --up-soft: #fdecee; --down: #2457c5; --down-soft: #eaf1fd; --flat: #5a6472; --flat-soft: #eef0f3;
+	--font: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--page: #0f1115; --surface: #191c22; --sunken: #20242b; --line: #2a2f38; --fg: #eceef1; --muted: #9ca5b1;
+		--up: #ff6b76; --up-soft: #3b1a1e; --down: #6f9cff; --down-soft: #18264a; --flat: #9ca5b1; --flat-soft: #2a2f38;
+		color-scheme: dark;
+	}
+}
+
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.6; letter-spacing: -.01em; margin: 0; }
+h1, h2, p, ul { margin: 0; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--down); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.gutter { padding-left: 16px; padding-right: 16px; }
+.inner { max-width: 760px; margin: 0 auto; }
+
+.appbar { background: var(--surface); border-bottom: 1px solid var(--line); }
+.appbar .inner { padding-block: 12px; }
+.logo { font-weight: 800; font-size: 17px; text-decoration: none; }
+
+main.inner { display: grid; gap: 12px; padding-block: 16px 32px; }
+.card { background: var(--surface); border-radius: 18px; padding: 22px; min-width: 0; }
+h1 { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
+.meta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+
+/* 조건 */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 16px; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+.field.grow { flex: 1 1 220px; }
+.field input, .field select { height: 42px; border: 1px solid var(--line); border-radius: 10px; background: var(--sunken); color: var(--fg); padding: 0 12px; font: inherit; font-size: 15px; width: 100%; }
+.btn { height: 42px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--fg); color: var(--surface); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+/* 회사 자동완성 */
+.combo { position: relative; }
+.sug { position: absolute; left: 0; right: 0; top: 48px; z-index: 20; list-style: none; padding: 4px 0; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / .16); }
+.sug[hidden] { display: none; }
+.sug li { display: flex; align-items: baseline; gap: 8px; padding: 10px 14px; font-size: 15px; color: var(--fg); cursor: pointer; }
+.sug li:hover, .sug li[aria-selected="true"] { background: var(--sunken); }
+.sug .name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.sug .code { color: var(--muted); font-size: 13px; }
+.sug .market { margin-left: auto; }
+.sug.none { margin: 0; padding: 12px 14px; font-size: 14px; color: var(--muted); }
+.market { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--flat-soft); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+
+.picked { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 14px; padding: 10px 14px; background: var(--sunken); border-radius: 12px; font-size: 14px; color: var(--muted); }
+.picked b { color: var(--fg); font-size: 16px; }
+.picked a { margin-left: auto; color: var(--fg); font-weight: 700; }
+
+.tones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.tones a { display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; font-size: 14px; color: var(--muted); }
+.tones a b { color: var(--fg); font-weight: 700; }
+.tones a:hover { border-color: var(--muted); }
+.tones a.on { background: var(--fg); border-color: var(--fg); color: var(--surface); font-weight: 700; }
+.tones a.on b { color: var(--surface); }
+
+.help { margin-top: 14px; font-size: 14px; color: var(--muted); }
+.help summary { cursor: pointer; width: fit-content; }
+.help ul { margin-top: 8px; padding-left: 18px; display: grid; gap: 4px; }
+.help b { color: var(--fg); }
+
+/* 날짜별 목록 */
+.day h2 { font-size: 15px; font-weight: 800; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.list { list-style: none; padding: 0; }
+.list li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 0 12px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.verdict { display: grid; gap: 3px; justify-items: start; padding-top: 2px; }
+.pill { font-size: 13px; font-weight: 700; border-radius: 6px; padding: 2px 9px; white-space: nowrap; }
+.pill.tone-positive { background: var(--up-soft); color: var(--up); }
+.pill.tone-negative { background: var(--down-soft); color: var(--down); }
+.pill.tone-neutral { background: var(--flat-soft); color: var(--flat); }
+.pill.tone-undecided { background: transparent; color: var(--muted); border: 1px dashed var(--muted); }
+.impact { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.title { font-size: 16px; font-weight: 700; line-height: 1.45; text-decoration: none; overflow-wrap: anywhere; }
+.title:hover { text-decoration: underline; }
+.title.withdrawn { text-decoration: line-through; color: var(--muted); }
+.sub { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 13px; color: var(--muted); margin-top: 2px; align-items: center; }
+.sub .company { color: var(--fg); font-weight: 500; }
+.tag { font-size: 12px; font-weight: 700; border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; }
+.empty { color: var(--muted); font-size: 15px; }
+
+.pager { display: flex; justify-content: center; align-items: center; gap: 16px; font-size: 15px; padding: 6px 0; }
+.pager a, .pager .off { padding: 8px 16px; border-radius: 10px; background: var(--surface); text-decoration: none; font-weight: 700; }
+.pager .off { color: var(--muted); opacity: .5; font-weight: 500; }
+
+.notice { font-size: 13px; color: var(--muted); padding: 4px 6px; display: grid; gap: 2px; }
+
+@media (max-width: 480px) {
+	.card { padding: 18px 16px; }
+	.list li { grid-template-columns: 64px minmax(0, 1fr); gap: 0 10px; }
+}
