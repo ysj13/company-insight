@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.resilience.annotation.Retryable;
@@ -118,30 +119,45 @@ public class DartClient {
 	}
 
 	/**
-	 * 회사 한 곳의 보고서 한 건에 실린 주요 재무 계정(매출액, 영업이익, 당기순이익 등).
+	 * 회사 한 곳의 보고서 한 건에 실린 주요 재무 계정(매출액, 영업이익, 당기순이익 등)의 응답 원문.
+	 *
+	 * <p>원본을 그대로 저장할 수 있게 해석한 객체가 아니라 응답 본문(JSON)을 돌려준다.
+	 * 필요한 값은 {@link MajorAccountResponse#fromJson(String)}으로 읽는다.
 	 *
 	 * @param corpCode     DART 고유번호 (8자리)
 	 * @param businessYear 사업연도. 2015년 이후만 제공된다
 	 * @param reportCode   보고서 코드. 11013 1분기, 11012 반기, 11014 3분기, 11011 사업보고서
-	 * @return 계정 목록. 아직 제출되지 않은 보고서처럼 데이터가 없으면 빈 목록
+	 * @return 응답 본문(JSON). 아직 제출되지 않은 보고서처럼 데이터가 없으면 비어 있음
 	 */
 	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
 			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
-	public MajorAccountResponse listMajorAccounts(String corpCode, int businessYear, String reportCode) {
+	public Optional<String> fetchMajorAccounts(String corpCode, int businessYear, String reportCode) {
 		Map<String, Object> params = Map.of(
 			"corp_code", corpCode,
 			"bsns_year", businessYear,
 			"reprt_code", reportCode);
-		MajorAccountResponse response = get("/api/fnlttSinglAcnt.json", params, MajorAccountResponse.class);
-		if (response == null || response.status() == null) {
+		// 문자열로 바로 받으면 응답 헤더에 문자 집합이 없을 때 한글이 깨진다. DART는 UTF-8로 준다
+		byte[] bytes = get("/api/fnlttSinglAcnt.json", params, byte[].class);
+		if (bytes == null || bytes.length == 0) {
 			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "주요계정 응답이 비어 있음");
 		}
+		String body = new String(bytes, StandardCharsets.UTF_8);
+		MajorAccountResponse response;
+		try {
+			response = MajorAccountResponse.fromJson(body);
+		}
+		catch (RuntimeException e) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "convert", "주요계정 응답 처리 실패: " + e.getClass().getSimpleName());
+		}
+		if (response == null || response.status() == null) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "주요계정 응답에 상태 코드가 없음");
+		}
 		if (STATUS_OK.equals(response.status())) {
-			return response;
+			return Optional.of(body);
 		}
 		ErrorKind kind = classify(response.status());
 		if (kind == null) {
-			return new MajorAccountResponse(response.status(), response.message(), List.of());
+			return Optional.empty();
 		}
 		throw ExternalApiException.of(SOURCE, kind, response.status(), response.message());
 	}

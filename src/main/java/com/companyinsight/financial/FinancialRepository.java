@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** financial 테이블 접근. 저장은 PostgreSQL의 ON CONFLICT를 쓰기 위해 JDBC로 한다. */
 @Repository
@@ -96,6 +97,36 @@ public class FinancialRepository {
 			}
 		}
 		return changed;
+	}
+
+	/**
+	 * 보고서 한 건의 재무 행을 원본에서 뽑은 결과로 맞춘다. 뽑은 행은 추가·갱신하고,
+	 * 같은 보고서의 행 중 이번 결과에 없는 것(출처의 응답에서 사라진 계정)은 지운다.
+	 *
+	 * @param companyId  회사 ID
+	 * @param source     원본의 출처. 이 출처에서 온 행만 지운다
+	 * @param fiscalYear 사업연도
+	 * @param reportType 보고서 종류
+	 * @param records    원본에서 뽑은 행. 모두 같은 사업연도, 보고서 종류여야 한다
+	 * @return 추가·변경·삭제한 행 수
+	 */
+	@Transactional
+	public int replaceReport(long companyId, Source source, int fiscalYear, ReportType reportType,
+			List<FinancialRecord> records) {
+		int changed = upsertAll(companyId, records);
+		String delete = """
+			DELETE FROM financial
+			 WHERE company_id = :companyId AND source = :source
+			   AND fiscal_year = :fiscalYear AND report_type = :reportType
+			""";
+		var statement = records.isEmpty() ? jdbcClient.sql(delete)
+				: jdbcClient.sql(delete + " AND (statement_type || '/' || account) NOT IN (:keys)")
+					.param("keys", records.stream().map(r -> r.statementType().name() + "/" + r.account().name()).toList());
+		return changed + statement.param("companyId", companyId)
+			.param("source", source.name())
+			.param("fiscalYear", fiscalYear)
+			.param("reportType", reportType.name())
+			.update();
 	}
 
 	/**

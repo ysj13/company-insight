@@ -7,9 +7,9 @@ import com.companyinsight.common.dart.MajorAccountResponse.Item;
 import com.companyinsight.common.source.Source;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
 
 /** 주요계정 응답 → 저장할 행. 응답은 삼성전자 2025년 3분기보고서의 실제 값이다. */
 class FinancialCollectorTest {
@@ -114,9 +114,14 @@ class FinancialCollectorTest {
 	}
 
 	static MajorAccountResponse realResponse() throws IOException {
+		return MajorAccountResponse.fromJson(realJson());
+	}
+
+	/** 삼성전자 2025년 3분기보고서의 실제 응답 본문(손익계산서 계정과 자산총계만 남긴 것). */
+	static String realJson() throws IOException {
 		try (InputStream in = FinancialCollectorTest.class
 			.getResourceAsStream("/dart/major-accounts-00126380-2025-q3.json")) {
-			return JsonMapper.builder().build().readValue(in, MajorAccountResponse.class);
+			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 		}
 	}
 }

@@ -56,3 +56,5 @@ app:
     # 앱이 뜬 직후 재무를 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
     collect-on-startup: ${FINANCIAL_COLLECT_ON_STARTUP:}
     collect-years: 3     # 올해를 포함해 거슬러 올라가는 사업연도 수
+    # true면 앱이 뜬 직후 저장된 원본(financial_raw)에서 재무 행을 다시 뽑는다. 뽑는 규칙을 고친 뒤 한 번 켠다
+    reextract-on-startup: ${FINANCIAL_REEXTRACT_ON_STARTUP:false}

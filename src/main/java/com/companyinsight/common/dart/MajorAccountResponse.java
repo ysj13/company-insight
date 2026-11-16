@@ -3,6 +3,7 @@ package com.companyinsight.common.dart;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * DART 단일회사 주요계정(fnlttSinglAcnt.json) 응답. 보고서 한 건의 주요 재무 계정이 들어 있다.
@@ -13,6 +14,18 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record MajorAccountResponse(String status, String message, List<Item> list) {
+
+	private static final JsonMapper MAPPER = JsonMapper.builder().build();
+
+	/**
+	 * 응답 본문(JSON)을 읽는다. 저장해 둔 원본에서 값을 다시 뽑을 때도 쓴다.
+	 *
+	 * @param json 주요계정 응답 본문
+	 * @throws tools.jackson.core.JacksonException JSON이 아니거나 형식이 다른 경우
+	 */
+	public static MajorAccountResponse fromJson(String json) {
+		return MAPPER.readValue(json, MajorAccountResponse.class);
+	}
 
 	/** 계정 목록. 없으면 빈 목록. */
 	public List<Item> items() {

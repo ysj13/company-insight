@@ -29,8 +29,13 @@ import org.springframework.stereotype.Service;
  * DART 주요계정으로 회사 한 곳의 재무(매출액, 영업이익, 당기순이익)를 수집한다.
  *
  * <p>사업연도마다 보고서 네 종류(1분기, 반기, 3분기, 사업보고서)를 한 번씩 조회한다. 아직 제출되지 않은 보고서는
- * 데이터가 없어 건너뛴다. 받은 값은 그대로 저장하고, 4분기 금액이나 증감은 조회할 때 계산한다
- * ({@link PerformanceCalculator}).
+ * 데이터가 없어 건너뛴다. 저장은 두 단계다.
+ * <ol>
+ * <li>응답 원본을 그대로 financial_raw에 저장한다. 저장하지 않는 계정과 필드도 남는다.</li>
+ * <li>원본에서 필요한 계정을 뽑아 financial에 저장한다. 뽑는 규칙을 고치면 DART를 다시 부르지 않고
+ * {@link #reextractAll()}로 원본에서 다시 뽑는다.</li>
+ * </ol>
+ * 4분기 금액이나 증감은 조회할 때 계산한다({@link PerformanceCalculator}).
  */
 @Service
 public class FinancialCollector {
@@ -57,15 +62,18 @@ public class FinancialCollector {
 	private final DartClient dart;
 	private final CompanyRepository companies;
 	private final FinancialRepository repository;
+	private final FinancialRawRepository rawRepository;
 	private final CollectionRunRecorder recorder;
 	private final SourcePauseRegistry pauses;
 	private final Clock clock;
 
 	public FinancialCollector(DartClient dart, CompanyRepository companies, FinancialRepository repository,
-			CollectionRunRecorder recorder, SourcePauseRegistry pauses, Clock clock) {
+			FinancialRawRepository rawRepository, CollectionRunRecorder recorder, SourcePauseRegistry pauses,
+			Clock clock) {
 		this.dart = dart;
 		this.companies = companies;
 		this.repository = repository;
+		this.rawRepository = rawRepository;
 		this.recorder = recorder;
 		this.pauses = pauses;
 		this.clock = clock;
@@ -129,9 +137,9 @@ public class FinancialCollector {
 			int failedReports = 0;
 			for (int year = fromYear; year <= toYear; year++) {
 				for (ReportType reportType : ReportType.values()) {
-					MajorAccountResponse response;
+					Optional<String> body;
 					try {
-						response = dart.listMajorAccounts(corpCode, year, reportType.dartCode());
+						body = dart.fetchMajorAccounts(corpCode, year, reportType.dartCode());
 					}
 					catch (ExternalApiException e) {
 						if (!SKIPPABLE.contains(e.kind())) {
@@ -142,21 +150,60 @@ public class FinancialCollector {
 							e.getMessage());
 						continue;
 					}
-					progress.addFetched(response.items().size());
-					List<FinancialRecord> records = toRecords(year, reportType, response.items());
-					if (!response.items().isEmpty()) {
-						reports++;
-						if (records.isEmpty()) {
-							log.warn("재무 수집: 회사 {} {}년 {} 응답에 저장할 계정이 없습니다", companyId, year, reportType);
-						}
+					if (body.isEmpty()) {
+						continue;
 					}
-					progress.addSaved(repository.upsertAll(companyId, records));
+					reports++;
+					FinancialRaw raw = new FinancialRaw(companyId, Source.DART, year, reportType, body.get());
+					rawRepository.upsert(raw);
+					Extracted extracted = extract(raw);
+					progress.addFetched(extracted.lines());
+					progress.addSaved(extracted.changed());
 				}
 			}
 			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받지 못한 보고서 {}건, 받은 계정 {}줄, 추가·변경 {}행", companyId,
 				fromYear, toYear, reports, failedReports, progress.fetched(), progress.saved());
 			return new CollectResult(false, reports, failedReports, progress.fetched(), progress.saved());
 		});
+	}
+
+	/**
+	 * 저장된 원본 전체에서 재무 행을 다시 뽑는다. DART를 부르지 않는다.
+	 * 뽑는 규칙(계정명 매핑 등)을 고친 뒤에 실행한다. 여러 번 실행해도 결과가 같다.
+	 *
+	 * @return 추가·변경·삭제한 행 수
+	 */
+	public int reextractAll() {
+		int reports = 0;
+		int changed = 0;
+		for (long companyId : rawRepository.findCompanyIds()) {
+			for (FinancialRaw raw : rawRepository.findByCompany(companyId)) {
+				try {
+					changed += extract(raw).changed();
+					reports++;
+				}
+				catch (RuntimeException e) {
+					// 원본 한 건을 읽지 못해도 나머지는 계속 뽑는다
+					log.warn("재무 다시 뽑기 실패(회사 {} {}년 {}): {}", companyId, raw.fiscalYear(), raw.reportType(),
+						e.toString());
+				}
+			}
+		}
+		log.info("재무 다시 뽑기: 원본 {}건, 추가·변경·삭제 {}행", reports, changed);
+		return changed;
+	}
+
+	/** 원본 한 건에서 재무 행을 뽑아 그 보고서의 행을 맞춘다. */
+	private Extracted extract(FinancialRaw raw) {
+		List<Item> items = MajorAccountResponse.fromJson(raw.payload()).items();
+		List<FinancialRecord> records = toRecords(raw.fiscalYear(), raw.reportType(), items);
+		if (records.isEmpty()) {
+			log.warn("재무 수집: 회사 {} {}년 {} 응답에 저장할 계정이 없습니다", raw.companyId(), raw.fiscalYear(),
+				raw.reportType());
+		}
+		int changed = repository.replaceReport(raw.companyId(), raw.source(), raw.fiscalYear(), raw.reportType(),
+			records);
+		return new Extracted(items.size(), changed);
 	}
 
 	/**
@@ -220,13 +267,22 @@ public class FinancialCollector {
 	}
 
 	/**
+	 * 원본 한 건을 뽑은 결과.
+	 *
+	 * @param lines   원본에 있던 계정 줄 수
+	 * @param changed 추가·변경·삭제한 행 수
+	 */
+	private record Extracted(int lines, int changed) {
+	}
+
+	/**
 	 * 수집 결과.
 	 *
 	 * @param skipped 키가 없거나 소스가 정지 중이라 실행하지 않았으면 true
 	 * @param reports       데이터가 있던 보고서 수
 	 * @param failedReports 응답이 잘못되어 건너뛴 보고서 수
 	 * @param fetched       DART에서 받은 계정 줄 수 (저장하지 않는 계정 포함)
-	 * @param saved         새로 저장하거나 값이 바뀐 행 수
+	 * @param saved         추가·변경·삭제한 재무 행 수
 	 */
 	public record CollectResult(boolean skipped, int reports, int failedReports, int fetched, int saved) {
 		static CollectResult skip() {
