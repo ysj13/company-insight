@@ -15,6 +15,10 @@ public class CompanySearchService {
 		this.repository = repository;
 	}
 
+	/**
+	 * @param keyword 회사명 일부 또는 종목코드 앞부분
+	 * @return 최대 20건
+	 */
 	public List<CompanySummary> search(String keyword) {
 		return repository.search(keyword.strip());
 	}

@@ -31,6 +31,7 @@ public record DartProperties(String apiKey, String baseUrl, Duration connectTime
 		}
 	}
 
+	/** 인증키가 비어 있지 않은지. */
 	public boolean hasApiKey() {
 		return apiKey != null && !apiKey.isBlank();
 	}

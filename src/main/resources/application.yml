@@ -25,6 +25,13 @@ spring:
     jdbc:
       initialize-schema: never
 
+# API 문서(Swagger UI, /v3/api-docs). 기본은 꺼 두고 로컬에서만 API_DOCS_ENABLED=true로 켠다.
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+
 management:
   endpoints:
     web:

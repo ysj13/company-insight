@@ -6,7 +6,6 @@ import com.companyinsight.common.external.RetryableExternalApiException;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -37,7 +36,6 @@ public class DartClient {
 	private static final Pattern XML_MESSAGE = Pattern.compile("<message>\\s*(.*?)\\s*</message>", Pattern.DOTALL);
 	private static final Pattern JSON_STATUS = Pattern.compile("\"status\"\\s*:\\s*\"(\\d+)\"");
 	private static final Pattern JSON_MESSAGE = Pattern.compile("\"message\"\\s*:\\s*\"(.*?)\"");
-	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
 
 	static final String STATUS_OK = "000";
 
@@ -58,6 +56,7 @@ public class DartClient {
 		this.rateLimiter = rateLimiter;
 	}
 
+	/** 인증키가 설정되어 있는지. 없으면 호출하지 말고 건너뛴다. */
 	public boolean isConfigured() {
 		return properties.hasApiKey();
 	}
@@ -100,8 +99,8 @@ public class DartClient {
 			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
 	public DisclosureListResponse listDisclosures(LocalDate from, LocalDate to, int pageNo) {
 		Map<String, Object> params = Map.of(
-			"bgn_de", from.format(YYYYMMDD),
-			"end_de", to.format(YYYYMMDD),
+			"bgn_de", DartText.formatDate(from),
+			"end_de", DartText.formatDate(to),
 			"page_no", pageNo,
 			"page_count", MAX_PAGE_COUNT);
 		DisclosureListResponse response = get("/api/list.json", params, DisclosureListResponse.class);

@@ -21,11 +21,11 @@
 - **뉴스는 제목과 원문 링크만 노출한다.** 본문을 저장하거나 표시하지 않는다.
 - **비밀 값은 커밋하지 않는다.** API 키와 비밀번호는 `.env`에만 두고, 필요한 키 이름은 `.env.example`에 적는다.
 - **브랜치 규칙:** `main`에는 직접 커밋·push하지 않는다. 작업은 `feat/`·`fix/`·`chore/`·`docs/`·`test/` 브랜치에서 하고, 기능 브랜치의 커밋·push·PR 생성은 묻지 않고 진행한다. PR Merge는 사용자가 한다. 커밋 전에 `git status`와 diff로 올라갈 파일을 확인한다. 상세는 `docs/DEVELOPMENT.md` 2절.
-- **독립 코드 리뷰:** PR을 만든 직후 `/code-review`로 별도 리뷰 에이전트의 검토를 받는다. 확인된 문제는 같은 브랜치에서 고쳐 push하고, 결과를 PR 댓글로 남긴다. 문서만 바꾼 PR은 생략할 수 있다. 상세는 `docs/DEVELOPMENT.md` 2절.
+- **독립 코드 리뷰:** 코드를 바꾸는 PR은 Draft로 만든다. 만든 직후 별도 리뷰 에이전트의 검토를 받고, 확인된 문제는 같은 브랜치에서 고쳐 push한 뒤 결과를 PR 댓글로 남기고 Ready for review로 바꾼다. 문서만 바꾼 PR은 생략할 수 있다. 상세는 `docs/DEVELOPMENT.md` 2절.
 
 ## 기술 스택
 
-Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Thymeleaf, Chart.js, Docker Compose, GitHub Actions, Sentry. 버전은 `docs/DEVELOPMENT.md` 1절. 코드 규칙은 `docs/CONVENTIONS.md`.
+Java 25 LTS, Spring Boot 4.1, Gradle 9, PostgreSQL 18, JPA + QueryDSL 7(OpenFeign 포크), Spring Batch, Flyway, Caffeine, Thymeleaf, Chart.js, Docker Compose, GitHub Actions, Sentry. 버전은 `docs/DEVELOPMENT.md` 1절. 코드 규칙은 `docs/CONVENTIONS.md`. 클래스와 public 메서드에는 한국어 Javadoc을 단다.
 
 ## 설계 원칙
 

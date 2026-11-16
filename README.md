@@ -41,6 +41,8 @@ docker compose up -d
 
 헬스체크: http://localhost:8080/actuator/health
 
+API 문서: http://localhost:8080/swagger-ui.html (`.env`의 `API_DOCS_ENABLED`를 `true`로 바꿨을 때만 열린다)
+
 ## 테스트
 
 ```bash

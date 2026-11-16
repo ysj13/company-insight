@@ -12,6 +12,12 @@ public class ExternalApiException extends RuntimeException {
 	private final ErrorKind kind;
 	private final String code;
 
+	/**
+	 * @param source  외부 소스 이름 (예: "DART")
+	 * @param kind    오류 분류
+	 * @param code    소스의 원래 오류 코드
+	 * @param message 설명. URL·헤더·인증키를 넣지 않는다.
+	 */
 	public ExternalApiException(String source, ErrorKind kind, String code, String message) {
 		super(source + " " + kind + " [" + code + "]: " + message);
 		this.source = source;
@@ -26,10 +32,12 @@ public class ExternalApiException extends RuntimeException {
 				: new ExternalApiException(source, kind, code, message);
 	}
 
+	/** 외부 소스 이름. 소스 정지의 단위다. */
 	public String source() {
 		return source;
 	}
 
+	/** 오류 분류. 재시도·정지 여부를 정한다. */
 	public ErrorKind kind() {
 		return kind;
 	}

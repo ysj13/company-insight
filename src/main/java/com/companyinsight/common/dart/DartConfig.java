@@ -10,10 +10,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+/** OpenDART 호출에 쓰는 빈 설정. 타임아웃을 건 HTTP 클라이언트와 호출 속도 제한을 묶어 {@link DartClient}를 만든다. */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(DartProperties.class)
 public class DartConfig {
 
+	/** 연결·응답 타임아웃과 속도 제한이 적용된 DART 클라이언트. */
 	@Bean
 	DartClient dartClient(DartProperties properties) {
 		HttpClient httpClient = HttpClient.newBuilder()

@@ -55,7 +55,11 @@ public class CompanyRepository {
 		this.jdbcClient = jdbcClient;
 	}
 
-	/** @return 실제로 추가되거나 바뀐 행 수 */
+	/**
+	 * 회사 목록을 500건씩 묶어 추가·갱신한다.
+	 *
+	 * @return 실제로 추가되거나 바뀐 행 수
+	 */
 	public int upsertAll(List<CorpCode> rows) {
 		// 공시 수집도 company를 upsert한다. 둘이 겹칠 때 서로 다른 순서로 행을 잠그면 데드락이 나므로 항상 corp_code 순으로 쓴다.
 		List<CorpCode> sorted = rows.stream().sorted(java.util.Comparator.comparing(CorpCode::corpCode)).toList();
@@ -75,10 +79,17 @@ public class CompanyRepository {
 		return changed;
 	}
 
+	/** 저장된 회사 수. */
 	public long count() {
 		return jdbcClient.sql("SELECT count(*) FROM company").query(Long.class).single();
 	}
 
+	/**
+	 * 회사명 일부 또는 종목코드 앞부분으로 찾는다.
+	 *
+	 * @param keyword 검색어. 앞뒤 공백을 없앤 값이어야 한다.
+	 * @return 최대 20건. 정확히 일치 → 앞부분 일치 → 포함 순.
+	 */
 	public List<CompanySummary> search(String keyword) {
 		return jdbcClient.sql(SEARCH)
 			.param("q", escapeLike(keyword))

@@ -35,6 +35,7 @@ public enum ErrorKind {
 		this.pausesSource = pausesSource;
 	}
 
+	/** 잠시 뒤 다시 시도하면 성공할 수 있는 오류인지. */
 	public boolean retryable() {
 		return retryable;
 	}

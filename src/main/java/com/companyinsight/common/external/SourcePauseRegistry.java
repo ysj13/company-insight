@@ -46,6 +46,11 @@ public class SourcePauseRegistry {
 		log.warn("{} 호출 정지: {} [{}], {}까지", e.source(), e.kind(), e.code(), until);
 	}
 
+	/**
+	 * 지금 이 소스가 정지 중인지.
+	 *
+	 * @return 정지 중이면 정지 정보, 아니면(정지 시각이 지났으면 포함) 비어 있음
+	 */
 	public Optional<Pause> pausedNow(String source) {
 		Pause pause = pauses.get(source);
 		if (pause == null) {
@@ -62,6 +67,13 @@ public class SourcePauseRegistry {
 		return LocalDate.now(clock.withZone(ClockConfig.KST)).plusDays(1).atStartOfDay(ClockConfig.KST).toInstant();
 	}
 
+	/**
+	 * 정지 정보.
+	 *
+	 * @param until 이 시각까지 호출하지 않는다
+	 * @param kind  정지를 일으킨 오류 분류
+	 * @param code  소스의 원래 오류 코드
+	 */
 	public record Pause(Instant until, ErrorKind kind, String code) {
 	}
 }
