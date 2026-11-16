@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
  *
  * <p>회사는 두 가지로 거른다. {@code corpCode}는 고른 회사 한 곳만 보여주고, {@code keyword}는 이름이나 종목코드가
  * 맞는 회사를 모두 보여준다. 이름이 비슷한 회사가 섞이지 않게 하려면 회사를 골라 {@code corpCode}를 쓴다.
+ * 둘이 함께 오면 검색어가 우선하고 {@code corpCode}는 비운다.
  *
  * @param tone     판정. null이면 전체
  * @param kind     공시 종류. null이면 전체
@@ -38,6 +39,11 @@ public record DisclosureSearchCondition(ToneFilter tone, DisclosureKind kind, St
 			}
 		}
 		if (corpCode != null && !CORP_CODE.matcher(corpCode).matches()) {
+			corpCode = null;
+		}
+		// 회사를 고른 화면에서 검색어를 넣어 찾으면 다른 회사를 찾으려는 것이므로 검색어가 우선하고 고른 회사는 푼다.
+		// 다듬은 뒤의 검색어로 판단해야 공백이나 제어 문자뿐인 검색어가 고른 회사를 풀지 않는다
+		if (keyword != null) {
 			corpCode = null;
 		}
 	}

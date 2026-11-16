@@ -29,6 +29,7 @@
 						   th:placeholder="${condition.corpCode != null} ? '다른 회사 찾기' : '회사명 또는 종목코드'"
 						   th:value="${condition.keyword}">
 					<ul id="company-suggestions" class="sug" role="listbox" aria-label="회사 목록" hidden></ul>
+					<p class="sug none" role="status" hidden>맞는 회사가 없습니다.</p>
 				</div>
 			</div>
 			<label class="field">
@@ -46,7 +47,7 @@
 			<th:block th:if="${result.company != null}">
 				<b th:text="${result.company.name}">회사명</b>
 				<span class="num" th:text="${result.company.stockCode}">000000</span>
-				<span class="market" th:if="${result.company.market != null}" th:text="${result.company.market.name()}">KOSPI</span>
+				<span class="market" th:if="${result.company.market != null}" th:text="${result.company.market.label()}">KOSPI</span>
 				<span>의 공시만 보고 있습니다.</span>
 			</th:block>
 			<span th:if="${result.company == null}">고른 회사를 찾을 수 없습니다.</span>

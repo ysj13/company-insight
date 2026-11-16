@@ -293,10 +293,13 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 형식이_틀린_고유번호는_무시하고_없는_회사는_안내한다() throws Exception {
-		mvc.perform(get("/disclosures").param("corp", "1' OR '1'='1"))
-			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("주요사항보고서(자기주식취득결정)")))
-			.andExpect(content().string(not(containsString("class=\"picked\""))));
+		// 따옴표, 7자리, 9자리, 전각 숫자, 앞뒤 공백. 모두 고르지 않은 것으로 보고 전체를 보여준다
+		for (String wrong : List.of("1' OR '1'='1", "0012638", "001263800", "００１２６３８０", " 00126380")) {
+			mvc.perform(get("/disclosures").param("corp", wrong))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("연결재무제표기준영업(잠정)실적(공정공시)")))
+				.andExpect(content().string(not(containsString("class=\"picked\""))));
+		}
 		mvc.perform(get("/disclosures").param("corp", "99999999"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("고른 회사를 찾을 수 없습니다.")))
@@ -304,14 +307,44 @@ class DisclosurePageIntegrationTest {
 	}
 
 	@Test
-	void 회사_검색_API는_시장_구분을_함께_준다() throws Exception {
-		jdbc.sql("UPDATE company SET market = 'K' WHERE corp_code = '00164779'").update();
+	void 공백이나_제어_문자뿐인_검색어는_고른_회사를_풀지_않는다() throws Exception {
+		mvc.perform(get("/disclosures").param("corp", "00126380").param("q", "\u0001 "))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("의 공시만 보고 있습니다.")))
+			.andExpect(content().string(not(containsString("연결재무제표기준영업(잠정)실적(공정공시)"))));
+		assertThat(new DisclosureSearchCondition(null, null, "삼성", "00126380").corpCode()).isNull();
+	}
 
-		mvc.perform(get("/api/companies").param("q", "SK하이닉스"))
-			.andExpect(jsonPath("$[0].corpCode").value("00164779"))
+	@Test
+	void 회사를_고른_채로_페이지를_넘겨도_고른_회사를_유지한다() throws Exception {
+		for (int i = 0; i < 60; i++) {
+			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "IR", "NEUTRAL",
+				null, false, false);
+		}
+
+		mvc.perform(get("/disclosures").param("corp", "00126380"))
+			.andExpect(content().string(containsString("href=\"/disclosures?corp=00126380&amp;page=2\"")));
+	}
+
+	@Test
+	void 회사_검색_API는_시장_구분을_함께_준다() throws Exception {
+		company("01344336", "226330", "신테카바이오");
+		company("00999002", "654321", "기타법인테스트");
+		jdbc.sql("UPDATE company SET market = 'K' WHERE corp_code = '01344336'").update();
+		jdbc.sql("UPDATE company SET market = 'E' WHERE corp_code = '00999002'").update();
+
+		mvc.perform(get("/api/companies").param("q", "신테카바이오"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].corpCode").value("01344336"))
 			.andExpect(jsonPath("$[0].market").value("KOSDAQ"));
-		// 최근 공시가 없어 시장을 모르는 회사
+		// 공시에서 시장 구분을 아직 받지 못한 회사
 		mvc.perform(get("/api/companies").param("q", "삼성전자"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].name").value("삼성전자"))
+			.andExpect(jsonPath("$[0].market").value(org.hamcrest.Matchers.nullValue()));
+		// 상장 시장이 아닌 법인 구분(E)
+		mvc.perform(get("/api/companies").param("q", "기타법인테스트"))
+			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].market").value(org.hamcrest.Matchers.nullValue()));
 	}
 

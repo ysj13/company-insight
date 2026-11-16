@@ -36,9 +36,7 @@ public class DisclosurePageController {
 	public String list(@RequestParam(required = false) ToneFilter tone, @RequestParam(required = false) DisclosureKind kind,
 			@RequestParam(required = false) String q, @RequestParam(required = false) String corp,
 			@RequestParam(defaultValue = "1") int page, Model model) {
-		// 회사를 고른 화면에서 검색어를 새로 넣어 찾으면 다른 회사를 찾으려는 것이므로 고른 회사를 푼다
-		boolean searching = q != null && !q.isBlank();
-		DisclosureSearchCondition condition = new DisclosureSearchCondition(tone, kind, q, searching ? null : corp);
+		DisclosureSearchCondition condition = new DisclosureSearchCondition(tone, kind, q, corp);
 		model.addAttribute("condition", condition);
 		model.addAttribute("result", queryService.search(condition, page));
 		model.addAttribute("links", new DisclosureListLinks(condition));

@@ -47,8 +47,7 @@ h1 { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
 .sug .name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
 .sug .code { color: var(--muted); font-size: 13px; }
 .sug .market { margin-left: auto; }
-.sug .none { color: var(--muted); cursor: default; }
-.sug .none:hover { background: none; }
+.sug.none { margin: 0; padding: 12px 14px; font-size: 14px; color: var(--muted); }
 .market { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--flat-soft); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
 
 .picked { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 14px; padding: 10px 14px; background: var(--sunken); border-radius: 12px; font-size: 14px; color: var(--muted); }

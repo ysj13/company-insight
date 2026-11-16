@@ -25,6 +25,11 @@ public enum Market {
 		this.dartCode = dartCode;
 	}
 
+	/** 화면에 보여주는 이름. 시장은 영문 표기가 널리 쓰여 상수 이름과 같다. */
+	public String label() {
+		return name();
+	}
+
 	/** DART 법인 구분 코드 (corp_cls). DB에 저장하는 값. */
 	public String dartCode() {
 		return dartCode;

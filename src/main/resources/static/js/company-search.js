@@ -11,6 +11,7 @@
 	}
 	var input = box.querySelector('input');
 	var list = box.querySelector('ul');
+	var status = box.querySelector('[role="status"]');
 	var form = input.form;
 	var api = box.getAttribute('data-api');
 
@@ -20,8 +21,12 @@
 	var active = -1;
 
 	function close() {
+		// 기다리던 조회와 응답을 함께 버린다. 그러지 않으면 닫은 뒤에 도착한 응답이 목록을 다시 연다
+		clearTimeout(timer);
+		requestNo++;
 		list.hidden = true;
 		list.textContent = '';
+		status.hidden = true;
 		active = -1;
 		input.setAttribute('aria-expanded', 'false');
 		input.removeAttribute('aria-activedescendant');
@@ -47,11 +52,13 @@
 		active = -1;
 		input.removeAttribute('aria-activedescendant');
 		if (companies.length === 0) {
-			var none = document.createElement('li');
-			none.className = 'none';
-			none.textContent = '맞는 회사가 없습니다.';
-			list.appendChild(none);
+			// 고를 항목이 없으므로 목록은 닫아 두고, 안내는 목록 밖에서 알린다
+			list.hidden = true;
+			input.setAttribute('aria-expanded', 'false');
+			status.hidden = false;
+			return;
 		}
+		status.hidden = true;
 		companies.forEach(function (company, i) {
 			var item = document.createElement('li');
 			item.id = 'company-option-' + i;
@@ -60,6 +67,7 @@
 			item.dataset.corp = company.corpCode;
 			item.appendChild(span('name', company.name));
 			item.appendChild(span('code num', company.stockCode));
+			// 시장 구분은 영문 표기(KOSPI 등)가 화면 이름과 같아 응답 값을 그대로 쓴다
 			if (company.market) {
 				item.appendChild(span('market', company.market));
 			}
@@ -72,17 +80,20 @@
 	function search() {
 		var keyword = input.value.trim();
 		if (!keyword) {
-			requestNo++;
 			close();
 			return;
 		}
 		var mine = ++requestNo;
 		fetch(api + '?q=' + encodeURIComponent(keyword), { headers: { Accept: 'application/json' } })
 			.then(function (response) {
-				return response.ok ? response.json() : [];
+				if (!response.ok) {
+					// 오류를 "맞는 회사가 없습니다"로 보여주면 틀린 안내가 된다. 목록만 닫는다
+					throw new Error('company search failed');
+				}
+				return response.json();
 			})
 			.then(function (companies) {
-				if (mine === requestNo) {
+				if (mine === requestNo && document.activeElement === input) {
 					render(companies);
 				}
 			})
@@ -117,8 +128,9 @@
 	});
 
 	input.addEventListener('keydown', function (event) {
-		if (event.isComposing) {
-			return; // 한글 조합 중의 키 입력은 건드리지 않는다
+		// 한글 조합 중의 키 입력은 건드리지 않는다. 일부 브라우저는 조합이 끝난 직후의 키를 keyCode 229로만 알려 준다
+		if (event.isComposing || event.keyCode === 229) {
+			return;
 		}
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			if (list.hidden) {
@@ -153,4 +165,7 @@
 	});
 
 	input.addEventListener('blur', close);
+
+	// 뒤로 가기로 돌아왔을 때 이전에 열려 있던 목록이 남지 않게 한다
+	window.addEventListener('pageshow', close);
 })();
