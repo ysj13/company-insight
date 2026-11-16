@@ -87,7 +87,7 @@ public class CollectionRunRepository {
 		jdbc.sql("""
 				UPDATE collection_run
 				   SET finished_at = :finishedAt, status = :status, fetched = :fetched, saved = :saved,
-					   pages = :pages, error_kind = :errorKind, error_code = :errorCode, error = :error
+				       pages = :pages, error_kind = :errorKind, error_code = :errorCode, error = :error
 				 WHERE id = :id
 				""")
 			.param("finishedAt", OffsetDateTime.ofInstant(finishedAt, ZoneOffset.UTC))

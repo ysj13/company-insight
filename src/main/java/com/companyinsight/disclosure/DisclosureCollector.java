@@ -91,8 +91,9 @@ public class DisclosureCollector {
 			do {
 				DisclosureListResponse response = dart.listDisclosures(from, to, page);
 				totalPage = response.totalPage();
+				progress.addFetched(response.items().size());
 				int savedOnPage = repository.saveListed(response.items());
-				progress.addPage(response.items().size(), savedOnPage);
+				progress.addSaved(savedOnPage);
 
 				boolean hasStorable = response.items().stream()
 					.anyMatch(item -> DisclosureRepository.isListed(item) && DisclosureRepository.isStorable(item));

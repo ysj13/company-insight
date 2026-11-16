@@ -17,6 +17,7 @@ class DartTextTest {
 	@Test
 	void collapseSpaces는_앞뒤_공백을_없애고_연속_공백을_하나로() {
 		assertThat(DartText.collapseSpaces("  주요사항보고서   (자기주식취득결정)      ")).isEqualTo("주요사항보고서 (자기주식취득결정)");
+		assertThat(DartText.collapseSpaces("사업보고서\t(2025.12)\r\n 정정")).isEqualTo("사업보고서 (2025.12) 정정");
 		assertThat(DartText.collapseSpaces(null)).isEmpty();
 	}
 
@@ -31,6 +32,7 @@ class DartTextTest {
 	void 날짜는_yyyyMMdd만_받는다() {
 		assertThat(DartText.parseDate("20261113")).contains(LocalDate.of(2026, 11, 13));
 		assertThat(DartText.parseDate("2026-11-13")).isEmpty();
+		assertThat(DartText.parseDate(" 20261113")).isEmpty();
 		assertThat(DartText.parseDate("20261332")).isEmpty();
 		assertThat(DartText.parseDate("")).isEmpty();
 		assertThat(DartText.parseDate(null)).isEmpty();

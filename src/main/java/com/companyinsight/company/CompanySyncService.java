@@ -62,8 +62,9 @@ public class CompanySyncService {
 			long started = System.currentTimeMillis();
 			byte[] zip = dartClient.downloadCorpCodeZip();
 			List<CorpCode> listed = parser.parseListed(zip);
+			progress.addFetched(listed.size());
 			int changed = repository.upsertAll(listed);
-			progress.addPage(listed.size(), changed);
+			progress.addSaved(changed);
 			long elapsed = System.currentTimeMillis() - started;
 			log.info("기업 목록 동기화: 상장사 {}곳, 추가·변경 {}건, {}ms (zip {}KB)", listed.size(), changed, elapsed,
 				zip.length / 1024);

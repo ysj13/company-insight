@@ -72,15 +72,23 @@ public class CollectionRunRecorder {
 		private int pages;
 
 		/**
-		 * 한 페이지(또는 한 번의 외부 호출) 처리 결과를 더한다.
+		 * 외부에서 한 페이지(또는 한 번의 호출)를 받았음을 더한다. 저장하기 전에 부른다.
+		 * 저장이 실패해도 어디까지 받았는지가 기록에 남게 하기 위해서다.
 		 *
-		 * @param fetched 외부에서 받은 건수
-		 * @param saved   새로 저장하거나 변경한 건수
+		 * @param count 받은 건수
 		 */
-		public void addPage(int fetched, int saved) {
+		public void addFetched(int count) {
 			this.pages++;
-			this.fetched += fetched;
-			this.saved += saved;
+			this.fetched += count;
+		}
+
+		/**
+		 * 저장을 마친 건수를 더한다.
+		 *
+		 * @param count 새로 저장하거나 변경한 건수
+		 */
+		public void addSaved(int count) {
+			this.saved += count;
 		}
 
 		public int fetched() {

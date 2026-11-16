@@ -8,7 +8,7 @@ import java.util.Optional;
 /**
  * DART가 주는 문자열과 날짜를 저장하기 전에 다듬는 공통 처리.
  *
- * <p>기업 목록, 공시, 재무 수집이 모두 같은 규칙을 써야 해서 한곳에 둔다. 규칙이 경로마다 다르면
+ * <p>기업 목록 동기화와 공시 수집이 같은 규칙을 써야 해서 한곳에 둔다. 규칙이 경로마다 다르면
  * 한쪽에서만 저장이 실패하는 일이 생긴다.
  */
 public final class DartText {
@@ -37,12 +37,12 @@ public final class DartText {
 	}
 
 	/**
-	 * 앞뒤 공백을 없애고 연속 공백을 하나로 줄인다. DART 공시 제목은 뒤에 공백이 길게 붙어 온다.
+	 * 앞뒤 공백을 없애고, 연속된 공백 문자(탭·줄바꿈 포함)를 공백 하나로 줄인다. DART 공시 제목은 뒤에 공백이 길게 붙어 온다.
 	 *
 	 * @return 다듬은 문자열. null이면 빈 문자열.
 	 */
 	public static String collapseSpaces(String value) {
-		return value == null ? "" : value.strip().replaceAll("\s+", " ");
+		return value == null ? "" : value.strip().replaceAll("\\s+", " ");
 	}
 
 	/** 비어 있거나 공백뿐이면 null, 아니면 앞뒤 공백을 없앤 값. */
@@ -53,6 +53,8 @@ public final class DartText {
 	/**
 	 * yyyyMMdd 문자열을 날짜로 바꾼다.
 	 *
+	 * <p>앞뒤 공백이 있는 값도 형식 오류로 본다. 날짜 문자열을 그대로 비교하는 코드가 있어 엄격하게 받는다.
+	 *
 	 * @return 형식이 맞으면 날짜, null·빈 값·형식 오류면 비어 있음
 	 */
 	public static Optional<LocalDate> parseDate(String yyyymmdd) {
@@ -60,7 +62,7 @@ public final class DartText {
 			return Optional.empty();
 		}
 		try {
-			return Optional.of(LocalDate.parse(yyyymmdd.strip(), YYYYMMDD));
+			return Optional.of(LocalDate.parse(yyyymmdd, YYYYMMDD));
 		}
 		catch (DateTimeParseException e) {
 			return Optional.empty();
