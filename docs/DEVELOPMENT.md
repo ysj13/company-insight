@@ -50,8 +50,7 @@ com.companyinsight
 - 회사 검색 API와 공시 목록 화면은 회사를 내부 번호로 가리킨다. 출처의 번호는 밖으로 내보내지 않는다. 내부 번호는 DB를 새로 만들면 달라지므로, 오래 남는 공개 주소(종목 화면)에 쓸 회사 식별자는 종목 화면을 만드는 단계에서 정한다.
 - 수집기와 제목 규칙은 출처별로 나눠, 새 출처를 추가할 때 기존 코드를 고치지 않게 한다.
 - 새로 만드는 테이블(재무, 분석, 판단)은 회사의 내부 번호를 참조하고, 금액에는 통화를 함께 저장한다.
-- 재무는 출처의 응답 원본을 보고서 단위로 그대로 저장하고(`financial_raw`), 필요한 계정을 거기서 뽑아 쓴다(`financial`). 계정을 추가하거나 뽑는 규칙을 고칠 때 출처를 다시 부르지 않고 저장된 원본에서 다시 뽑는다. 계정이 하나도 없는 응답은 저장하지 않아 이미 저장한 원본을 덮어쓰지 않는다. 뽑은 행은 원본에 그 계정의 줄이 아예 없을 때만 지우고, 줄은 있는데 금액을 읽지 못한 계정은 기존 값을 둔다.
-- 뽑은 재무 값은 출처가 준 값(그 기간의 금액, 누적 금액, 같은 보고서에 실린 전년 금액) 그대로다. 4분기 금액(연간 − 3분기 누적), 전년 동기 대비 증감, 영업이익률은 조회할 때 코드가 계산한다. 계산 방식을 바꿔도 다시 수집하지 않는다. 보고서에 연결재무제표가 있으면 연결을, 없으면 별도를 쓴다. 반기·3분기보고서의 금액이 3개월 금액이라고 볼 근거(누적 금액이 따로 있음)가 없으면 그 분기는 내보내지 않는다.
+- 재무는 출처가 준 응답을 보고서 한 건 단위로 그대로 저장한다(`financial`). 화면에 쓰는 계정(매출액, 영업이익, 당기순이익)과 4분기 금액(연간 − 3분기 누적), 전년 동기 대비 증감, 영업이익률은 조회할 때 저장된 응답에서 읽어 계산한다. 계정을 추가하거나 읽는 규칙, 계산 방식을 고쳐도 다시 수집하지 않는다. 계정이 하나도 없는 응답은 저장하지 않아 이미 저장한 응답을 덮어쓰지 않는다. 보고서에 연결재무제표가 있으면 연결을, 없으면 별도를 쓴다. 반기·3분기보고서의 금액이 3개월 금액이라고 볼 근거(누적 금액이 따로 있음)가 없으면 그 분기는 내보내지 않는다.
 - 수집 기능은 회사 한 곳을 지정해 받을 수 있게 만든다. 기능을 완성한 뒤 테스트 회사 몇 곳으로 확인하고, 이상이 없으면 전 종목 데이터를 채운다.
 
 ### 주요 테이블 (초안)
@@ -63,11 +62,10 @@ com.companyinsight
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
 | `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
 | `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
-| `financial` | company_id, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL), statement_type(연결/별도), account(매출액/영업이익/당기순이익), amount, cumulative_amount, prior_amount, prior_cumulative_amount, currency, source, source_key(근거 보고서). 보고서 한 건의 계정 하나가 한 행이고 다섯 컬럼(company_id~account)을 묶어 **unique** |
-| `financial_raw` | company_id, source, fiscal_year, report_type(넷을 묶어 **unique**), payload(출처 응답 전체, JSONB), fetched_at. 보고서 한 건의 응답 하나가 한 행 |
+| `financial` | company_id, source, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL. 넷을 묶어 **unique**), payload(출처 응답 전체, JSONB), fetched_at. 보고서 한 건의 응답 하나가 한 행 |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `collection_run`, `financial`, `financial_raw`는 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `collection_run`, `financial`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -155,7 +153,7 @@ com.companyinsight
 | 5-1 | 11/16 | 공시 목록 화면 | 수집한 공시와 분류 결과를 최근 접수 순으로 보여주는 한 페이지(`/disclosures`), 검색창 자동완성으로 회사 한 곳 고르기, DART 원문 링크. 분류 결과 확인용이고 서비스 화면에는 연결하지 않는다. 자동완성과 화면 틀은 종목 화면에 쓴다 | 분류 결과를 실제 데이터로 화면에서 확인 |
 | 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 회사 참조를 내부 번호로, 기존 데이터 이전(Flyway V7) | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
 | 5-3 | 11/17 | 재무 수집 | OpenDART 주요계정으로 보고서별 매출액·영업이익·당기순이익 수집(회사 한 곳을 지정해 받기, 설정한 종목코드는 앱 시작 때 수집), 분기·연간 실적과 전년 동기 대비 증감·영업이익률 계산, 실적 조회 API(`/api/companies/{id}/financials`) | 테스트 회사 세 곳의 재무가 저장되고 증감이 보고서의 수치로 계산한 값과 맞음 |
-| 5-4 | 11/17 | 재무 원본 저장 | 주요계정 응답 원본을 보고서 단위로 저장(`financial_raw`), 재무 값은 원본에서 뽑아 저장, 저장된 원본에서 다시 뽑기(`FINANCIAL_REEXTRACT_ON_STARTUP`), 응답에서 사라진 계정의 행 삭제 | 테스트 회사 세 곳의 원본 33건이 저장되고 뽑은 값이 이전과 같음 |
+| 5-4 | 11/17 | 재무 응답 그대로 저장 | `financial`을 주요계정 응답을 보고서 단위로 그대로 저장하는 테이블로 변경(Flyway V9), 계정의 금액은 조회할 때 응답에서 읽음 | 테스트 회사 세 곳의 응답 33건이 저장되고 실적 조회 결과가 이전과 같음 |
 
 **MVP (~ 11/22)**
 

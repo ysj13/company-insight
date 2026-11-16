@@ -1,7 +1,6 @@
 package com.companyinsight.financial;
 
 import com.companyinsight.common.dart.DartClient;
-import com.companyinsight.common.dart.DartText;
 import com.companyinsight.common.dart.MajorAccountResponse;
 import com.companyinsight.common.dart.MajorAccountResponse.Item;
 import com.companyinsight.common.external.ErrorKind;
@@ -10,16 +9,9 @@ import com.companyinsight.common.external.SourcePauseRegistry;
 import com.companyinsight.common.source.Source;
 import com.companyinsight.company.CompanyRepository;
 import com.companyinsight.ops.CollectionRunRecorder;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -28,17 +20,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * DART 주요계정으로 회사 한 곳의 재무(매출액, 영업이익, 당기순이익)를 수집한다.
+ * DART 주요계정으로 회사 한 곳의 재무를 수집한다.
  *
- * <p>사업연도마다 보고서 네 종류(1분기, 반기, 3분기, 사업보고서)를 한 번씩 조회한다. 아직 제출되지 않은 보고서는
- * 데이터가 없어 건너뛴다. 저장은 두 단계다.
- * <ol>
- * <li>응답 원본을 financial_raw에 저장한다. 저장하지 않는 계정과 필드도 남는다.
- * 계정이 하나도 없는 응답은 저장하지 않아, 이미 저장한 원본을 빈 응답으로 덮어쓰지 않는다.</li>
- * <li>원본에서 필요한 계정을 뽑아 financial에 저장한다. 뽑는 규칙을 고치면 DART를 다시 부르지 않고
- * {@link #reextractAll()}로 원본에서 다시 뽑는다.</li>
- * </ol>
- * 4분기 금액이나 증감은 조회할 때 계산한다({@link PerformanceCalculator}).
+ * <p>사업연도마다 보고서 네 종류(1분기, 반기, 3분기, 사업보고서)를 한 번씩 조회하고, 응답을 보고서 단위로
+ * 그대로 저장한다. 계정을 고르거나 금액을 계산하지 않는다. 그 일은 조회할 때 한다
+ * ({@link FinancialExtractor}, {@link PerformanceCalculator}).
+ *
+ * <p>아직 제출되지 않은 보고서는 데이터가 없어 건너뛴다. 계정이 하나도 없는 응답은 저장하지 않아,
+ * 이미 저장한 응답을 빈 응답으로 덮어쓰지 않는다.
  */
 @Service
 public class FinancialCollector {
@@ -51,32 +40,24 @@ public class FinancialCollector {
 	/** DART 주요계정이 제공되는 첫 사업연도. */
 	static final int FIRST_YEAR = 2015;
 
-	/** 손익계산서 구분 코드 (sj_div). */
-	private static final String INCOME_STATEMENT = "IS";
-
 	/**
 	 * 보고서 한 건에만 해당하는 오류. 그 보고서만 건너뛰고 나머지를 계속 받는다.
 	 * 한도 초과, 인증 오류, 재시도 뒤에도 남은 일시 오류는 다음 호출도 실패하므로 수집을 멈춘다.
 	 */
 	private static final Set<ErrorKind> SKIPPABLE = Set.of(ErrorKind.PARSE, ErrorKind.BAD_REQUEST, ErrorKind.UNKNOWN);
 
-	private static final Comparator<Item> BY_ORDER = Comparator.comparingInt(FinancialCollector::order);
-
 	private final DartClient dart;
 	private final CompanyRepository companies;
 	private final FinancialRepository repository;
-	private final FinancialRawRepository rawRepository;
 	private final CollectionRunRecorder recorder;
 	private final SourcePauseRegistry pauses;
 	private final Clock clock;
 
 	public FinancialCollector(DartClient dart, CompanyRepository companies, FinancialRepository repository,
-			FinancialRawRepository rawRepository, CollectionRunRecorder recorder, SourcePauseRegistry pauses,
-			Clock clock) {
+			CollectionRunRecorder recorder, SourcePauseRegistry pauses, Clock clock) {
 		this.dart = dart;
 		this.companies = companies;
 		this.repository = repository;
-		this.rawRepository = rawRepository;
 		this.recorder = recorder;
 		this.pauses = pauses;
 		this.clock = clock;
@@ -158,16 +139,17 @@ public class FinancialCollector {
 					}
 					List<Item> items = MajorAccountResponse.fromJson(body.get()).items();
 					if (items.isEmpty()) {
-						// 정상 응답인데 계정이 하나도 없다. 저장해 둔 원본과 재무 행을 빈 응답으로 덮어쓰지 않는다
+						// 정상 응답인데 계정이 하나도 없다. 저장해 둔 응답을 빈 응답으로 덮어쓰지 않는다
 						failedReports++;
 						log.warn("재무 수집: 회사 {} {}년 {} 응답에 계정이 없어 건너뜁니다", companyId, year, reportType);
 						continue;
 					}
 					progress.addFetched(items.size());
-					FinancialRaw raw = new FinancialRaw(companyId, Source.DART, year, reportType, body.get());
+					FinancialReport report = new FinancialReport(companyId, Source.DART, year, reportType, body.get());
 					try {
-						rawRepository.upsert(raw);
-						progress.addSaved(extract(raw, items));
+						if (repository.upsert(report)) {
+							progress.addSaved(1);
+						}
 						reports++;
 					}
 					catch (DataIntegrityViolationException e) {
@@ -175,150 +157,38 @@ public class FinancialCollector {
 						failedReports++;
 						log.warn("재무 수집: 회사 {} {}년 {} 응답을 저장하지 못해 건너뜁니다: {}", companyId, year, reportType,
 							e.getClass().getSimpleName());
+						continue;
 					}
+					warnIfHardToRead(report, items);
 				}
 			}
-			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받지 못한 보고서 {}건, 받은 계정 {}줄, 추가·변경 {}행", companyId,
+			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받지 못한 보고서 {}건, 받은 계정 {}줄, 새로 저장·변경 {}건", companyId,
 				fromYear, toYear, reports, failedReports, progress.fetched(), progress.saved());
 			return new CollectResult(false, reports, failedReports, progress.fetched(), progress.saved());
 		});
 	}
 
 	/**
-	 * 저장된 원본 전체에서 재무 행을 다시 뽑는다. DART를 부르지 않는다.
-	 * 뽑는 규칙(계정명 매핑 등)을 고친 뒤에 실행한다. 여러 번 실행해도 결과가 같다.
-	 *
-	 * <p>수집과 동시에 실행하면 안 된다. 읽어 둔 옛 원본으로 새로 받은 값을 되돌릴 수 있다.
-	 * 둘 다 {@link FinancialScheduler}가 같은 작업 그룹에서 차례로 실행한다.
-	 *
-	 * @return 추가·변경한 행 수
+	 * 저장한 응답에서 화면에 쓸 계정을 읽을 수 있는지 미리 확인해 경고를 남긴다. 저장에는 영향을 주지 않는다.
+	 * 조회할 때마다 경고하지 않고 수집할 때 한 번 알리기 위해서다.
 	 */
-	public int reextractAll() {
-		int reports = 0;
-		int failed = 0;
-		int changed = 0;
-		for (long companyId : rawRepository.findCompanyIds()) {
-			for (FinancialRaw raw : rawRepository.findByCompany(companyId)) {
-				try {
-					changed += extract(raw, MajorAccountResponse.fromJson(raw.payload()).items());
-					reports++;
-				}
-				catch (RuntimeException e) {
-					// 원본 한 건을 읽지 못해도 나머지는 계속 뽑는다
-					failed++;
-					log.warn("재무 다시 뽑기 실패(회사 {} {}년 {}): {}", companyId, raw.fiscalYear(), raw.reportType(),
-						e.toString());
-				}
-			}
-		}
-		log.info("재무 다시 뽑기: 원본 {}건, 실패 {}건, 추가·변경 {}행", reports, failed, changed);
-		return changed;
-	}
-
-	/**
-	 * 원본 한 건의 계정 줄에서 재무 행을 뽑아 저장한다.
-	 *
-	 * <p>그 보고서의 기존 행 중 원본에 계정 줄이 아예 없는 것만 지운다. 줄은 있는데 금액이나 통화를 읽지 못한 계정은
-	 * 지우지 않고 기존 값을 둔다. 원본에 아는 계정이 하나도 없으면(뽑는 규칙이 틀렸을 수 있다) 아무것도 지우지 않는다.
-	 *
-	 * @return 추가·변경한 행 수
-	 */
-	private int extract(FinancialRaw raw, List<Item> items) {
-		List<FinancialRecord> records = toRecords(raw.fiscalYear(), raw.reportType(), items);
-		if (records.isEmpty()) {
-			log.warn("재무 수집: 회사 {} {}년 {} 응답에 저장할 계정이 없습니다", raw.companyId(), raw.fiscalYear(),
-				raw.reportType());
-		}
-		FinancialRepository.Replaced replaced = repository.replaceReport(raw.companyId(), raw.source(),
-			raw.fiscalYear(), raw.reportType(), records, presentKeys(items));
-		if (replaced.deleted() > 0) {
-			log.warn("재무 수집: 회사 {} {}년 {} 응답에서 사라진 계정의 행 {}개를 지웠습니다", raw.companyId(),
-				raw.fiscalYear(), raw.reportType(), replaced.deleted());
-		}
-		return replaced.upserted();
-	}
-
-	/** 응답에 줄이 있는 계정의 키. 금액을 읽을 수 있는지와 상관없이, 수집하는 계정의 줄이 있으면 들어간다. */
-	static Set<String> presentKeys(List<Item> items) {
-		Set<String> keys = new HashSet<>();
-		for (Item item : items) {
-			Optional<StatementType> statementType = StatementType.fromDartCode(item.statementDiv());
-			Optional<AccountType> account = AccountType.fromDartName(item.accountName());
-			if (INCOME_STATEMENT.equals(item.sheetDiv()) && statementType.isPresent() && account.isPresent()) {
-				keys.add(FinancialRecord.key(statementType.get(), account.get()));
-			}
-		}
-		return keys;
-	}
-
-	/**
-	 * 주요계정 응답에서 저장할 행을 고른다. 손익계산서의 매출액·영업이익·당기순이익만, 연결과 별도를 따로 남긴다.
-	 *
-	 * <p>같은 계정이 두 줄 오면(당기순이익이 같은 금액으로 두 줄 온다) 표시 순서가 앞선 줄을 쓴다.
-	 * 당기 금액이나 통화를 읽을 수 없는 줄은 건너뛴다.
-	 */
-	static List<FinancialRecord> toRecords(int fiscalYear, ReportType reportType, List<Item> items) {
-		Map<String, FinancialRecord> byKey = new LinkedHashMap<>();
-		for (Item item : items.stream().sorted(BY_ORDER).toList()) {
-			if (!INCOME_STATEMENT.equals(item.sheetDiv())) {
-				continue;
-			}
-			Optional<StatementType> statementType = StatementType.fromDartCode(item.statementDiv());
-			Optional<AccountType> account = AccountType.fromDartName(item.accountName());
-			if (statementType.isEmpty() || account.isEmpty()) {
-				continue;
-			}
-			Optional<BigDecimal> amount = DartText.parseAmount(item.currentAmount());
-			String currency = DartText.blankToNull(item.currency());
-			String receiptNo = DartText.blankToNull(item.receiptNo());
-			if (amount.isEmpty() || currency == null || currency.length() != 3 || receiptNo == null) {
-				log.warn("재무 수집: {}년 {} {} {} 줄을 읽을 수 없어 건너뜁니다", fiscalYear, reportType, statementType.get(),
-					account.get());
-				continue;
-			}
-			FinancialRecord record = new FinancialRecord(fiscalYear, reportType, statementType.get(), account.get(),
-				amount.get(), DartText.parseAmount(item.currentAddAmount()).orElse(null),
-				DartText.parseAmount(item.priorAmount()).orElse(null),
-				DartText.parseAmount(item.priorAddAmount()).orElse(null), currency, Source.DART,
-				DartText.clean(receiptNo, 40));
-			String key = FinancialRecord.key(statementType.get(), account.get());
-			FinancialRecord first = byKey.putIfAbsent(key, record);
-			if (first != null && !sameAmounts(first, record)) {
-				log.warn("재무 수집: {}년 {} {} {} 계정이 두 줄인데 금액이 다릅니다. 앞선 줄을 씁니다", fiscalYear, reportType,
-					statementType.get(), account.get());
-			}
-		}
-		return new ArrayList<>(byKey.values());
-	}
-
-	private static boolean sameAmounts(FinancialRecord a, FinancialRecord b) {
-		return same(a.amount(), b.amount()) && same(a.cumulativeAmount(), b.cumulativeAmount())
-				&& same(a.priorAmount(), b.priorAmount())
-				&& same(a.priorCumulativeAmount(), b.priorCumulativeAmount());
-	}
-
-	private static boolean same(BigDecimal a, BigDecimal b) {
-		return a == null || b == null ? Objects.equals(a, b) : a.compareTo(b) == 0;
-	}
-
-	/** 표시 순서(ord). 숫자가 아니면 맨 뒤로 보낸다. */
-	private static int order(Item item) {
-		try {
-			return Integer.parseInt(item.order().strip());
-		}
-		catch (RuntimeException e) {
-			return Integer.MAX_VALUE;
+	private static void warnIfHardToRead(FinancialReport report, List<Item> items) {
+		FinancialExtractor.Extraction extraction = FinancialExtractor.extract(report, items);
+		if (extraction.records().isEmpty() || extraction.unreadable() > 0 || extraction.conflicting() > 0) {
+			log.warn("재무 수집: 회사 {} {}년 {} 응답에서 읽은 계정 {}개, 읽지 못한 줄 {}개, 금액이 다른 중복 줄 {}개",
+				report.companyId(), report.fiscalYear(), report.reportType(), extraction.records().size(),
+				extraction.unreadable(), extraction.conflicting());
 		}
 	}
 
 	/**
 	 * 수집 결과.
 	 *
-	 * @param skipped 키가 없거나 소스가 정지 중이라 실행하지 않았으면 true
-	 * @param reports       받아서 저장한 보고서 수
+	 * @param skipped       키가 없거나 소스가 정지 중이라 실행하지 않았으면 true
+	 * @param reports       받아서 저장한 보고서 수 (내용이 그대로인 것 포함)
 	 * @param failedReports 응답이 잘못되었거나 비어 있어 건너뛴 보고서 수
-	 * @param fetched       DART에서 받은 계정 줄 수 (저장하지 않는 계정 포함)
-	 * @param saved         새로 저장하거나 값이 바뀐 재무 행 수
+	 * @param fetched       DART에서 받은 계정 줄 수
+	 * @param saved         새로 저장했거나 내용이 바뀐 보고서 수
 	 */
 	public record CollectResult(boolean skipped, int reports, int failedReports, int fetched, int saved) {
 		static CollectResult skip() {

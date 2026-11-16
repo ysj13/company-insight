@@ -22,6 +22,8 @@ import com.companyinsight.common.external.ErrorKind;
 import com.companyinsight.common.external.ExternalApiException;
 import com.companyinsight.common.external.SourcePauseRegistry;
 import java.io.IOException;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,7 +54,7 @@ class FinancialIntegrationTest {
 	MockMvc mvc;
 
 	@Autowired
-	java.time.Clock clock;
+	Clock clock;
 
 	@MockitoBean
 	DartClient dart;
@@ -65,7 +67,6 @@ class FinancialIntegrationTest {
 	@BeforeEach
 	void setUp() {
 		jdbc.sql("DELETE FROM financial").update();
-		jdbc.sql("DELETE FROM financial_raw").update();
 		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
 		jdbc.sql("DELETE FROM collection_run").update();
@@ -82,12 +83,11 @@ class FinancialIntegrationTest {
 	@AfterEach
 	void tearDown() {
 		jdbc.sql("DELETE FROM financial").update();
-		jdbc.sql("DELETE FROM financial_raw").update();
 	}
 
 	@Test
-	void 회사_한_곳의_재무를_받아_저장하고_다시_받아도_변경이_없다() throws IOException {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
+	void 회사_한_곳의_응답을_받아_그대로_저장하고_다시_받아도_변경이_없다() throws IOException {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
 
 		FinancialCollector.CollectResult first = collector.collect(companyId, 2025, 2025);
 		FinancialCollector.CollectResult second = collector.collect(companyId, 2025, 2025);
@@ -97,147 +97,92 @@ class FinancialIntegrationTest {
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11012");
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11014");
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11011");
-		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 6));
-		assertThat(second.saved()).isZero();
-		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(6);
+		// 보고서 1건, 계정 14줄을 받아 1건을 새로 저장. 다시 받으면 내용이 같아 저장 0건
+		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 1));
+		assertThat(second).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 0));
 
-		Map<String, Object> revenue = jdbc.sql("""
-			SELECT * FROM financial
-			 WHERE company_id = :id AND fiscal_year = 2025 AND report_type = 'Q3'
-			   AND statement_type = 'CONSOLIDATED' AND account = 'REVENUE'
-			""").param("id", companyId).query().singleRow();
-		assertThat(revenue.get("amount").toString()).isEqualTo("86061747000000.00");
-		assertThat(revenue.get("cumulative_amount").toString()).isEqualTo("239768567000000.00");
-		assertThat(revenue.get("prior_amount").toString()).isEqualTo("79098731000000.00");
-		assertThat(revenue.get("prior_cumulative_amount").toString()).isEqualTo("225082634000000.00");
-		assertThat(revenue.get("currency")).isEqualTo("KRW");
-		assertThat(revenue.get("source")).isEqualTo("DART");
-		assertThat(revenue.get("source_key")).isEqualTo("20251114002447");
-
-		assertThat(jdbc.sql("SELECT status, fetched, saved FROM collection_run WHERE source = :s ORDER BY id")
-			.param("s", FinancialCollector.JOB).query().listOfRows())
-			.extracting(r -> r.get("status") + ":" + r.get("fetched") + ":" + r.get("saved"))
-			.containsExactly("SUCCESS:14:6", "SUCCESS:14:0");
-	}
-
-	@Test
-	void 출처의_값이_바뀌면_다시_받을_때_그_행만_갱신한다() {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "매출액", "CFS", "1,000", "1"),
-			line("20250515000001", "영업이익", "CFS", "100", "2")));
-		collector.collect(companyId, 2025, 2025);
-
-		// 정정 보고서가 나와 매출액과 근거 접수번호가 바뀐 경우
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250601000009", "매출액", "CFS", "1,200", "1"),
-			line("20250515000001", "영업이익", "CFS", "100", "2")));
-		FinancialCollector.CollectResult second = collector.collect(companyId, 2025, 2025);
-
-		assertThat(second.saved()).isEqualTo(1);
-		assertThat(jdbc.sql("SELECT amount || ' ' || source_key FROM financial WHERE account = 'REVENUE'")
-			.query(String.class).single()).isEqualTo("1200.00 20250601000009");
-		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(2);
-	}
-
-	@Test
-	void 응답_원본을_읽지_않는_필드까지_그대로_저장한다() throws IOException {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
-
-		collector.collect(companyId, 2025, 2025);
-		collector.collect(companyId, 2025, 2025);
-
-		// 아직 나오지 않은 보고서(응답 없음)는 원본도 없다
-		assertThat(jdbc.sql("SELECT count(*) FROM financial_raw").query(Long.class).single()).isEqualTo(1);
-		Map<String, Object> raw = jdbc.sql("""
+		// 아직 나오지 않은 보고서(응답 없음)는 행이 없다
+		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
+		Map<String, Object> row = jdbc.sql("""
 			SELECT source, fiscal_year, report_type, jsonb_array_length(payload -> 'list') AS lines,
 			       (SELECT e ->> 'thstrm_dt' FROM jsonb_array_elements(payload -> 'list') e
 			         WHERE e ->> 'fs_div' = 'CFS' AND e ->> 'account_nm' = '매출액') AS period,
 			       (SELECT e ->> 'thstrm_amount' FROM jsonb_array_elements(payload -> 'list') e
 			         WHERE e ->> 'fs_div' = 'CFS' AND e ->> 'account_nm' = '자산총계') AS total_assets
-			  FROM financial_raw WHERE company_id = :id
+			  FROM financial WHERE company_id = :id
 			""").param("id", companyId).query().singleRow();
-		assertThat(raw.get("source")).isEqualTo("DART");
-		assertThat(raw.get("fiscal_year")).isEqualTo(2025);
-		assertThat(raw.get("report_type")).isEqualTo("Q3");
-		// financial에는 6행만 뽑지만 원본에는 14줄이 모두 있다
-		assertThat(raw.get("lines")).isEqualTo(14);
-		assertThat(raw.get("period")).isEqualTo("2025.01.01 ~ 2025.09.30");
-		assertThat(raw.get("total_assets")).isEqualTo("523,659,586,000,000");
+		assertThat(row.get("source")).isEqualTo("DART");
+		assertThat(row.get("fiscal_year")).isEqualTo(2025);
+		assertThat(row.get("report_type")).isEqualTo("Q3");
+		// 화면에 쓰지 않는 계정과 필드도 응답 그대로 들어 있다
+		assertThat(row.get("lines")).isEqualTo(14);
+		assertThat(row.get("period")).isEqualTo("2025.01.01 ~ 2025.09.30");
+		assertThat(row.get("total_assets")).isEqualTo("523,659,586,000,000");
+
+		assertThat(jdbc.sql("SELECT status, fetched, saved FROM collection_run WHERE source = :s ORDER BY id")
+			.param("s", FinancialCollector.JOB).query().listOfRows())
+			.extracting(r -> r.get("status") + ":" + r.get("fetched") + ":" + r.get("saved"))
+			.containsExactly("SUCCESS:14:1", "SUCCESS:14:0");
 	}
 
 	@Test
-	void 원본을_다시_받으면_받은_시각을_고치고_내용이_바뀐_경우에만_수정_시각을_바꾼다() {
+	void 다시_받으면_받은_시각을_고치고_내용이_바뀐_경우에만_수정_시각을_바꾼다() {
 		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
 			line("20250515000001", "매출액", "CFS", "1,000", "1")));
 		collector.collect(companyId, 2025, 2025);
 		// 시각을 분명한 과거로 돌려 놓고 본다. 시계의 해상도에 기대지 않기 위해서다
-		String rewind = "UPDATE financial_raw SET created_at = now() - interval '1 day', "
+		String rewind = "UPDATE financial SET created_at = now() - interval '1 day', "
 				+ "updated_at = now() - interval '1 day', fetched_at = now() - interval '1 day'";
 		String recent = "SELECT (fetched_at > now() - interval '1 hour') || ' ' || (updated_at > now() - interval '1 hour')"
-				+ " || ' ' || (created_at > now() - interval '1 hour') FROM financial_raw";
+				+ " || ' ' || (created_at > now() - interval '1 hour') FROM financial";
 		jdbc.sql(rewind).update();
 
-		collector.collect(companyId, 2025, 2025); // 같은 내용
+		FinancialCollector.CollectResult same = collector.collect(companyId, 2025, 2025);
+		assertThat(same.saved()).isZero();
 		assertThat(jdbc.sql(recent).query(String.class).single()).isEqualTo("true false false");
 
+		// 정정 보고서가 나와 매출액과 근거 접수번호가 바뀐 경우
 		jdbc.sql(rewind).update();
 		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
 			line("20250601000009", "매출액", "CFS", "1,200", "1")));
-		collector.collect(companyId, 2025, 2025); // 바뀐 내용
+		FinancialCollector.CollectResult changed = collector.collect(companyId, 2025, 2025);
+		assertThat(changed.saved()).isEqualTo(1);
 		assertThat(jdbc.sql(recent).query(String.class).single()).isEqualTo("true true false");
-		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'thstrm_amount' FROM financial_raw")
+		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'thstrm_amount' FROM financial")
 			.query(String.class).single()).isEqualTo("1,200");
 	}
 
 	@Test
-	void 정상_응답인데_계정이_없으면_저장된_원본과_재무_행을_덮어쓰지_않는다() throws IOException {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
+	void 공백과_키_순서만_다른_응답은_같은_내용으로_본다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(Optional.of(
+			"{\"status\":\"000\",\"message\":\"정상\",\"list\":[{\"account_nm\":\"매출액\",\"thstrm_amount\":\"1,000\"}]}"));
+		collector.collect(companyId, 2025, 2025);
+
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(Optional.of(
+			"{ \"list\": [ { \"thstrm_amount\": \"1,000\", \"account_nm\": \"매출액\" } ], \"message\": \"정상\", \"status\": \"000\" }"));
+
+		assertThat(collector.collect(companyId, 2025, 2025).saved()).isZero();
+	}
+
+	@Test
+	void 정상_응답인데_계정이_없으면_저장된_응답을_덮어쓰지_않는다() throws Exception {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
 		collector.collect(companyId, 2025, 2025);
 
 		given(dart.fetchMajorAccounts("00126380", 2025, "11014"))
 			.willReturn(Optional.of("{\"status\":\"000\",\"message\":\"정상\"}"));
-		FinancialCollector.CollectResult emptyList = collector.collect(companyId, 2025, 2025);
+		FinancialCollector.CollectResult noList = collector.collect(companyId, 2025, 2025);
 		given(dart.fetchMajorAccounts("00126380", 2025, "11014"))
 			.willReturn(Optional.of("{\"status\":\"000\",\"message\":\"정상\",\"list\":[]}"));
-		collector.collect(companyId, 2025, 2025);
+		FinancialCollector.CollectResult emptyList = collector.collect(companyId, 2025, 2025);
 
+		assertThat(noList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 0, 0));
 		assertThat(emptyList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 0, 0));
-		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(6);
-		assertThat(jdbc.sql("SELECT jsonb_array_length(payload -> 'list') FROM financial_raw").query(Integer.class).single())
+		assertThat(jdbc.sql("SELECT jsonb_array_length(payload -> 'list') FROM financial").query(Integer.class).single())
 			.isEqualTo(14);
-	}
-
-	@Test
-	void 줄은_있는데_금액을_읽지_못한_계정은_기존_값을_지우지_않는다() {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "매출액", "CFS", "1,000", "1"),
-			line("20250515000001", "영업이익", "CFS", "100", "2")));
-		collector.collect(companyId, 2025, 2025);
-
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "매출액", "CFS", "-", "1"),
-			line("20250515000001", "영업이익", "CFS", "120", "2")));
-		FinancialCollector.CollectResult second = collector.collect(companyId, 2025, 2025);
-
-		assertThat(second.saved()).isEqualTo(1);
-		assertThat(jdbc.sql("SELECT account || ' ' || amount FROM financial ORDER BY 1").query(String.class).list())
-			.containsExactly("OPERATING_INCOME 120.00", "REVENUE 1000.00");
-	}
-
-	@Test
-	void 응답에_아는_계정이_하나도_없으면_아무것도_지우지_않는다() {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "매출액", "CFS", "1,000", "1")));
-		collector.collect(companyId, 2025, 2025);
-
-		// 계정명이 모두 달라진 응답. 뽑는 규칙이 맞지 않는 경우와 구분할 수 없으므로 기존 값을 둔다
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "영업수익", "CFS", "1,000", "1")));
-		collector.collect(companyId, 2025, 2025);
-
-		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
-		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'account_nm' FROM financial_raw").query(String.class).single())
-			.isEqualTo("영업수익");
+		mvc.perform(get("/api/companies/{id}/financials", companyId))
+			.andExpect(jsonPath("$[0].revenue.changeRate").value(8.8));
 	}
 
 	@Test
@@ -254,47 +199,7 @@ class FinancialIntegrationTest {
 
 		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 1, 1, 2, 1));
 		assertThat(jdbc.sql("SELECT report_type FROM financial").query(String.class).list()).containsExactly("HALF");
-		assertThat(jdbc.sql("SELECT report_type FROM financial_raw").query(String.class).list()).containsExactly("HALF");
 		assertThat(jdbc.sql("SELECT status FROM collection_run").query(String.class).single()).isEqualTo("SUCCESS");
-	}
-
-	@Test
-	void 저장된_원본에서_DART를_부르지_않고_재무_행을_다시_뽑는다() throws IOException {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
-		collector.collect(companyId, 2025, 2025);
-		// 뽑은 값이 사라지거나 틀어진 상태를 만든다
-		jdbc.sql("DELETE FROM financial WHERE account = 'NET_INCOME'").update();
-		jdbc.sql("UPDATE financial SET amount = 1 WHERE account = 'REVENUE' AND statement_type = 'CONSOLIDATED'").update();
-		org.mockito.Mockito.clearInvocations(dart);
-
-		int changed = collector.reextractAll();
-		int again = collector.reextractAll();
-
-		assertThat(changed).isEqualTo(3);
-		assertThat(again).isZero();
-		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(6);
-		assertThat(jdbc.sql("SELECT amount FROM financial WHERE account = 'REVENUE' AND statement_type = 'CONSOLIDATED'")
-			.query(java.math.BigDecimal.class).single()).isEqualByComparingTo("86061747000000");
-		verify(dart, never()).fetchMajorAccounts(anyString(), anyInt(), anyString());
-	}
-
-	@Test
-	void 출처의_응답에서_사라진_계정의_행은_지운다() {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250515000001", "매출액", "CFS", "1,000", "1"),
-			line("20250515000001", "영업이익", "CFS", "100", "2")));
-		given(dart.fetchMajorAccounts("00126380", 2025, "11012")).willReturn(response(
-			line("20250814000001", "영업이익", "CFS", "300", "2")));
-		collector.collect(companyId, 2025, 2025);
-
-		// 정정으로 1분기보고서의 영업이익 줄이 응답에서 빠진 경우
-		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
-			line("20250601000009", "매출액", "CFS", "1,000", "1")));
-		collector.collect(companyId, 2025, 2025);
-
-		// 다른 보고서(반기)의 행은 건드리지 않는다
-		assertThat(jdbc.sql("SELECT report_type || ' ' || account FROM financial ORDER BY 1").query(String.class).list())
-			.containsExactly("HALF OPERATING_INCOME", "Q1 REVENUE");
 	}
 
 	@Test
@@ -316,11 +221,12 @@ class FinancialIntegrationTest {
 		assertThatThrownBy(() -> collector.collect(companyId, 2025, 2025)).isInstanceOf(ExternalApiException.class);
 
 		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
-		Map<String, Object> run = jdbc.sql("SELECT status, error_kind, error_code, saved FROM collection_run").query()
-			.singleRow();
+		Map<String, Object> run = jdbc.sql("SELECT status, error_kind, error_code, fetched, saved FROM collection_run")
+			.query().singleRow();
 		assertThat(run.get("status")).isEqualTo("FAILED");
 		assertThat(run.get("error_kind")).isEqualTo("QUOTA_EXCEEDED");
 		assertThat(run.get("error_code")).isEqualTo("020");
+		assertThat(run.get("fetched")).isEqualTo(1);
 		assertThat(run.get("saved")).isEqualTo(1);
 		verify(dart, never()).fetchMajorAccounts("00126380", 2025, "11014");
 	}
@@ -341,7 +247,7 @@ class FinancialIntegrationTest {
 
 	@Test
 	void 종목코드로_지정한_회사를_올해부터_거슬러_받고_없는_종목코드는_건너뛴다() {
-		int thisYear = java.time.LocalDate.now(clock).getYear();
+		int thisYear = LocalDate.now(clock).getYear();
 
 		collector.collectByStockCodes(List.of("999999", "005930"), 2);
 
@@ -389,8 +295,8 @@ class FinancialIntegrationTest {
 	}
 
 	@Test
-	void 실적_API는_저장된_재무로_증감을_계산해_준다() throws Exception {
-		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
+	void 실적_API는_저장된_응답에서_금액을_읽어_증감을_계산해_준다() throws Exception {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
 		collector.collect(companyId, 2025, 2025);
 
 		// 기대값은 삼성전자 2025년 3분기보고서의 실제 금액으로 손으로 계산한 값 (PerformanceCalculatorTest 참고)
@@ -401,7 +307,7 @@ class FinancialIntegrationTest {
 			.andExpect(jsonPath("$[0].period").value("Q3"))
 			.andExpect(jsonPath("$[0].statementType").value("CONSOLIDATED"))
 			.andExpect(jsonPath("$[0].currency").value("KRW"))
-			.andExpect(jsonPath("$[0].revenue.amount").value(86061747000000.00))
+			.andExpect(jsonPath("$[0].revenue.amount").value(86061747000000L))
 			.andExpect(jsonPath("$[0].revenue.changeRate").value(8.8))
 			.andExpect(jsonPath("$[0].revenue.change").value("INCREASED"))
 			.andExpect(jsonPath("$[0].operatingIncome.changeRate").value(32.5))
@@ -409,6 +315,22 @@ class FinancialIntegrationTest {
 			.andExpect(jsonPath("$[0].operatingMargin").value(14.1))
 			.andExpect(jsonPath("$[0].operatingMarginChange").value(2.5))
 			.andExpect(jsonPath("$[0].documentUrl").value("https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251114002447"));
+	}
+
+	@Test
+	void 저장된_응답_한_건을_읽지_못해도_나머지_보고서로_실적을_준다() throws Exception {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
+		collector.collect(companyId, 2025, 2025);
+		// 주요계정 응답 형식이 아닌 내용이 저장된 경우
+		jdbc.sql("""
+			INSERT INTO financial (company_id, source, fiscal_year, report_type, payload)
+			VALUES (:id, 'DART', 2025, 'Q1', '[1, 2]'::jsonb)
+			""").param("id", companyId).update();
+
+		mvc.perform(get("/api/companies/{id}/financials", companyId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(1))
+			.andExpect(jsonPath("$[0].period").value("Q3"));
 	}
 
 	@Test

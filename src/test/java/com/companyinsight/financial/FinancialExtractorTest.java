@@ -1,6 +1,7 @@
 package com.companyinsight.financial;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.companyinsight.common.dart.MajorAccountResponse;
 import com.companyinsight.common.dart.MajorAccountResponse.Item;
@@ -11,12 +12,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** 주요계정 응답 → 저장할 행. 응답은 삼성전자 2025년 3분기보고서의 실제 값이다. */
-class FinancialCollectorTest {
+/** 저장된 주요계정 응답 → 계정의 금액. 응답은 삼성전자 2025년 3분기보고서의 실제 값이다. */
+class FinancialExtractorTest {
 
 	@Test
-	void 손익계산서의_세_계정만_연결과_별도로_남긴다() throws IOException {
-		List<FinancialRecord> records = FinancialCollector.toRecords(2025, ReportType.Q3, realResponse().items());
+	void 손익계산서의_세_계정만_연결과_별도로_읽는다() throws IOException {
+		List<FinancialRecord> records = FinancialExtractor.extract(report(2025, ReportType.Q3, realJson())).records();
 
 		assertThat(records).hasSize(6);
 		assertThat(records).extracting(r -> r.statementType() + " " + r.account())
@@ -49,7 +50,7 @@ class FinancialCollectorTest {
 		Item annual = new Item("20260310002820", "매출액", "CFS", "IS", "333,605,938,000,000", null,
 			"300,870,903,000,000", null, "23", "KRW");
 
-		List<FinancialRecord> records = FinancialCollector.toRecords(2025, ReportType.ANNUAL, List.of(annual));
+		List<FinancialRecord> records = extract(2025, ReportType.ANNUAL, List.of(annual)).records();
 
 		assertThat(records).singleElement().satisfies(r -> {
 			assertThat(r.amount()).isEqualByComparingTo("333605938000000");
@@ -64,7 +65,11 @@ class FinancialCollectorTest {
 		Item later = item("당기순이익(손실)", "CFS", "IS", "999", "61", "KRW");
 		Item earlier = item("당기순이익(손실)", "CFS", "IS", "100", "29", "KRW");
 
-		List<FinancialRecord> records = FinancialCollector.toRecords(2025, ReportType.Q1, List.of(later, earlier));
+		FinancialExtractor.Extraction extraction = extract(2025, ReportType.Q1, List.of(later, earlier));
+		List<FinancialRecord> records = extraction.records();
+
+		// 금액이 다른 중복 줄이 있었음을 알려 준다
+		assertThat(extraction.conflicting()).isEqualTo(1);
 
 		assertThat(records).singleElement().satisfies(r -> assertThat(r.amount()).isEqualByComparingTo("100"));
 	}
@@ -82,7 +87,11 @@ class FinancialCollectorTest {
 			new Item(null, "영업이익", "OFS", "IS", "100", null, null, null, "8", "KRW"), // 접수번호가 없음
 			item("당기순이익", "OFS", "IS", "1,000", null, "KRW")); // 표시 순서가 없어도 저장한다
 
-		List<FinancialRecord> records = FinancialCollector.toRecords(2025, ReportType.Q1, items);
+		FinancialExtractor.Extraction extraction = extract(2025, ReportType.Q1, items);
+		List<FinancialRecord> records = extraction.records();
+
+		// 수집하는 계정인데 읽지 못한 줄: 금액 2개, 통화 1개, 접수번호 1개
+		assertThat(extraction.unreadable()).isEqualTo(4);
 
 		assertThat(records).singleElement().satisfies(r -> {
 			assertThat(r.account()).isEqualTo(AccountType.NET_INCOME);
@@ -104,8 +113,30 @@ class FinancialCollectorTest {
 	}
 
 	@Test
-	void 응답이_비어_있으면_저장할_행이_없다() {
-		assertThat(FinancialCollector.toRecords(2026, ReportType.ANNUAL, List.of())).isEmpty();
+	void 응답이_비어_있으면_읽은_계정이_없다() {
+		assertThat(extract(2026, ReportType.ANNUAL, List.of()).records()).isEmpty();
+	}
+
+	@Test
+	void 주요계정_응답_형식이_아니면_예외() {
+		assertThatThrownBy(() -> FinancialExtractor.extract(report(2025, ReportType.Q1, "[1, 2]")))
+			.isInstanceOf(tools.jackson.core.JacksonException.class);
+	}
+
+	@Test
+	void 같은_금액의_중복_줄과_정상_응답에는_경고할_것이_없다() throws IOException {
+		FinancialExtractor.Extraction extraction = FinancialExtractor.extract(report(2025, ReportType.Q3, realJson()));
+
+		assertThat(extraction.unreadable()).isZero();
+		assertThat(extraction.conflicting()).isZero();
+	}
+
+	private static FinancialExtractor.Extraction extract(int year, ReportType reportType, List<Item> items) {
+		return FinancialExtractor.extract(report(year, reportType, "{}"), items);
+	}
+
+	private static FinancialReport report(int year, ReportType reportType, String payload) {
+		return new FinancialReport(1L, Source.DART, year, reportType, payload);
 	}
 
 	private static Item item(String accountName, String statementDiv, String sheetDiv, String amount, String order,
@@ -119,7 +150,7 @@ class FinancialCollectorTest {
 
 	/** 삼성전자 2025년 3분기보고서의 실제 응답 본문(손익계산서 계정과 자산총계만 남긴 것). */
 	static String realJson() throws IOException {
-		try (InputStream in = FinancialCollectorTest.class
+		try (InputStream in = FinancialExtractorTest.class
 			.getResourceAsStream("/dart/major-accounts-00126380-2025-q3.json")) {
 			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 		}

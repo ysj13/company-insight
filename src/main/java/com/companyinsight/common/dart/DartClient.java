@@ -121,7 +121,7 @@ public class DartClient {
 	/**
 	 * 회사 한 곳의 보고서 한 건에 실린 주요 재무 계정(매출액, 영업이익, 당기순이익 등)의 응답 원문.
 	 *
-	 * <p>원본을 그대로 저장할 수 있게 해석한 객체가 아니라 응답 본문(JSON)을 돌려준다.
+	 * <p>응답을 그대로 저장할 수 있게 해석한 객체가 아니라 응답 본문(JSON)을 돌려준다.
 	 * 필요한 값은 {@link MajorAccountResponse#fromJson(String)}으로 읽는다.
 	 *
 	 * @param corpCode     DART 고유번호 (8자리)
