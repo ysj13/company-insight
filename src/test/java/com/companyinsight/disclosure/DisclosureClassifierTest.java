@@ -7,8 +7,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * 보고서명은 2026-10-19 ~ 11-16에 실제로 접수된 공시 제목을 그대로 옮긴 것이다.
- * 기대값은 코드가 아니라 합의한 분류표에서 가져왔다.
+ * 표로 넣은 보고서명은 2026-10-19 ~ 11-16에 실제로 접수된 공시 제목을 그대로 옮긴 것이고,
+ * 기대값은 코드가 아니라 합의한 분류표(docs/PLAN.md 6절)에서 가져왔다.
+ * 실제 데이터에 없어 지어낸 입력은 테스트 이름이나 주석에 "가정한 제목"이라고 적었다.
  */
 class DisclosureClassifierTest {
 
@@ -32,12 +33,11 @@ class DisclosureClassifierTest {
 		자본잠식50%이상또는매출액50억원미만사실발생                         | NEGATIVE | 3
 		반기검토의견부적정,의견거절또는완전자본잠식사실발생                 | NEGATIVE | 3
 		회계처리기준위반행위로인한증권선물위원회의검찰고발등                | NEGATIVE | 3
-		기타시장안내 (주가 미달에 따른 상장폐지 우려 관련 안내)             | NEGATIVE | 3
 		기타시장안내 (주권 상장폐지 우려 예고)                              | NEGATIVE | 3
-		투자유의안내 (주가요건 미달로 인한 상장폐지 우려 예고)              | NEGATIVE | 3
+		투자유의안내 (상장폐지 우려 예고)                                   | NEGATIVE | 3
 		불성실공시법인지정 (공시번복 3건)                                   | NEGATIVE | 2
-		기타시장안내(관리종목지정우려종목) (주가 1,000원 미달)              | NEGATIVE | 2
-		기타시장안내 (관리종목 지정사유 추가우려)(시가총액 200억원 미달)    | NEGATIVE | 2
+		기타시장안내(관리종목지정우려종목)                                  | NEGATIVE | 2
+		기타시장안내 (관리종목 지정사유 추가우려)                           | NEGATIVE | 2
 		투자유의안내 (관리종목지정 우려 예고)                               | NEGATIVE | 2
 		단일판매ㆍ공급계약해지                                              | NEGATIVE | 2
 		거래처와의거래중단                                                  | NEGATIVE | 2
@@ -140,7 +140,7 @@ class DisclosureClassifierTest {
 		[기재정정]주요사항보고서(자기주식취득결정)                | POSITIVE | 2
 		[기재정정]주식소각결정(자회사의 주요경영사항)             | POSITIVE | 2
 		[첨부정정]단일판매ㆍ공급계약해지                          | NEGATIVE | 2
-		[기재정정]기타시장안내 (주가 미달에 따른 상장폐지 우려 관련 안내) | NEGATIVE | 3
+		[기재정정]기타시장안내 (주권 상장폐지 우려 예고)          | NEGATIVE | 3
 		[기재정정]주요사항보고서(회생절차개시신청)                | NEGATIVE | 3
 		""")
 	void 정정_공시는_원래_공시와_같게_분류하고_정정으로_표시한다(String reportName, Tone tone, int impact) {
@@ -162,10 +162,32 @@ class DisclosureClassifierTest {
 
 	@Test
 	void 머리말이_두_개_이어져도_정정으로_본다() {
-		Classification c = classifier.classify("[기재정정][첨부추가]분기보고서 (2026.09)", null);
+		Classification c = classifier.classify("[정정제출요구][기재정정]증권신고서(지분증권)", null);
 
-		assertThat(c.kind()).isEqualTo(DisclosureKind.PERIODIC);
+		assertThat(c.kind()).isEqualTo(DisclosureKind.ISSUANCE);
+		assertThat(c.tone()).isEqualTo(Tone.NEUTRAL);
 		assertThat(c.correction()).isTrue();
+	}
+
+	/** 실제 데이터에는 없던 가정한 제목이다. 이름 뒤에 말이 더 붙어 뜻이 뒤집히는 경우를 막는다. */
+	@ParameterizedTest(name = "{0}")
+	@CsvSource(delimiter = '|', textBlock = """
+		파산신청취하
+		파산신청각하
+		회생절차개시신청기각
+		회생절차개시신청취하
+		불성실공시법인지정예고철회
+		불성실공시법인지정유예
+		주식소각결정철회
+		자기주식취득결정취소
+		사업보고서제출기한연장신고서
+		기타시장안내 (상장폐지 우려 해소 안내)
+		투자유의안내 (관리종목지정 우려 해제)
+		""")
+	void 이름_뒤에_다른_말이_붙으면_판정하지_않는다(String reportName) {
+		Classification c = classifier.classify(reportName, null);
+
+		assertThat(c.tone()).isNull();
 	}
 
 	@Test
@@ -175,6 +197,7 @@ class DisclosureClassifierTest {
 		assertThat(c.correction()).isFalse();
 	}
 
+	/** 비고 "유철"은 가정한 값이다. 실제 철회 3건은 모두 "철" 하나였고, 다른 표시는 "유정"처럼 붙어 온다. */
 	@Test
 	void 철회된_공시는_호재여도_중립으로_돌린다() {
 		Classification c = classifier.classify("주식소각결정", "유철");
@@ -205,12 +228,13 @@ class DisclosureClassifierTest {
 
 	@Test
 	void 공백과_탭_줄바꿈이_섞여도_같게_분류한다() {
-		Classification c = classifier.classify("  기타시장안내\t(주가  미달에 따른\n상장폐지 우려 관련 안내 )   ", null);
+		Classification c = classifier.classify("  기타시장안내\t(주권  상장폐지\n우려 예고 )   ", null);
 
 		assertThat(c.tone()).isEqualTo(Tone.NEGATIVE);
 		assertThat(c.impact()).isEqualTo(3);
 	}
 
+	/** 가정한 제목이다. 실제 데이터의 가운뎃점은 모두 ㆍ(U+318D)였다. */
 	@Test
 	void 가운뎃점_글자가_달라도_같게_분류한다() {
 		Classification c = classifier.classify("현금·현물배당결정", null);

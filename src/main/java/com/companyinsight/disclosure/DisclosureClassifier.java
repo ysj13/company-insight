@@ -12,8 +12,10 @@ import org.springframework.stereotype.Component;
  * 본문을 읽어야 알 수 있는 공시(실적, 공급계약, 증자 등)는 종류만 정하고 tone을 비워 둔다.
  * 규칙에 없는 제목도 tone을 비워 둔다. 모르는 것을 중립으로 단정하지 않기 위해서다.
  *
- * <p>규칙은 위에서부터 차례로 맞춰 보고 처음 맞는 것을 쓴다. 그래서 더 긴 제목을 먼저 둔다
- * (예: "불성실공시법인지정예고"가 "불성실공시법인지정"보다 앞).
+ * <p>규칙은 위에서부터 차례로 맞춰 보고 처음 맞는 것을 쓴다.
+ *
+ * <p>호재·악재 규칙은 제목 전체가 맞아야 한다({@link #title}). 앞부분만 맞추면 "파산신청"이 "파산신청기각"이나
+ * "파산신청취하"에도 맞아 반대 뜻의 공시가 같은 판정을 받는다. 중립과 판정 보류는 틀려도 피해가 작아 앞부분만 맞춘다.
  *
  * <p>규칙을 바꾸면 {@link #RULE_VERSION}을 올린다. 옛 버전으로 분류된 공시를 다시 분류하는 기준이다.
  */
@@ -38,39 +40,40 @@ public class DisclosureClassifier {
 		// --- 거래소 시장안내. 같은 제목 아래 괄호 안 사유로 갈린다 ---
 		rule(notice("상장폐지우려"), DisclosureKind.MARKET, Tone.NEGATIVE, 3),
 		rule(notice("관리종목지정우려").or(notice("관리종목지정사유추가우려")), DisclosureKind.MARKET, Tone.NEGATIVE, 2),
-		rule(startsWith("불성실공시법인지정예고"), DisclosureKind.MARKET, Tone.NEGATIVE, 1),
-		rule(startsWith("불성실공시법인지정"), DisclosureKind.MARKET, Tone.NEGATIVE, 2),
+		rule(title("불성실공시법인지정예고"), DisclosureKind.MARKET, Tone.NEGATIVE, 1),
+		rule(title("불성실공시법인지정"), DisclosureKind.MARKET, Tone.NEGATIVE, 2),
 
 		// --- 호재 ---
-		rule(startsWith("주식소각결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 3),
-		rule(startsWith("회생절차종결결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 3),
-		rule(startsWith("자기주식취득결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
-		rule(startsWith("자기주식취득신탁계약체결결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
-		rule(startsWith("현금ㆍ현물배당결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
-		rule(startsWith("무상증자결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
-		rule(startsWith("파산신청기각"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
-		rule(startsWith("기업가치제고계획예고"), DisclosureKind.IR, Tone.NEUTRAL, 0),
-		rule(startsWith("기업가치제고계획"), DisclosureKind.MAJOR, Tone.POSITIVE, 1),
-		rule(startsWith("생산재개"), DisclosureKind.MAJOR, Tone.POSITIVE, 1),
+		rule(title("주식소각결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 3),
+		rule(title("회생절차종결결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 3),
+		rule(title("자기주식취득결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
+		rule(title("자기주식취득신탁계약체결결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
+		rule(title("현금ㆍ현물배당결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
+		rule(title("무상증자결정"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
+		rule(title("파산신청기각"), DisclosureKind.MAJOR, Tone.POSITIVE, 2),
+		rule(title("기업가치제고계획예고"), DisclosureKind.IR, Tone.NEUTRAL, 0),
+		rule(title("기업가치제고계획"), DisclosureKind.MAJOR, Tone.POSITIVE, 1),
+		rule(title("생산재개"), DisclosureKind.MAJOR, Tone.POSITIVE, 1),
 
 		// --- 악재 ---
-		rule(startsWith("횡령ㆍ배임혐의발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("회생절차개시신청"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("파산신청"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("대출원리금연체사실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("영업정지"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("자본잠식50%이상"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("반기검토의견부적정"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("회계처리기준위반"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
-		rule(startsWith("단일판매ㆍ공급계약해지"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
-		rule(startsWith("거래처와의거래중단"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
-		rule(startsWith("생산중단"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
-		rule(startsWith("파생상품거래손실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
-		rule(startsWith("중대재해발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
-		rule(startsWith("벌금등의부과"), DisclosureKind.MAJOR, Tone.NEGATIVE, 1),
+		rule(title("횡령ㆍ배임혐의발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("회생절차개시신청"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("파산신청"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("대출원리금연체사실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("영업정지"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("자본잠식50%이상또는매출액50억원미만사실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("반기검토의견부적정,의견거절또는완전자본잠식사실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("회계처리기준위반에따른검찰고발등조치").or(title("회계처리기준위반행위로인한증권선물위원회의검찰고발등")),
+			 DisclosureKind.MAJOR, Tone.NEGATIVE, 3),
+		rule(title("단일판매ㆍ공급계약해지"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
+		rule(title("거래처와의거래중단"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
+		rule(title("생산중단"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
+		rule(title("파생상품거래손실발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
+		rule(title("중대재해발생"), DisclosureKind.MAJOR, Tone.NEGATIVE, 2),
+		rule(title("벌금등의부과"), DisclosureKind.MAJOR, Tone.NEGATIVE, 1),
 
 		// --- 중립: 정기보고서 ---
-		neutral(DisclosureKind.PERIODIC, "분기보고서", "반기보고서", "사업보고서"),
+		rule(title("분기보고서").or(title("반기보고서")).or(title("사업보고서")), DisclosureKind.PERIODIC, Tone.NEUTRAL, 0),
 		// --- 중립: 지분 보고. 매수·매도 방향은 본문에만 있고 건수가 많아 방향을 판정하지 않는다 ---
 		neutral(DisclosureKind.OWNERSHIP, "임원ㆍ주요주주특정증권등소유상황보고서", "주식등의대량보유상황보고서",
 			"최대주주등소유주식변동신고서", "임원ㆍ주요주주특정증권등거래계획"),
@@ -130,13 +133,18 @@ public class DisclosureClassifier {
 			}
 		}
 
-		boolean withdrawn = remark != null && remark.contains(WITHDRAWN_MARK);
+		boolean withdrawn = isWithdrawn(remark);
 		if (withdrawn) {
 			// 철회된 공시는 없던 일이 된다. 호재·악재로 세지 않고, 본문을 읽을 대상에서도 뺀다.
 			tone = Tone.NEUTRAL;
 			impact = null;
 		}
 		return new Classification(kind, tone, impact, tone == null ? null : ClassifiedBy.RULE, correction, withdrawn);
+	}
+
+	/** 비고에 철회 표시가 있는지. */
+	public static boolean isWithdrawn(String remark) {
+		return remark != null && remark.contains(WITHDRAWN_MARK);
 	}
 
 	/**
@@ -162,13 +170,31 @@ public class DisclosureClassifier {
 		return WHITESPACE.matcher(reportName).replaceAll("").replace('·', 'ㆍ').replace('・', 'ㆍ');
 	}
 
-	private static Predicate<String> startsWith(String prefix) {
-		return name -> name.startsWith(prefix);
+	/**
+	 * 제목이 정확히 이 이름인 공시. 이름 뒤에는 아무것도 없거나 괄호만 올 수 있다.
+	 * "주식소각결정(자회사의주요경영사항)"은 맞고 "파산신청기각"은 "파산신청"에 맞지 않는다.
+	 * 닫는 괄호는 "주요사항보고서(자기주식취득결정)"에서 앞을 벗겨 낸 "자기주식취득결정)" 때문에 허용한다.
+	 */
+	private static Predicate<String> title(String exact) {
+		return name -> {
+			if (!name.startsWith(exact)) {
+				return false;
+			}
+			if (name.length() == exact.length()) {
+				return true;
+			}
+			char next = name.charAt(exact.length());
+			return next == '(' || next == ')';
+		};
 	}
 
-	/** 거래소 시장안내(기타시장안내, 투자유의안내) 중 사유에 이 말이 들어 있는 것 */
+	/**
+	 * 거래소 시장안내(기타시장안내, 투자유의안내) 중 사유에 이 말이 들어 있는 것.
+	 * 우려가 풀렸다는 안내(해소, 해제)는 반대 뜻이라 제외한다.
+	 */
 	private static Predicate<String> notice(String reason) {
-		return name -> (name.startsWith("기타시장안내") || name.startsWith("투자유의안내")) && name.contains(reason);
+		return name -> (name.startsWith("기타시장안내") || name.startsWith("투자유의안내")) && name.contains(reason)
+				&& !name.contains("해소") && !name.contains("해제");
 	}
 
 	private static Rule rule(Predicate<String> matcher, DisclosureKind kind, Tone tone, int impact) {

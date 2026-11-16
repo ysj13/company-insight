@@ -60,6 +60,7 @@ public class DisclosureRepository {
 	private static final String UPDATE_REMARK = """
 		UPDATE disclosure
 		   SET remark = ?,
+		       updated_at = now(),
 		       is_withdrawn = is_withdrawn OR ?,
 		       tone = CASE WHEN ? THEN 'NEUTRAL' ELSE tone END,
 		       impact = CASE WHEN ? THEN NULL ELSE impact END,
@@ -80,7 +81,8 @@ public class DisclosureRepository {
 
 	private static final String UPDATE_CLASSIFICATION = """
 		UPDATE disclosure
-		   SET kind = ?, tone = ?, impact = ?, classified_by = ?, rule_version = ?, is_correction = ?, is_withdrawn = ?
+		   SET kind = ?, tone = ?, impact = ?, classified_by = ?, rule_version = ?, is_correction = ?, is_withdrawn = ?,
+		       updated_at = now()
 		 WHERE id = ?
 		   AND classified_by IS DISTINCT FROM 'LLM'
 		""";
@@ -135,7 +137,7 @@ public class DisclosureRepository {
 		// 방금 넣은 행은 비고가 같아 WHERE에서 걸러진다. 전에 저장한 공시 중 비고가 바뀐 것만 갱신된다.
 		jdbc.batchUpdate(UPDATE_REMARK, listed, listed.size(), (ps, item) -> {
 			String remark = remark(item);
-			boolean withdrawn = classifier.classify(reportName(item), remark).withdrawn();
+			boolean withdrawn = DisclosureClassifier.isWithdrawn(remark);
 			ps.setString(1, remark);
 			ps.setBoolean(2, withdrawn);
 			ps.setBoolean(3, withdrawn);

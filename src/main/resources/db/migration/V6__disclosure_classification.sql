@@ -7,9 +7,13 @@ ALTER TABLE disclosure
     ADD COLUMN rule_version  SMALLINT    NOT NULL DEFAULT 0,
     ADD COLUMN is_correction BOOLEAN     NOT NULL DEFAULT false,
     ADD COLUMN is_withdrawn  BOOLEAN     NOT NULL DEFAULT false,
+    ADD COLUMN updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ADD CONSTRAINT disclosure_kind_check CHECK (kind IN ('PERIODIC', 'EARNINGS', 'MAJOR', 'OWNERSHIP', 'IR', 'ISSUANCE', 'GOVERNANCE', 'MARKET', 'ETC')),
+    ADD CONSTRAINT disclosure_tone_check CHECK (tone IN ('POSITIVE', 'NEGATIVE', 'NEUTRAL')),
+    ADD CONSTRAINT disclosure_classified_by_check CHECK (classified_by IN ('RULE', 'LLM')),
     ADD CONSTRAINT disclosure_impact_check CHECK (impact BETWEEN 1 AND 3),
-    -- 영향도는 호재·악재에만 있다
-    ADD CONSTRAINT disclosure_tone_impact_check CHECK ((tone IN ('POSITIVE', 'NEGATIVE')) = (impact IS NOT NULL)),
+    -- 영향도는 호재·악재에만 있다. tone이 NULL이면 비교 결과도 NULL이 되어 CHECK를 통과하므로 COALESCE로 막는다
+    ADD CONSTRAINT disclosure_tone_impact_check CHECK (COALESCE(tone IN ('POSITIVE', 'NEGATIVE'), false) = (impact IS NOT NULL)),
     -- 판정된 공시에는 판정 주체가 있다
     ADD CONSTRAINT disclosure_tone_classified_by_check CHECK ((tone IS NULL) = (classified_by IS NULL));
 
@@ -23,4 +27,5 @@ COMMENT ON COLUMN disclosure.impact IS '영향도 1~3 (3이 가장 큼). 호재�
 COMMENT ON COLUMN disclosure.classified_by IS '판정 주체. RULE 제목 규칙, LLM. 아직 판정하지 않았으면 NULL';
 COMMENT ON COLUMN disclosure.rule_version IS '적용한 제목 규칙의 버전. 0이면 규칙을 적용하지 않은 행';
 COMMENT ON COLUMN disclosure.is_correction IS '이미 낸 공시의 후속 공시인지. 보고서명 앞에 [기재정정], [첨부정정], [첨부추가] 같은 머리말이 붙은 공시. 같은 소식이 두 번 반영되지 않게 점수 계산에서 뺀다';
+COMMENT ON COLUMN disclosure.updated_at IS '행 수정 시각. 비고가 바뀌었거나 다시 분류했을 때 갱신한다';
 COMMENT ON COLUMN disclosure.is_withdrawn IS '철회된 공시인지 (비고에 철). 호재·악재로 세지 않는다';

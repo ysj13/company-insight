@@ -200,6 +200,33 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
+	void LLM이_판정한_공시도_철회되면_중립으로_돌린다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			itemWithRemark("1", "000001", "Y", "20261113000001", "단일판매ㆍ공급계약체결", "유")));
+		collector.reconcile(DAY, DAY);
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 2, classified_by = 'LLM'").update();
+
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			itemWithRemark("1", "000001", "Y", "20261113000001", "단일판매ㆍ공급계약체결", "유철")));
+		collector.reconcile(DAY, DAY);
+
+		assertThat(classificationOf("20261113000001")).containsEntry("is_withdrawn", true).containsEntry("tone", "NEUTRAL")
+			.containsEntry("impact", null).containsEntry("classified_by", "RULE");
+	}
+
+	@Test
+	void 판정이_없는_공시에는_영향도를_넣을_수_없다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("1", "000001", "Y", "20261113000001", "단일판매ㆍ공급계약체결")));
+		collector.reconcile(DAY, DAY);
+
+		assertThatThrownBy(() -> jdbc.sql("UPDATE disclosure SET impact = 2").update())
+			.isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+		assertThatThrownBy(() -> jdbc.sql("UPDATE disclosure SET tone = 'NEUTRAL', classified_by = 'RULE', impact = 1").update())
+			.isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+	}
+
+	@Test
 	void 비고에_정정_표시만_붙으면_비고만_바꾸고_판정은_그대로_둔다() {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			itemWithRemark("1", "000001", "Y", "20261113000001", "연결재무제표기준영업(잠정)실적(공정공시)", "유")));
