@@ -1,12 +1,11 @@
 package com.companyinsight.company;
 
+import com.companyinsight.common.dart.DartText;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -26,10 +25,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class CorpCodeParser {
 
-	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
 	private static final int CORP_CODE_MAX = 8;
 	private static final int NAME_MAX = 200;
 
+	/**
+	 * @param zip DART 고유번호 zip 파일 내용
+	 * @return 종목코드가 있는 회사 목록. 고유번호 형식이 틀린 건은 빠진다.
+	 * @throws IllegalStateException zip 안에 XML이 없거나 XML 형식이 틀린 경우
+	 */
 	public List<CorpCode> parseListed(byte[] zip) {
 		try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip))) {
 			ZipEntry entry;
@@ -79,7 +82,8 @@ public class CorpCodeParser {
 						case "modify_date" -> modifyDate = value;
 						case "list" -> {
 							if (isListed(stockCode) && isValidCorpCode(corpCode) && name != null && !name.isEmpty()) {
-								result.add(new CorpCode(corpCode, stockCode, truncate(name), parseDate(modifyDate)));
+								result.add(new CorpCode(corpCode, stockCode, DartText.clean(name, NAME_MAX),
+									DartText.parseDate(modifyDate).orElse(null)));
 							}
 						}
 						default -> { }
@@ -100,24 +104,8 @@ public class CorpCodeParser {
 		return corpCode != null && !corpCode.isEmpty() && corpCode.length() <= CORP_CODE_MAX;
 	}
 
-	private static String truncate(String name) {
-		String clean = name.replace("\u0000", "");
-		return clean.length() <= NAME_MAX ? clean : clean.substring(0, NAME_MAX);
-	}
-
+	/** 종목코드가 6자리면 상장(또는 상장했던) 회사다. 비상장사는 종목코드가 비어 있다. */
 	private static boolean isListed(String stockCode) {
 		return stockCode != null && stockCode.length() == 6;
-	}
-
-	private static LocalDate parseDate(String value) {
-		if (value == null || value.isEmpty()) {
-			return null;
-		}
-		try {
-			return LocalDate.parse(value, YYYYMMDD);
-		}
-		catch (DateTimeParseException e) {
-			return null;
-		}
 	}
 }

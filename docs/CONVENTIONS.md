@@ -33,6 +33,25 @@ com.companyinsight
 | 정기 실행 | `XxxScheduler` |
 | 설정 | `XxxProperties` (record + `@ConfigurationProperties("app.xxx")`), `XxxConfig` |
 
+### 공통 코드
+
+- 두 기능 이상이 실제로 쓰는 코드만 `common`(또는 `ops`)에 둔다. 미리 만들지 않고, 두 번째 사용처가 생길 때 옮긴다.
+- 만능 `Util` 클래스에 모으지 않는다. 역할이 분명한 이름의 작은 클래스로 둔다.
+
+| 공통 코드 | 용도 |
+|---|---|
+| `common.dart.DartText` | DART 문자열 다듬기(NUL 제거, 길이 자르기, 공백 정리), `yyyyMMdd` 날짜 변환 |
+| `common.external.ExternalApiException`, `ErrorKind` | 외부 API 오류 분류 |
+| `common.external.SourcePauseRegistry` | 외부 소스 일시 정지 |
+| `common.schedule.ExclusiveJobRunner` | 정기 작업 중복 실행 방지 |
+| `ops.CollectionRunRecorder` | 수집 실행 기록 (시작 → 실행 → 성공·실패) |
+
+### 코드값
+
+- 정해진 값 집합(시장 구분, 실행 상태, 오류 분류, 공시 종류 등)은 Java `enum`으로 둔다. 문자열 리터럴을 코드에 흩어 쓰지 않는다.
+- DB에는 `varchar`로 저장한다. 값은 enum 이름을 쓰되, 외부 시스템의 코드를 그대로 보관해야 하면 enum에 그 코드를 필드로 둔다(예: `Market.dartCode()`).
+- 컬럼 `COMMENT`에 값과 의미를 적는다.
+
 ## 3. 데이터 접근
 
 | 용도 | 도구 |
@@ -72,6 +91,7 @@ com.companyinsight
 ## 5. API 응답
 
 - 성공: JSON 본문. 목록은 배열 또는 페이지 객체.
+- API 문서는 springdoc-openapi가 자동 생성한다. 컨트롤러에 문서용 애너테이션을 쌓지 않는다. 운영에서는 끈다(`API_DOCS_ENABLED`).
 - 오류: RFC 9457 Problem Details (`application/problem+json`). Spring `ProblemDetail`을 쓴다.
 
 | 상황 | 상태 코드 |
@@ -121,6 +141,7 @@ DART는 오류도 HTTP 200으로 준다. HTTP 상태만 보지 않고 본문(`st
 - 예외 메시지와 로그에 요청 URL, 헤더, 인증키를 넣지 않는다.
 - 한 소스가 실패해도 다른 소스 수집은 계속한다. 한 건 실패가 배치 전체를 멈추지 않는다.
 - 정기 작업은 `ExclusiveJobRunner`로 실행해 같은 그룹의 작업이 겹치지 않게 한다.
+- 수집 작업은 `CollectionRunRecorder.record()` 안에서 실행한다. 기록과 소스 정지를 수집기마다 따로 구현하지 않는다.
 - 수집 실행 결과는 `collection_run`에 남긴다. 실패하면 `error_kind`(분류 또는 `INTERNAL`)와 `error_code`(원래 코드)를 함께 남긴다.
 
 ## 7. 시간
@@ -150,4 +171,13 @@ DART는 오류도 HTTP 200으로 준다. HTTP 상태만 보지 않고 본문(`st
 
 - 들여쓰기는 탭. `.editorconfig`를 따른다.
 - DTO와 설정은 record. Lombok은 JPA 엔티티에만 필요한 만큼 쓴다.
+
+### 주석
+
+- 주석은 한국어로 쓴다.
+- 모든 클래스(record, enum, interface 포함)에 Javadoc으로 무엇을 하는지, 왜 필요한지 적는다.
+- `public` 메서드에 Javadoc을 단다. 무엇을 하는지, 이름만으로 알 수 없는 파라미터·반환값의 의미, 예외가 나는 조건. 단순 접근자와 생성자는 생략할 수 있다.
+- `private` 메서드와 상수는 이름으로 부족할 때 단다.
+- 코드 안쪽 주석은 "왜 이렇게 했는가"를 적는다. 외부 API의 특이한 동작, 이 방식을 고른 이유, 지켜야 할 조건. 코드를 그대로 풀어 쓴 주석은 달지 않는다.
+- record는 `@param`으로 각 구성 요소를, enum은 상수마다 의미를 적는다.
 - 로그와 예외 메시지에 비밀 값, 개인정보를 넣지 않는다.

@@ -1,0 +1,43 @@
+package com.companyinsight.common.dart;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.LocalDate;
+import org.junit.jupiter.api.Test;
+
+class DartTextTest {
+
+	@Test
+	void clean은_NUL을_지우고_길이에_맞춰_자른다() {
+		assertThat(DartText.clean("가\u0000나다라", 3)).isEqualTo("가나다");
+		assertThat(DartText.clean("짧다", 10)).isEqualTo("짧다");
+		assertThat(DartText.clean(null, 10)).isNull();
+	}
+
+	@Test
+	void collapseSpaces는_앞뒤_공백을_없애고_연속_공백을_하나로() {
+		assertThat(DartText.collapseSpaces("  주요사항보고서   (자기주식취득결정)      ")).isEqualTo("주요사항보고서 (자기주식취득결정)");
+		assertThat(DartText.collapseSpaces(null)).isEmpty();
+	}
+
+	@Test
+	void blankToNull() {
+		assertThat(DartText.blankToNull("  ")).isNull();
+		assertThat(DartText.blankToNull(null)).isNull();
+		assertThat(DartText.blankToNull(" 유 ")).isEqualTo("유");
+	}
+
+	@Test
+	void 날짜는_yyyyMMdd만_받는다() {
+		assertThat(DartText.parseDate("20261113")).contains(LocalDate.of(2026, 11, 13));
+		assertThat(DartText.parseDate("2026-11-13")).isEmpty();
+		assertThat(DartText.parseDate("20261332")).isEmpty();
+		assertThat(DartText.parseDate("")).isEmpty();
+		assertThat(DartText.parseDate(null)).isEmpty();
+	}
+
+	@Test
+	void 날짜를_yyyyMMdd로_바꾼다() {
+		assertThat(DartText.formatDate(LocalDate.of(2026, 1, 5))).isEqualTo("20260105");
+	}
+}
