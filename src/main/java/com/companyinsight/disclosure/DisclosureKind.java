@@ -9,29 +9,40 @@ package com.companyinsight.disclosure;
 public enum DisclosureKind {
 
 	/** 정기보고서 (사업·반기·분기보고서) */
-	PERIODIC,
+	PERIODIC("정기보고서"),
 
 	/** 실적 (잠정실적, 실적 전망, 손익구조 변동) */
-	EARNINGS,
+	EARNINGS("실적"),
 
 	/** 주요사항 (자기주식, 증자, 합병, 계약, 소송 등 회사의 주요 결정과 사건) */
-	MAJOR,
+	MAJOR("주요사항"),
 
 	/** 지분 (임원·주요주주 소유 보고, 대량보유 보고) */
-	OWNERSHIP,
+	OWNERSHIP("지분"),
 
 	/** 기업설명회와 실적 발표 일정 */
-	IR,
+	IR("기업설명회·일정"),
 
 	/** 증권 발행 서류 (증권신고서, 투자설명서, 발행실적보고서) */
-	ISSUANCE,
+	ISSUANCE("증권 발행"),
 
 	/** 주주총회와 절차성 공시 (소집, 기준일, 본점 이전 등) */
-	GOVERNANCE,
+	GOVERNANCE("주주총회·절차"),
 
 	/** 거래소 시장조치 (시장안내, 불성실공시, 매매거래정지, 조회공시) */
-	MARKET,
+	MARKET("시장조치"),
 
 	/** 위에 속하지 않는 공시 */
-	ETC
+	ETC("기타");
+
+	private final String label;
+
+	DisclosureKind(String label) {
+		this.label = label;
+	}
+
+	/** 화면에 보여주는 이름 */
+	public String label() {
+		return label;
+	}
 }

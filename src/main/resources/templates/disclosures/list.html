@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>공시 목록 | company-insight</title>
+	<link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="appbar gutter">
+	<div class="inner">
+		<a class="logo" th:href="@{/disclosures}">company-insight</a>
+	</div>
+</header>
+
+<main class="inner gutter">
+	<section class="card">
+		<h1>공시 목록</h1>
+		<p class="meta">최근 접수된 순서입니다. 제목을 누르면 DART 원문이 열립니다.</p>
+
+		<form class="filters" method="get" th:action="@{/disclosures}">
+			<input type="hidden" name="tone" th:if="${condition.tone != null}" th:value="${condition.tone.name()}">
+			<label class="field grow">
+				<span>회사</span>
+				<input type="search" name="q" maxlength="50" placeholder="회사명 또는 종목코드" th:value="${condition.keyword}">
+			</label>
+			<label class="field">
+				<span>종류</span>
+				<select name="kind">
+					<option value="">전체</option>
+					<option th:each="k : ${kinds}" th:value="${k.name()}" th:text="${k.label()}"
+							th:selected="${k == condition.kind}">종류</option>
+				</select>
+			</label>
+			<button type="submit" class="btn">찾기</button>
+		</form>
+
+		<nav class="tones" aria-label="판정으로 거르기">
+			<a th:href="${links.tone(null)}" th:classappend="${condition.tone == null} ? 'on'"
+			   th:aria-current="${condition.tone == null} ? 'true'">
+				전체 <b class="num" th:text="${#numbers.formatInteger(result.total, 1, 'COMMA')}">0</b>
+			</a>
+			<a th:each="t : ${tones}" th:href="${links.tone(t)}"
+			   th:class="${'tone-' + #strings.toLowerCase(t.name())}" th:classappend="${condition.tone == t} ? 'on'"
+			   th:aria-current="${condition.tone == t} ? 'true'">
+				<span th:text="${t.label()}">호재</span>
+				<b class="num" th:text="${#numbers.formatInteger(result.countOf(t), 1, 'COMMA')}">0</b>
+			</a>
+		</nav>
+
+		<details class="help">
+			<summary>판정은 어떻게 정하나요?</summary>
+			<ul>
+				<li><b>호재·악재</b>는 공시 제목만으로 방향이 정해지는 것을 규칙으로 판정한 결과입니다. 옆의 <b>영향</b>은 작음·보통·큼 세 단계입니다.</li>
+				<li><b>중립</b>은 정기보고서나 절차 안내처럼 방향이 없는 공시입니다.</li>
+				<li><b>미판정</b>은 본문을 읽어야 알 수 있어 아직 판정하지 않은 공시입니다.</li>
+				<li><b>정정</b>은 이미 낸 공시를 고치거나 첨부를 더한 공시, <b>철회</b>는 취소된 공시입니다.</li>
+			</ul>
+		</details>
+	</section>
+
+	<section class="card" th:if="${result.days.isEmpty()}">
+		<p class="empty">조건에 맞는 공시가 없습니다.</p>
+	</section>
+
+	<section class="card day" th:each="day : ${result.days}">
+		<h2 th:text="${day.label()}">2026년 11월 16일 (월)</h2>
+		<ul class="list">
+			<li th:each="d : ${day.items}">
+				<div class="verdict">
+					<span class="pill" th:classappend="${'tone-' + #strings.toLowerCase(d.toneFilter().name())}"
+						  th:text="${d.toneFilter().label()}">호재</span>
+					<span class="impact" th:if="${d.impactLabel() != null}" th:text="${'영향 ' + d.impactLabel()}">영향 큼</span>
+				</div>
+				<div class="what">
+					<a class="title" th:href="${d.dartUrl()}" target="_blank" rel="noopener noreferrer"
+					   th:text="${d.reportName}">공시 제목</a>
+					<p class="sub">
+						<span class="company" th:text="${d.companyName}">회사명</span>
+						<span class="num" th:text="${d.stockCode}">000000</span>
+						<span th:text="${d.kind.label()}">종류</span>
+						<span class="tag" th:if="${d.correction}">정정</span>
+						<span class="tag" th:if="${d.withdrawn}">철회</span>
+					</p>
+				</div>
+			</li>
+		</ul>
+	</section>
+
+	<nav class="pager" aria-label="페이지" th:if="${result.totalPages > 1}">
+		<a th:if="${result.hasPrevious()}" th:href="${links.page(result.page - 1)}" rel="prev">이전</a>
+		<span th:unless="${result.hasPrevious()}" class="off">이전</span>
+		<span class="num" th:text="${result.page + ' / ' + result.totalPages}">1 / 10</span>
+		<a th:if="${result.hasNext()}" th:href="${links.page(result.page + 1)}" rel="next">다음</a>
+		<span th:unless="${result.hasNext()}" class="off">다음</span>
+	</nav>
+
+	<footer class="notice">
+		<p>출처: 금융감독원 전자공시시스템(DART). 공시 내용은 제목을 눌러 원문에서 확인하세요.</p>
+		<p>판정은 자동으로 분류한 결과라 틀릴 수 있습니다. AI 요약은 틀릴 수 있으며 투자 권유가 아닙니다.</p>
+	</footer>
+</main>
+</body>
+</html>
