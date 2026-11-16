@@ -42,4 +42,24 @@ class DartTextTest {
 	void 날짜를_yyyyMMdd로_바꾼다() {
 		assertThat(DartText.formatDate(LocalDate.of(2026, 1, 5))).isEqualTo("20260105");
 	}
+
+	@Test
+	void 금액은_쉼표를_지우고_숫자로_바꾼다() {
+		// 실제 응답 값: 삼성전자 2025년 3분기 연결 매출액, SK하이닉스 2023년 연결 영업이익(적자)
+		assertThat(DartText.parseAmount("86,061,747,000,000")).contains(new java.math.BigDecimal("86061747000000"));
+		assertThat(DartText.parseAmount("-7,730,313,000,000")).contains(new java.math.BigDecimal("-7730313000000"));
+		assertThat(DartText.parseAmount(" 0 ")).contains(java.math.BigDecimal.ZERO);
+		assertThat(DartText.parseAmount("1,234.5")).contains(new java.math.BigDecimal("1234.5"));
+	}
+
+	@Test
+	void 숫자가_아닌_금액은_비어_있다() {
+		assertThat(DartText.parseAmount(null)).isEmpty();
+		assertThat(DartText.parseAmount("")).isEmpty();
+		assertThat(DartText.parseAmount("   ")).isEmpty();
+		assertThat(DartText.parseAmount("-")).isEmpty();
+		assertThat(DartText.parseAmount("해당없음")).isEmpty();
+		assertThat(DartText.parseAmount("1e5")).isEmpty();
+		assertThat(DartText.parseAmount("(1,000)")).isEmpty();
+	}
 }

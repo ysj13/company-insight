@@ -117,6 +117,35 @@ public class DartClient {
 		throw ExternalApiException.of(SOURCE, kind, response.status(), response.message());
 	}
 
+	/**
+	 * 회사 한 곳의 보고서 한 건에 실린 주요 재무 계정(매출액, 영업이익, 당기순이익 등).
+	 *
+	 * @param corpCode     DART 고유번호 (8자리)
+	 * @param businessYear 사업연도. 2015년 이후만 제공된다
+	 * @param reportCode   보고서 코드. 11013 1분기, 11012 반기, 11014 3분기, 11011 사업보고서
+	 * @return 계정 목록. 아직 제출되지 않은 보고서처럼 데이터가 없으면 빈 목록
+	 */
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
+	public MajorAccountResponse listMajorAccounts(String corpCode, int businessYear, String reportCode) {
+		Map<String, Object> params = Map.of(
+			"corp_code", corpCode,
+			"bsns_year", businessYear,
+			"reprt_code", reportCode);
+		MajorAccountResponse response = get("/api/fnlttSinglAcnt.json", params, MajorAccountResponse.class);
+		if (response == null || response.status() == null) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "주요계정 응답이 비어 있음");
+		}
+		if (STATUS_OK.equals(response.status())) {
+			return response;
+		}
+		ErrorKind kind = classify(response.status());
+		if (kind == null) {
+			return new MajorAccountResponse(response.status(), response.message(), List.of());
+		}
+		throw ExternalApiException.of(SOURCE, kind, response.status(), response.message());
+	}
+
 	private <T> T get(String path, Map<String, Object> params, Class<T> type) {
 		// acquirePermission()은 예외를 던지지 않고, 대기 시간 안에 허가를 못 받으면 false를 돌려준다.
 		if (!rateLimiter.acquirePermission()) {
