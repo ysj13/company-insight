@@ -43,9 +43,8 @@ public record DisclosureListLinks(DisclosureSearchCondition condition) {
 		if (condition.keyword() != null) {
 			uri.queryParam("q", "{q}");
 		}
-		if (condition.corpCode() != null) {
-			// 숫자 8자리만 통과한 값이라 인코딩할 글자가 없다
-			uri.queryParam("corp", condition.corpCode());
+		if (condition.companyId() != null) {
+			uri.queryParam(DisclosurePageController.COMPANY_PARAM, condition.companyId());
 		}
 		if (page > 1) {
 			uri.queryParam("page", page);

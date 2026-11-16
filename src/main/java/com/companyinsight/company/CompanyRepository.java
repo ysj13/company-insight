@@ -1,5 +1,6 @@
 package com.companyinsight.company;
 
+import com.companyinsight.common.source.Source;
 import java.sql.Date;
 import java.util.List;
 import java.util.Optional;
@@ -21,9 +22,9 @@ public class CompanyRepository {
 	 * WHERE 조건 덕분에 바뀌지 않은 행은 UPDATE되지 않아 불필요한 쓰기(죽은 행)가 생기지 않는다.
 	 */
 	private static final String UPSERT = """
-		INSERT INTO company (corp_code, stock_code, name, modify_date)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT (corp_code) DO UPDATE
+		INSERT INTO company (country, source, source_key, stock_code, name, modify_date)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT (source, source_key) DO UPDATE
 		   SET stock_code = EXCLUDED.stock_code,
 		       name = EXCLUDED.name,
 		       modify_date = EXCLUDED.modify_date,
@@ -37,7 +38,7 @@ public class CompanyRepository {
 	 * 종목코드는 앞부분 일치로 찾는다.
 	 */
 	private static final String SEARCH = """
-		SELECT corp_code, stock_code, name, market
+		SELECT id, stock_code, name, market
 		  FROM company
 		 WHERE name ILIKE '%' || :q || '%' OR stock_code LIKE :q || '%'
 		 ORDER BY CASE
@@ -50,7 +51,7 @@ public class CompanyRepository {
 		""";
 
 	/** market에는 DART 법인 구분 코드가 들어 있다. 최근 공시가 없는 회사는 NULL이다. */
-	private static final RowMapper<CompanySummary> SUMMARY = (rs, i) -> new CompanySummary(rs.getString("corp_code"),
+	private static final RowMapper<CompanySummary> SUMMARY = (rs, i) -> new CompanySummary(rs.getLong("id"),
 		rs.getString("stock_code"), rs.getString("name"), Market.fromDartCode(rs.getString("market")).orElse(null));
 
 	private final JdbcTemplate jdbcTemplate;
@@ -62,19 +63,21 @@ public class CompanyRepository {
 	}
 
 	/**
-	 * 회사 목록을 500건씩 묶어 추가·갱신한다.
+	 * DART 고유번호 파일의 회사 목록을 500건씩 묶어 추가·갱신한다. 한국(KR), DART 출처로 저장한다.
 	 *
 	 * @return 실제로 추가되거나 바뀐 행 수
 	 */
 	public int upsertAll(List<CorpCode> rows) {
-		// 공시 수집도 company를 upsert한다. 둘이 겹칠 때 서로 다른 순서로 행을 잠그면 데드락이 나므로 항상 corp_code 순으로 쓴다.
+		// 공시 수집도 company를 upsert한다. 둘이 겹칠 때 서로 다른 순서로 행을 잠그면 데드락이 나므로 항상 고유번호 순으로 쓴다.
 		List<CorpCode> sorted = rows.stream().sorted(java.util.Comparator.comparing(CorpCode::corpCode)).toList();
 		int changed = 0;
 		for (int[] batch : jdbcTemplate.batchUpdate(UPSERT, sorted, 500, (ps, row) -> {
-			ps.setString(1, row.corpCode());
-			ps.setString(2, row.stockCode());
-			ps.setString(3, row.name());
-			ps.setDate(4, row.modifyDate() == null ? null : Date.valueOf(row.modifyDate()));
+			ps.setString(1, Country.KR.name());
+			ps.setString(2, Source.DART.name());
+			ps.setString(3, row.corpCode());
+			ps.setString(4, row.stockCode());
+			ps.setString(5, row.name());
+			ps.setDate(6, row.modifyDate() == null ? null : Date.valueOf(row.modifyDate()));
 		})) {
 			for (int count : batch) {
 				if (count > 0) {
@@ -106,13 +109,13 @@ public class CompanyRepository {
 	}
 
 	/**
-	 * 고유번호로 회사 한 곳을 찾는다.
+	 * 회사 ID로 회사 한 곳을 찾는다.
 	 *
 	 * @return 없으면 비어 있음
 	 */
-	public Optional<CompanySummary> findByCorpCode(String corpCode) {
-		return jdbcClient.sql("SELECT corp_code, stock_code, name, market FROM company WHERE corp_code = :c")
-			.param("c", corpCode)
+	public Optional<CompanySummary> findById(long id) {
+		return jdbcClient.sql("SELECT id, stock_code, name, market FROM company WHERE id = :id")
+			.param("id", id)
 			.query(SUMMARY)
 			.optional();
 	}

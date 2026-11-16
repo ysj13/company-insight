@@ -28,22 +28,22 @@ public class DisclosureQueryRepository {
 	}
 
 	/**
-	 * 조건에 맞는 공시를 접수일이 최근인 순으로 가져온다. 같은 날짜 안에서는 접수번호가 큰 것이 먼저다.
+	 * 조건에 맞는 공시를 접수일이 최근인 순으로 가져온다. 같은 날짜 안에서는 출처의 공시 번호(DART 접수번호)가 큰 것이 먼저다.
 	 * 접수번호는 제출 경로(금융감독원, 거래소 시장별)마다 번호대가 달라 같은 날 안의 순서는 접수 시각 순서가 아니다.
-	 * 접수번호가 유일해서 페이지를 넘겨도 순서가 흔들리지 않는다.
+	 * 공시 번호는 출처 안에서만 유일하므로 마지막에 공시 ID로 한 번 더 정렬해, 페이지를 넘겨도 순서가 흔들리지 않게 한다.
 	 *
 	 * @param offset 건너뛸 건수
 	 * @param limit  최대 건수
 	 */
 	public List<DisclosureSummary> find(DisclosureSearchCondition condition, long offset, int limit) {
 		return query
-			.select(Projections.constructor(DisclosureSummary.class, DISCLOSURE.receiptNo, DISCLOSURE.receiptDate,
+			.select(Projections.constructor(DisclosureSummary.class, DISCLOSURE.source, DISCLOSURE.sourceKey, DISCLOSURE.receiptDate,
 				COMPANY.name, COMPANY.stockCode, DISCLOSURE.reportName, DISCLOSURE.kind, DISCLOSURE.tone,
 				DISCLOSURE.impact, DISCLOSURE.correction, DISCLOSURE.withdrawn))
 			.from(DISCLOSURE)
 			.join(DISCLOSURE.company, COMPANY)
 			.where(kindAndKeyword(condition).and(toneIs(condition.tone())))
-			.orderBy(DISCLOSURE.receiptDate.desc(), DISCLOSURE.receiptNo.desc())
+			.orderBy(DISCLOSURE.receiptDate.desc(), DISCLOSURE.sourceKey.desc(), DISCLOSURE.id.desc())
 			.offset(offset)
 			.limit(limit)
 			.fetch();
@@ -77,9 +77,9 @@ public class DisclosureQueryRepository {
 		if (condition.kind() != null) {
 			where.and(DISCLOSURE.kind.eq(condition.kind()));
 		}
-		if (condition.corpCode() != null) {
-			// 외래키 컬럼(disclosure.corp_code)으로 비교하므로 company를 조인하지 않아도 된다
-			where.and(DISCLOSURE.company.corpCode.eq(condition.corpCode()));
+		if (condition.companyId() != null) {
+			// 외래키 컬럼(disclosure.company_id)으로 비교하므로 company를 조인하지 않아도 된다
+			where.and(DISCLOSURE.company.id.eq(condition.companyId()));
 		}
 		if (condition.keyword() != null) {
 			// contains·startsWith는 검색어의 %, _를 글자 그대로 찾도록 이스케이프한다

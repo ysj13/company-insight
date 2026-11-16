@@ -43,8 +43,8 @@
 	 * 고른 회사의 공시만 보는 주소. 판정과 종류 조건은 풀어서 그 회사의 공시 전체를 먼저 보여준다.
 	 * 조건을 유지하면 "악재만 보기" 상태에서 회사를 골랐을 때 빈 화면이 나와 회사에 공시가 없는 것처럼 보인다.
 	 */
-	function urlFor(corpCode) {
-		return form.getAttribute('action') + '?corp=' + encodeURIComponent(corpCode);
+	function urlFor(companyId) {
+		return form.getAttribute('action') + '?company=' + encodeURIComponent(companyId);
 	}
 
 	function render(companies) {
@@ -64,7 +64,7 @@
 			item.id = 'company-option-' + i;
 			item.setAttribute('role', 'option');
 			item.setAttribute('aria-selected', 'false');
-			item.dataset.corp = company.corpCode;
+			item.dataset.company = company.id;
 			item.appendChild(span('name', company.name));
 			item.appendChild(span('code num', company.stockCode));
 			// 시장 구분은 영문 표기(KOSPI 등)가 화면 이름과 같아 응답 값을 그대로 쓴다
@@ -144,7 +144,7 @@
 		else if (event.key === 'Enter' && active >= 0) {
 			// 목록에서 고른 회사가 있으면 그 회사로 간다. 없으면 폼이 그대로 제출된다
 			event.preventDefault();
-			location.href = urlFor(options()[active].dataset.corp);
+			location.href = urlFor(options()[active].dataset.company);
 		}
 		else if (event.key === 'Escape' && !list.hidden) {
 			event.preventDefault();
@@ -160,7 +160,7 @@
 	list.addEventListener('click', function (event) {
 		var item = event.target.closest('[role="option"]');
 		if (item) {
-			location.href = urlFor(item.dataset.corp);
+			location.href = urlFor(item.dataset.company);
 		}
 	});
 
