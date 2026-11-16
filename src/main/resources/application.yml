@@ -31,6 +31,8 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
+  # 응답 형식을 따로 적지 않은 API는 JSON으로 문서에 표시한다 (기본값은 */*)
+  default-produces-media-type: application/json
 
 management:
   endpoints:
