@@ -7,6 +7,8 @@
 ALTER TABLE disclosure DROP CONSTRAINT disclosure_corp_code_fkey;
 ALTER TABLE company DROP CONSTRAINT company_pkey;
 ALTER TABLE company RENAME COLUMN corp_code TO source_key;
+-- PostgreSQL 18은 NOT NULL도 이름 있는 제약이다. 컬럼 이름을 바꿔도 제약 이름은 그대로라 함께 바꾼다
+ALTER TABLE company RENAME CONSTRAINT company_corp_code_not_null TO company_source_key_not_null;
 
 -- 기본값은 기존 행을 채우는 데만 쓰고 바로 없앤다. 이후에는 저장하는 쪽이 값을 반드시 준다
 ALTER TABLE company
@@ -46,6 +48,7 @@ ALTER TABLE disclosure
     DROP CONSTRAINT disclosure_rcept_no_key;
 
 ALTER TABLE disclosure RENAME COLUMN rcept_no TO source_key;
+ALTER TABLE disclosure RENAME CONSTRAINT disclosure_rcept_no_not_null TO disclosure_source_key_not_null;
 
 ALTER TABLE disclosure
     -- 다른 출처의 공시 번호는 DART 접수번호(14자리)보다 길 수 있다
