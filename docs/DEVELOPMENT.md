@@ -1,6 +1,6 @@
 # 개발 계획
 
-작성일 2026-11-16. 기획은 `PLAN.md`, 이 문서는 기술 스택, 구조, 개발 순서를 정리한다.
+작성일 2026-11-16, 수정 2026-11-17. 기획은 `PLAN.md`, 이 문서는 기술 스택, 구조, 개발 순서를 정리한다.
 
 ## 1. 기술 스택
 
@@ -15,7 +15,7 @@
 | 스키마 | Flyway |
 | 캐시 | Caffeine |
 | 외부 API 호출 | Spring `RestClient`, 가상 스레드, `@Retryable`, `@ConcurrencyLimit`, Resilience4j RateLimiter |
-| LLM | Gemini API (`LlmClient` 인터페이스) |
+| LLM | LLM API를 `LlmClient` 인터페이스 뒤에 두어 모델을 바꿀 수 있게 한다. 모델은 분석 기능을 설계할 때 정한다 |
 | API 문서 | springdoc-openapi |
 | 화면 | Thymeleaf(서버 렌더링), JavaScript, Chart.js (`static/vendor`에 고정 버전으로 포함) |
 | 테스트 | JUnit 5, AssertJ, Testcontainers (PostgreSQL), `MockRestServiceServer` |
@@ -36,20 +36,33 @@ com.companyinsight
 ├── financial     재무 수집, 체크리스트
 ├── backfill      Spring Batch 백필
 ├── ops           수집 실행 기록, 운영자 알림
+├── web           화면(Thymeleaf 컨트롤러)
 └── common        설정, 외부 API 공통(타임아웃·재시도·속도 제한)
 ```
+
+### 추가와 수정이 쉬운 구조
+
+미국·일본 상장사를 MVP 이후에 추가한다. 그때 구조를 뜯어고치지 않도록 다음을 지킨다.
+
+- 회사는 내부 번호를 기준 키로 쓰고, 나라와 출처, 그 출처에서의 번호(DART 고유번호 등)를 따로 저장한다.
+- 공시의 중복 방지는 "출처 + 그 출처의 공시 번호"로 한다. 지금의 접수번호(rcept_no) unique는 DART 출처에 대한 같은 규칙이다.
+- 수집기와 제목 규칙은 출처별로 나눠, 새 출처를 추가할 때 기존 코드를 고치지 않게 한다.
+- 새로 만드는 테이블(재무, 분석, 판단)은 회사의 내부 번호를 참조하고, 금액에는 통화를 함께 저장한다.
+- 수집 기능은 회사 한 곳을 지정해 받을 수 있게 만든다. 기능을 완성한 뒤 테스트 회사 몇 곳으로 확인하고, 이상이 없으면 전 종목 데이터를 채운다.
 
 ### 주요 테이블 (초안)
 
 | 테이블 | 핵심 컬럼 |
 |---|---|
-| `company` | corp_code(PK), stock_code, name, market |
-| `disclosure` | id, rcept_no(**unique**), corp_code, report_nm, rcept_dt, category, tone, impact, classified_by(RULE/LLM) |
+| `company` | id(PK), 나라, 출처, 출처에서의 번호(출처와 묶어 **unique**), stock_code, name, market |
+| `disclosure` | id, 출처, 출처의 공시 번호(출처와 묶어 **unique**. DART는 rcept_no), company_id, report_name, rcept_date, kind, tone, impact, classified_by(RULE/LLM), rule_version, is_correction, is_withdrawn |
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
 | `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
-| `company_score` | corp_code, date, score, up_sum, down_sum (corp_code+date unique) |
-| `financial` | corp_code, year, quarter, revenue, op_income, debt_ratio, dividend |
-| `collection_run` | source, started_at, finished_at, status, fetched, saved, error |
+| `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
+| `financial` | company_id, year, quarter, revenue, op_income, net_income, currency |
+| `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
+
+`company`, `disclosure`, `collection_run`은 만들어져 있다. `company`와 `disclosure`의 기준 키는 지금 DART 고유번호와 접수번호이고, 위 표의 구조로 바꾸는 것이 3절의 "구조 변경" 단계다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -116,34 +129,49 @@ com.companyinsight
 
 ### 순서를 정한 원칙
 
-1. **배포를 먼저 한다.** 기능이 하나도 없어도 2일차에 공개 주소에서 응답하게 만든다. 이후 모든 기능은 만들자마자 운영 서버에서 돈다.
-2. **데이터가 화면보다 먼저다.** 실제 공시가 쌓여야 분류 규칙과 점수를 실제 데이터로 맞출 수 있다.
-3. **규칙이 LLM보다 먼저다.** 규칙으로 처리되는 비율을 먼저 재야 LLM에 보낼 양과 무료 한도 안에 들어오는지 알 수 있다.
-4. **작업 큐가 LLM보다 먼저다.** LLM 호출은 느리고 실패하므로 재시도 구조 위에 올린다.
+1. **종목 화면까지의 흐름을 먼저 완성한다.** 이 서비스가 보여주는 것은 공시 목록이 아니라 회사 한 곳에 대한 판단과 근거다. 재무 수집, 본문 분석, 판단 계산, 종목 화면을 먼저 잇고, 배포와 공개 오픈은 그 뒤에 한다.
+2. **구조 변경이 새 테이블보다 먼저다.** 재무·분석·판단 테이블이 모두 회사를 참조하므로, 회사와 공시의 기준 키를 바꾸는 일은 테이블이 늘기 전에 한다.
+3. **기능이 데이터보다 먼저다.** 데이터가 많이 쌓인 뒤에는 구조를 고치기 어렵다. 기능을 완성하고 테스트 회사 몇 곳의 실제 데이터로 확인한 뒤 전 종목 데이터를 채운다.
+4. **규칙이 LLM보다 먼저다.** 규칙으로 처리되는 비율을 먼저 재야 LLM에 보낼 양을 알 수 있다.
+5. **작업 큐가 LLM보다 먼저다.** LLM 호출은 느리고 실패하므로 재시도 구조 위에 올린다.
 
 ### 단계
 
+단계 번호는 GitHub 이슈의 제목과 같다. 순서는 표에 적힌 순서를 따른다.
+
+**끝난 단계**
+
+| # | 끝난 날 | 단계 | 만든 것 | 완료 기준 |
+|---|---|---|---|---|
+| 1 | 11/16 | 뼈대 | Gradle, Boot 4.1, Compose(PostgreSQL), Flyway V1, 헬스체크, CI, `.env.example`, `.gitattributes`, 문서를 `docs/`로 이동 | 로컬에서 앱과 DB가 뜨고 CI 통과 |
+| 3 | 11/16 | 기업 목록 | 고유번호 zip 받아 `company` 적재(하루 1회), 이름 검색 | 상장사 목록이 DB에 있음 |
+| 4 | 11/16 | 공시 수집 | 상장폐지 기업 구분(고유번호 파일에 함께 들어 있음), 평일 5분 폴링, rcept_no 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
+| 5 | 11/16 | 규칙 분류 | 공시 제목 규칙으로 종류·tone·영향도 판정, 정정·철회 공시 처리, 나머지는 판정을 비워 분석 대상으로 남김(작업 등록은 6단계) | 규칙 처리 비율 측정 (74.0%, `PLAN.md` 6절) |
+| 5-1 | 11/16 | 공시 목록 화면 | 수집한 공시와 분류 결과를 최근 접수 순으로 보여주는 한 페이지(`/disclosures`), 검색창 자동완성으로 회사 한 곳 고르기, DART 원문 링크. 분류 결과 확인용이고 서비스 화면에는 연결하지 않는다. 자동완성과 화면 틀은 종목 화면에 쓴다 | 분류 결과를 실제 데이터로 화면에서 확인 |
+
+**MVP (~ 11/22)**
+
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 0 | 11/17 오전 | 준비 | 개발 환경, OpenDART·Gemini 키, VM, 도메인 | 키가 `.env`에 들어감 |
-| 1 | 11/17 | 뼈대 | Gradle, Boot 4.1, Compose(PostgreSQL), Flyway V1, 헬스체크, CI, `.env.example`, `.gitattributes`, 문서를 `docs/`로 이동 | 로컬에서 앱과 DB가 뜨고 CI 통과 |
-| 2 | 11/18 | 배포 | Dockerfile, GHCR, VM에 Compose, Caddy HTTPS, main 합치면 자동 배포 | 공개 주소 `/actuator/health` 응답 |
-| 3 | 11/18 | 기업 목록 | 고유번호 zip 받아 `company` 적재(하루 1회), 이름 검색 | 상장사 약 2,700곳이 DB에 있음 |
-| 4 | 11/19 | 공시 수집 | 상장폐지 기업 구분(고유번호 파일에 함께 들어 있음), 평일 5분 폴링, rcept_no 중복 방지, 타임아웃·재시도·속도 제한, `collection_run` 기록 | 새 공시가 5분 안에 들어오고 하루 건수 실측 |
-| 5 | 11/20 | 규칙 분류 | 공시 제목 규칙으로 종류·tone·영향도 판정, 정정·철회 공시 처리, 나머지는 판정을 비워 분석 대상으로 남김(작업 등록은 6단계). 재무 수집은 별도 PR | 규칙 처리 비율 측정 (74.0%, `PLAN.md` 6절) |
-| 5-1 | 11/20 | 공시 목록 화면 | 수집한 공시와 분류 결과(종류, 호재·악재, 영향도, 정정·철회)를 최근 접수 순으로 보여주는 한 페이지(`/disclosures`). 판정·종류·회사로 거르기, 검색창 자동완성으로 회사 한 곳을 골라 그 회사만 보기, DART 원문 링크. 10단계 홈 공시 피드의 바탕이 된다 | 분류 결과를 실제 데이터로 화면에서 확인 |
-| 6 | 11/21 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
-| 7 | 11/22 | LLM 분석 | 원문 받아 텍스트 추출 → Gemini 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 주요 30개 종목 공시에 핵심 3줄이 붙음 |
-| 8 | 11/23 | 점수·백필 | 점수 계산, 일별 추이 저장, Spring Batch 3개월 백필 | 주요 30개 종목 판단 추이가 계산됨 |
-| 9 | 11/24 | 조회 API | 종목 요약, 타임라인(QueryDSL), 홈 피드, 검색 | `.http`로 모든 API 확인 |
-| 10 | 11/25 | 화면 | Thymeleaf로 종목 화면(판단 추이는 Chart.js)과 홈(검색·공시 피드) | 실제 데이터로 화면이 뜸 |
-| 11 | 11/26~27 | 공개 오픈 | Sentry, 운영자 텔레그램 알림, DB 백업, 개인정보·면책 문구 | 장애가 나면 알림이 옴 |
-| 12 | 11/28~30 | 품질 | 오분류 점검, 버그 수정, README와 설계 결정 기록 | MVP 완료 |
+| 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 기존 데이터 이전 | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
+| 5-3 | 11/17~18 | 재무 수집 | OpenDART 주요계정으로 분기별 매출액·영업이익·순이익 수집(회사 한 곳을 지정해 받기), 전년 동기 대비 증감 계산 | 테스트 회사의 재무가 저장되고 증감이 실제 공시 수치와 맞음 |
+| 6 | 11/18 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
+| 7 | 11/19 | LLM 분석 | 원문 받아 텍스트 추출 → LLM 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
+| 8 | 11/20 | 판단 계산 | 회사 단위 판단 점수 계산(공시 건별 판정과 재무 실적 반영), 단계 이름 변환, 저장 | 테스트 회사의 판단이 계산되고 근거를 설명할 수 있음 |
+| 9·10 | 11/21~22 | 조회와 종목 화면 | 종목 요약·타임라인 조회(QueryDSL), Thymeleaf 종목 화면(결론, 판단 근거, 실적, 타임라인, 고지 문구), 검색창에서 종목 화면으로 이동. 판단 추이와 예정 일정은 자리만 | 테스트 회사의 종목 화면이 실제 데이터로 뜸 |
 
-### 밀릴 때 줄이는 순서
+**MVP 이후 (날짜는 MVP를 마친 뒤 정한다)**
 
-1. 백필 기간 3개월 → 1개월
-2. LLM 분석 대상 주요 30개 → 10개
-3. 홈 공시 피드 → 검색창만
-4. 공개 오픈 날짜(11/27)는 지킨다.
+| # | 단계 | 만드는 것 | 완료 기준 |
+|---|---|---|---|
+| 8 | 백필 | Spring Batch로 전 종목 과거 공시·재무 적재, 일별 추이 저장 | 전 종목 판단이 계산됨 |
+| 2 | 배포 | Dockerfile, GHCR, VM에 Compose, Caddy HTTPS, main 합치면 자동 배포 | 공개 주소 `/actuator/health` 응답 |
+| 11 | 공개 오픈 | Sentry, 운영자 텔레그램 알림, DB 백업, 로깅 정책, 개인정보·면책 문구 | 장애가 나면 알림이 옴 |
+| 12 | 품질 | 오분류 점검, 성능 점검, 버그 수정, README와 설계 결정 기록 | 공개 가능한 상태 |
+| 10 | 홈과 나머지 화면 | 홈(최근 본 종목, 공시 피드), 판단 추이, 예정 일정 | 실제 데이터로 화면이 뜸 |
+
+### MVP에서 자리만 두는 것과 하지 않는 것
+
+- 자리만 둔다: 판단 추이 그래프, 타임라인의 예정 일정.
+- 하지 않는다: 전 종목 백필, 재무 체크리스트, 홈 공시 피드, 뉴스 수집, 배포.
 
