@@ -1,18 +1,19 @@
 package com.companyinsight.common.config;
 
-import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.ProblemDetail;
 
 /**
  * API 문서(Swagger UI)의 제목과 공통 오류 응답.
@@ -40,23 +41,31 @@ public class OpenApiConfig {
 			.version(version == null ? "dev" : version));
 	}
 
-	/** 오류 응답 본문(RFC 9457 Problem Details)의 형식을 문서에 등록한다. */
+	/**
+	 * 오류 응답 본문(RFC 9457 Problem Details)의 형식을 문서에 등록한다.
+	 * Spring의 ProblemDetail 클래스에서 자동으로 뽑으면 실제 응답에는 없는 properties 필드가 생겨, 실제로 나가는 필드만 직접 적는다.
+	 */
 	@Bean
 	OpenApiCustomizer problemDetailSchema() {
-		return openApi -> ModelConverters.getInstance()
-			.read(ProblemDetail.class)
-			.forEach((name, schema) -> openApi.getComponents().addSchemas(name, schema));
+		return openApi -> openApi.getComponents()
+			.addSchemas(PROBLEM_SCHEMA, new ObjectSchema().description("오류 응답 (RFC 9457 Problem Details)")
+				.addProperty("type", new StringSchema().description("오류 종류를 가리키는 주소. 따로 정하지 않은 오류에는 없다"))
+				.addProperty("title", new StringSchema().description("오류 이름. 예: Bad Request"))
+				.addProperty("status", new IntegerSchema().description("HTTP 상태 코드"))
+				.addProperty("detail", new StringSchema().description("오류 설명"))
+				.addProperty("instance", new StringSchema().description("요청한 경로")));
 	}
 
 	/**
-	 * 파라미터를 받는 API에 400 응답을 적는다. 파라미터 검증 실패는 컨트롤러마다 처리하지 않고
+	 * 파라미터나 본문을 받는 API에 400 응답을 적는다. 입력 검증 실패는 컨트롤러마다 처리하지 않고
 	 * Spring이 공통으로 Problem Details로 응답하므로 문서에도 공통으로 넣는다.
 	 */
 	@Bean
 	OperationCustomizer badRequestResponse() {
 		return (operation, handlerMethod) -> {
-			if (operation.getParameters() != null && !operation.getParameters().isEmpty()
-					&& operation.getResponses().get("400") == null) {
+			boolean takesInput = (operation.getParameters() != null && !operation.getParameters().isEmpty())
+					|| operation.getRequestBody() != null;
+			if (takesInput && operation.getResponses() != null && operation.getResponses().get("400") == null) {
 				Schema<?> problem = new Schema<>().$ref("#/components/schemas/" + PROBLEM_SCHEMA);
 				operation.getResponses()
 					.addApiResponse("400", new ApiResponse().description("요청 파라미터가 올바르지 않음")

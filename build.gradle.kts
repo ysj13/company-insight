@@ -33,7 +33,7 @@ dependencies {
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 	// API 문서의 설명을 Javadoc에서 가져온다. 빌드할 때 Javadoc을 리소스로 담고(scribe), springdoc이 실행 중에 읽는다
-	implementation("com.github.therapi:therapi-runtime-javadoc:$therapiVersion")
+	runtimeOnly("com.github.therapi:therapi-runtime-javadoc:$therapiVersion")
 	annotationProcessor("com.github.therapi:therapi-runtime-javadoc-scribe:$therapiVersion")
 	implementation("com.github.ben-manes.caffeine:caffeine")
 	implementation("io.github.resilience4j:resilience4j-ratelimiter:2.4.0")
