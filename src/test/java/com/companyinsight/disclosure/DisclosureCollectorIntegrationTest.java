@@ -197,7 +197,9 @@ class DisclosureCollectorIntegrationTest {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 2, item("1", "000001", "Y", "20261113000002", "a")));
 		given(dart.listDisclosures(DAY, DAY, 2)).willReturn(page(2, 2, item("2", "000002", "K", "20261113000001", "b")));
 		collector.reconcile(DAY, DAY);
-		jdbc.sql("INSERT INTO collection_run (source, started_at, status) VALUES (:s, now(), 'RUNNING')")
+		// 시작 시각을 분명한 과거로 넣는다. DB의 now()로 넣으면 앱이 자기 시계로 남기는 기록과 시계가 섞여,
+		// DB 시계가 조금만 앞서도 이 행이 계속 "가장 최근 실행"으로 잡혀 두 번째 폴링이 끝까지 읽는다
+		jdbc.sql("INSERT INTO collection_run (source, started_at, status) VALUES (:s, now() - interval '1 hour', 'RUNNING')")
 			.param("s", DisclosureCollector.SOURCE_POLL).update();
 
 		DisclosureCollector.CollectResult afterCrash = pollAt(DAY);
