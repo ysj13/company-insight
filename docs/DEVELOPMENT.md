@@ -50,6 +50,7 @@ com.companyinsight
 - 회사 검색 API와 공시 목록 화면은 회사를 내부 번호로 가리킨다. 출처의 번호는 밖으로 내보내지 않는다. 내부 번호는 DB를 새로 만들면 달라지므로, 오래 남는 공개 주소(종목 화면)에 쓸 회사 식별자는 종목 화면을 만드는 단계에서 정한다.
 - 수집기와 제목 규칙은 출처별로 나눠, 새 출처를 추가할 때 기존 코드를 고치지 않게 한다.
 - 새로 만드는 테이블(재무, 분석, 판단)은 회사의 내부 번호를 참조하고, 금액에는 통화를 함께 저장한다.
+- 재무는 출처가 준 값(그 기간의 금액, 누적 금액, 같은 보고서에 실린 전년 금액)을 그대로 저장한다. 4분기 금액(연간 − 3분기 누적), 전년 동기 대비 증감, 영업이익률은 조회할 때 코드가 계산한다. 계산 방식을 바꿔도 다시 수집하지 않는다.
 - 수집 기능은 회사 한 곳을 지정해 받을 수 있게 만든다. 기능을 완성한 뒤 테스트 회사 몇 곳으로 확인하고, 이상이 없으면 전 종목 데이터를 채운다.
 
 ### 주요 테이블 (초안)
@@ -61,10 +62,10 @@ com.companyinsight
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
 | `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
 | `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
-| `financial` | company_id, year, quarter, revenue, op_income, net_income, currency |
+| `financial` | company_id, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL), statement_type(연결/별도), account(매출액/영업이익/당기순이익), amount, cumulative_amount, prior_amount, prior_cumulative_amount, currency, source, source_key(근거 보고서). 보고서 한 건의 계정 하나가 한 행이고 다섯 컬럼(company_id~account)을 묶어 **unique** |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `collection_run`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `collection_run`, `financial`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -151,12 +152,12 @@ com.companyinsight
 | 5 | 11/16 | 규칙 분류 | 공시 제목 규칙으로 종류·tone·영향도 판정, 정정·철회 공시 처리, 나머지는 판정을 비워 분석 대상으로 남김(작업 등록은 6단계) | 규칙 처리 비율 측정 (74.0%, `PLAN.md` 6절) |
 | 5-1 | 11/16 | 공시 목록 화면 | 수집한 공시와 분류 결과를 최근 접수 순으로 보여주는 한 페이지(`/disclosures`), 검색창 자동완성으로 회사 한 곳 고르기, DART 원문 링크. 분류 결과 확인용이고 서비스 화면에는 연결하지 않는다. 자동완성과 화면 틀은 종목 화면에 쓴다 | 분류 결과를 실제 데이터로 화면에서 확인 |
 | 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 회사 참조를 내부 번호로, 기존 데이터 이전(Flyway V7) | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
+| 5-3 | 11/17 | 재무 수집 | OpenDART 주요계정으로 보고서별 매출액·영업이익·당기순이익 수집(회사 한 곳을 지정해 받기, 설정한 종목코드는 앱 시작 때 수집), 분기·연간 실적과 전년 동기 대비 증감·영업이익률 계산, 실적 조회 API(`/api/companies/{id}/financials`) | 테스트 회사 세 곳의 재무가 저장되고 증감이 보고서의 수치로 계산한 값과 맞음 |
 
 **MVP (~ 11/22)**
 
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 5-3 | 11/17~18 | 재무 수집 | OpenDART 주요계정으로 분기별 매출액·영업이익·순이익 수집(회사 한 곳을 지정해 받기), 전년 동기 대비 증감 계산 | 테스트 회사의 재무가 저장되고 증감이 실제 공시 수치와 맞음 |
 | 6 | 11/18 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
 | 7 | 11/19 | LLM 분석 | 원문 받아 텍스트 추출 → LLM 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
 | 8 | 11/20 | 판단 계산 | 회사 단위 판단 점수 계산(공시 건별 판정과 재무 실적 반영), 단계 이름 변환, 저장 | 테스트 회사의 판단이 계산되고 근거를 설명할 수 있음 |

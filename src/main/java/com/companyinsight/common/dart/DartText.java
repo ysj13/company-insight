@@ -1,9 +1,11 @@
 package com.companyinsight.common.dart;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * DART가 주는 문자열과 날짜를 저장하기 전에 다듬는 공통 처리.
@@ -15,6 +17,9 @@ public final class DartText {
 
 	/** DART 날짜 형식 (예: 20261113). */
 	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+
+	/** 부호와 숫자, 소수점만 있는 금액. 지수 표기 같은 다른 형식은 받지 않는다. */
+	private static final Pattern AMOUNT = Pattern.compile("-?\\d+(\\.\\d+)?");
 
 	private DartText() {
 	}
@@ -67,6 +72,22 @@ public final class DartText {
 		catch (DateTimeParseException e) {
 			return Optional.empty();
 		}
+	}
+
+	/**
+	 * 쉼표가 들어간 금액 문자열을 숫자로 바꾼다. 예: "79,098,731,000,000", "-7,730,313,000,000".
+	 *
+	 * @return 숫자면 그 값. null·빈 값·"-"·숫자가 아닌 값이면 비어 있음
+	 */
+	public static Optional<BigDecimal> parseAmount(String amount) {
+		if (amount == null) {
+			return Optional.empty();
+		}
+		String digits = amount.strip().replace(",", "");
+		if (!AMOUNT.matcher(digits).matches()) {
+			return Optional.empty();
+		}
+		return Optional.of(new BigDecimal(digits));
 	}
 
 	/** 날짜를 DART 요청 형식(yyyyMMdd)으로 바꾼다. */

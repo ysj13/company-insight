@@ -181,4 +181,51 @@ class DartClientTest {
 				e -> assertThat(e.kind()).isEqualTo(ErrorKind.RATE_LIMITED));
 		limitedServer.verify();
 	}
+
+	@Test
+	void 주요계정을_읽는다() throws Exception {
+		// 삼성전자 2025년 3분기보고서의 실제 응답에서 손익계산서 계정과 자산총계만 남긴 것
+		String body = new org.springframework.core.io.ClassPathResource("dart/major-accounts-00126380-2025-q3.json")
+			.getContentAsString(StandardCharsets.UTF_8);
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andExpect(queryParam("crtfc_key", SECRET))
+			.andExpect(queryParam("corp_code", "00126380"))
+			.andExpect(queryParam("bsns_year", "2025"))
+			.andExpect(queryParam("reprt_code", "11014"))
+			.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+		MajorAccountResponse response = client.listMajorAccounts("00126380", 2025, "11014");
+
+		assertThat(response.items()).hasSize(14);
+		assertThat(response.items()).filteredOn(i -> "CFS".equals(i.statementDiv()) && "매출액".equals(i.accountName()))
+			.singleElement()
+			.satisfies(item -> {
+				assertThat(item.receiptNo()).isEqualTo("20251114002447");
+				assertThat(item.sheetDiv()).isEqualTo("IS");
+				assertThat(item.currentAmount()).isEqualTo("86,061,747,000,000");
+				assertThat(item.currentAddAmount()).isEqualTo("239,768,567,000,000");
+				assertThat(item.priorAmount()).isEqualTo("79,098,731,000,000");
+				assertThat(item.priorAddAmount()).isEqualTo("225,082,634,000,000");
+				assertThat(item.order()).isEqualTo("23");
+				assertThat(item.currency()).isEqualTo("KRW");
+			});
+	}
+
+	@Test
+	void 제출되지_않은_보고서의_주요계정은_빈_목록() {
+		// 실제 응답: 아직 나오지 않은 2026년 사업보고서를 조회했을 때
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
+
+		assertThat(client.listMajorAccounts("00126380", 2026, "11011").items()).isEmpty();
+	}
+
+	@Test
+	void 주요계정_한도_초과는_QUOTA_EXCEEDED() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess("{\"status\":\"020\",\"message\":\"요청 제한을 초과하였습니다.\"}", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.listMajorAccounts("00126380", 2025, "11014"))
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.QUOTA_EXCEEDED));
+	}
 }

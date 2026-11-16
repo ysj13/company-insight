@@ -120,6 +120,34 @@ public class CompanyRepository {
 			.optional();
 	}
 
+	/**
+	 * 회사가 지정한 출처에서 쓰는 번호. 출처의 API를 부를 때 쓴다.
+	 *
+	 * @param id     회사 ID
+	 * @param source 출처
+	 * @return 출처에서의 회사 번호(DART는 고유번호). 회사가 없거나 다른 출처의 회사면 비어 있음
+	 */
+	public Optional<String> findSourceKey(long id, Source source) {
+		return jdbcClient.sql("SELECT source_key FROM company WHERE id = :id AND source = :source")
+			.param("id", id)
+			.param("source", source.name())
+			.query(String.class)
+			.optional();
+	}
+
+	/**
+	 * 종목코드가 정확히 일치하는 회사의 ID.
+	 *
+	 * @param stockCode 종목코드
+	 * @return 회사 ID. 상장폐지된 회사의 종목코드가 남아 있어 여러 건일 수 있다
+	 */
+	public List<Long> findIdsByStockCode(String stockCode) {
+		return jdbcClient.sql("SELECT id FROM company WHERE stock_code = :stockCode ORDER BY id")
+			.param("stockCode", stockCode)
+			.query(Long.class)
+			.list();
+	}
+
 	/** LIKE 특수문자(%, _, \)를 글자 그대로 찾도록 이스케이프. PostgreSQL LIKE의 기본 이스케이프 문자는 \. */
 	static String escapeLike(String s) {
 		return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
