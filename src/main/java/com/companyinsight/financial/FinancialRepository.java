@@ -2,6 +2,7 @@ package com.companyinsight.financial;
 
 import com.companyinsight.common.source.Source;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -15,7 +16,8 @@ public class FinancialRepository {
 	 * 내용은 JSON 값으로 비교한다. 공백이나 키 순서만 다른 응답은 같은 내용이다.
 	 *
 	 * <p>돌려주는 값은 "새로 저장했거나 내용이 바뀌었는가"다. 이 문장을 실행하기 전의 내용(previous)과 비교하므로
-	 * 트랜잭션 안에서 불러도 결과가 같다.
+	 * 트랜잭션 안에서 불러도 결과가 같다. 같은 보고서를 두 곳에서 동시에 저장하면 이 값은 둘 다 true일 수 있다
+	 * (저장되는 내용과 수정 시각은 정확하다).
 	 */
 	private static final String UPSERT = """
 		WITH previous AS (
@@ -61,10 +63,30 @@ public class FinancialRepository {
 	}
 
 	/**
+	 * 보고서 한 건의 저장된 응답.
+	 *
+	 * @return 저장된 적이 없으면 비어 있음
+	 */
+	public Optional<FinancialReport> find(long companyId, Source source, int fiscalYear, ReportType reportType) {
+		return jdbcClient.sql("""
+			SELECT company_id, source, fiscal_year, report_type, payload
+			  FROM financial
+			 WHERE company_id = :companyId AND source = :source
+			   AND fiscal_year = :fiscalYear AND report_type = :reportType
+			""")
+			.param("companyId", companyId)
+			.param("source", source.name())
+			.param("fiscalYear", fiscalYear)
+			.param("reportType", reportType.name())
+			.query(REPORT)
+			.optional();
+	}
+
+	/**
 	 * 회사 한 곳의 저장된 응답 전체.
 	 *
 	 * @param companyId 회사 ID
-	 * @return 사업연도, 보고서 종류 순
+	 * @return 사업연도 순. 같은 사업연도 안의 순서에는 뜻이 없다
 	 */
 	public List<FinancialReport> findByCompany(long companyId) {
 		return jdbcClient.sql("""

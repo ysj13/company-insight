@@ -247,7 +247,7 @@ class DartClientTest {
 	}
 
 	@Test
-	void 제출되지_않은_보고서의_주요계정은_빈_목록() {
+	void 제출되지_않은_보고서의_주요계정은_비어_있다() {
 		// 실제 응답: 아직 나오지 않은 2026년 사업보고서를 조회했을 때
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
 			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));

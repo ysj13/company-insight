@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * 저장된 재무 행으로 기간별 실적과 전년 같은 기간 대비 증감을 계산한다.
+ * 저장된 재무 응답에서 읽은 계정의 금액으로 기간별 실적과 전년 같은 기간 대비 증감을 계산한다.
  *
  * <ul>
  * <li>1~3분기: 분기·반기보고서의 당기 금액이 그 분기 3개월 금액이라 그대로 쓴다.</li>
@@ -37,9 +37,9 @@ public final class PerformanceCalculator {
 	}
 
 	/**
-	 * 회사 한 곳의 재무 행으로 기간별 실적을 만든다.
+	 * 회사 한 곳의 계정 금액으로 기간별 실적을 만든다.
 	 *
-	 * @param records 회사 한 곳의 재무 행. 연결과 별도, 여러 사업연도가 섞여 있어도 된다
+	 * @param records 회사 한 곳의 계정 금액. 연결과 별도, 여러 사업연도가 섞여 있어도 된다
 	 * @return 최근 기간이 먼저. 같은 사업연도에서는 연간, 4분기, 3분기, 2분기, 1분기 순. 금액이 하나도 없는 기간은 빠진다
 	 */
 	public static List<PerformanceSummary> calculate(List<FinancialRecord> records) {

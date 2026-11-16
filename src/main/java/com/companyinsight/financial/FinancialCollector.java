@@ -9,6 +9,7 @@ import com.companyinsight.common.external.SourcePauseRegistry;
 import com.companyinsight.common.source.Source;
 import com.companyinsight.company.CompanyRepository;
 import com.companyinsight.ops.CollectionRunRecorder;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,8 +27,8 @@ import org.springframework.stereotype.Service;
  * 그대로 저장한다. 계정을 고르거나 금액을 계산하지 않는다. 그 일은 조회할 때 한다
  * ({@link FinancialExtractor}, {@link PerformanceCalculator}).
  *
- * <p>아직 제출되지 않은 보고서는 데이터가 없어 건너뛴다. 계정이 하나도 없는 응답은 저장하지 않아,
- * 이미 저장한 응답을 빈 응답으로 덮어쓰지 않는다.
+ * <p>아직 제출되지 않은 보고서는 데이터가 없어 건너뛴다. 계정이 하나도 없는 응답과, 읽을 수 있는 계정이 없는데
+ * 이미 저장된 응답에서는 읽을 수 있는 경우는 저장하지 않아, 쓸 수 있는 응답을 덮어쓰지 않는다.
  */
 @Service
 public class FinancialCollector {
@@ -137,57 +138,97 @@ public class FinancialCollector {
 					if (body.isEmpty()) {
 						continue;
 					}
-					List<Item> items = MajorAccountResponse.fromJson(body.get()).items();
-					if (items.isEmpty()) {
-						// 정상 응답인데 계정이 하나도 없다. 저장해 둔 응답을 빈 응답으로 덮어쓰지 않는다
-						failedReports++;
-						log.warn("재무 수집: 회사 {} {}년 {} 응답에 계정이 없어 건너뜁니다", companyId, year, reportType);
-						continue;
-					}
-					progress.addFetched(items.size());
 					FinancialReport report = new FinancialReport(companyId, Source.DART, year, reportType, body.get());
-					try {
-						if (repository.upsert(report)) {
-							progress.addSaved(1);
-						}
+					progress.addFetched(1);
+					String problem = store(report, progress);
+					if (problem == null) {
 						reports++;
 					}
-					catch (DataIntegrityViolationException e) {
-						// DB가 받지 못하는 내용(NUL 문자 등)이 든 응답 한 건. 그 보고서만 건너뛴다
+					else {
 						failedReports++;
-						log.warn("재무 수집: 회사 {} {}년 {} 응답을 저장하지 못해 건너뜁니다: {}", companyId, year, reportType,
-							e.getClass().getSimpleName());
-						continue;
+						log.warn("재무 수집: 회사 {} {}년 {} 응답을 저장하지 않고 건너뜁니다: {}", companyId, year, reportType,
+							problem);
 					}
-					warnIfHardToRead(report, items);
 				}
 			}
-			log.info("재무 수집(회사 {} {}~{}): 보고서 {}건, 받지 못한 보고서 {}건, 받은 계정 {}줄, 새로 저장·변경 {}건", companyId,
-				fromYear, toYear, reports, failedReports, progress.fetched(), progress.saved());
+			log.info("재무 수집(회사 {} {}~{}): 받은 응답 {}건, 저장 {}건(새로 저장·변경 {}건), 건너뛴 보고서 {}건", companyId,
+				fromYear, toYear, progress.fetched(), reports, progress.saved(), failedReports);
 			return new CollectResult(false, reports, failedReports, progress.fetched(), progress.saved());
 		});
 	}
 
 	/**
-	 * 저장한 응답에서 화면에 쓸 계정을 읽을 수 있는지 미리 확인해 경고를 남긴다. 저장에는 영향을 주지 않는다.
-	 * 조회할 때마다 경고하지 않고 수집할 때 한 번 알리기 위해서다.
+	 * 응답 한 건을 저장한다. 저장하면 안 되는 응답이면 저장하지 않고 이유를 돌려준다.
+	 *
+	 * <ul>
+	 * <li>계정이 하나도 없는 응답: 저장하지 않는다.</li>
+	 * <li>읽을 수 있는 계정이 없는데, 이미 저장된 응답에서는 읽을 수 있는 경우: 덮어쓰지 않는다.
+	 * 처음 받는 응답이면 읽을 수 있는 계정이 없어도 저장한다. 읽는 규칙을 나중에 고치면 읽을 수 있기 때문이다.</li>
+	 * <li>DB가 JSON으로 받지 못하는 내용(NUL 문자 등): 그 보고서만 건너뛴다.</li>
+	 * </ul>
+	 *
+	 * @return 저장했으면 null, 저장하지 않았으면 이유
 	 */
-	private static void warnIfHardToRead(FinancialReport report, List<Item> items) {
-		FinancialExtractor.Extraction extraction = FinancialExtractor.extract(report, items);
+	private String store(FinancialReport report, CollectionRunRecorder.Progress progress) {
+		FinancialExtractor.Extraction extraction;
+		int lines;
+		try {
+			MajorAccountResponse response = MajorAccountResponse.fromJson(report.payload());
+			List<Item> items = response == null ? List.of() : response.items();
+			lines = items.size();
+			extraction = FinancialExtractor.extract(report, items);
+		}
+		catch (RuntimeException e) {
+			return "응답을 읽지 못함 (" + e.getClass().getSimpleName() + ")";
+		}
+		if (lines == 0) {
+			return "응답에 계정이 없음";
+		}
+		if (extraction.records().isEmpty() && storedIsReadable(report)) {
+			return "읽을 수 있는 계정이 없어, 이미 저장된 응답을 덮어쓰지 않음";
+		}
+		try {
+			if (repository.upsert(report)) {
+				progress.addSaved(1);
+			}
+		}
+		catch (DataIntegrityViolationException e) {
+			// 값의 형식 문제(SQLState 22로 시작)만 이 보고서의 문제로 본다. 참조 제약 위반 같은 다른 오류는 숨기지 않는다
+			if (e.getMostSpecificCause() instanceof SQLException sql && sql.getSQLState() != null
+					&& sql.getSQLState().startsWith("22")) {
+				return "DB가 받지 못하는 내용 (SQLState " + sql.getSQLState() + ")";
+			}
+			throw e;
+		}
 		if (extraction.records().isEmpty() || extraction.unreadable() > 0 || extraction.conflicting() > 0) {
-			log.warn("재무 수집: 회사 {} {}년 {} 응답에서 읽은 계정 {}개, 읽지 못한 줄 {}개, 금액이 다른 중복 줄 {}개",
-				report.companyId(), report.fiscalYear(), report.reportType(), extraction.records().size(),
+			log.warn("재무 수집: 회사 {} {}년 {} 응답 {}줄에서 읽은 계정 {}개, 읽지 못한 줄 {}개, 금액이 다른 중복 줄 {}개",
+				report.companyId(), report.fiscalYear(), report.reportType(), lines, extraction.records().size(),
 				extraction.unreadable(), extraction.conflicting());
 		}
+		return null;
+	}
+
+	/** 같은 보고서의 응답이 이미 저장되어 있고, 거기서 계정을 읽을 수 있는지. */
+	private boolean storedIsReadable(FinancialReport report) {
+		return repository.find(report.companyId(), report.source(), report.fiscalYear(), report.reportType())
+			.map(stored -> {
+				try {
+					return !FinancialExtractor.extract(stored).records().isEmpty();
+				}
+				catch (RuntimeException e) {
+					return false;
+				}
+			})
+			.orElse(false);
 	}
 
 	/**
 	 * 수집 결과.
 	 *
 	 * @param skipped       키가 없거나 소스가 정지 중이라 실행하지 않았으면 true
-	 * @param reports       받아서 저장한 보고서 수 (내용이 그대로인 것 포함)
-	 * @param failedReports 응답이 잘못되었거나 비어 있어 건너뛴 보고서 수
-	 * @param fetched       DART에서 받은 계정 줄 수
+	 * @param reports       저장한 보고서 수 (내용이 그대로인 것 포함)
+	 * @param failedReports 받지 못했거나 저장하지 않고 건너뛴 보고서 수
+	 * @param fetched       DART에서 응답을 받은 보고서 수 (데이터가 없는 보고서 제외)
 	 * @param saved         새로 저장했거나 내용이 바뀐 보고서 수
 	 */
 	public record CollectResult(boolean skipped, int reports, int failedReports, int fetched, int saved) {

@@ -85,7 +85,7 @@ class FinancialExtractorTest {
 			item("총포괄손익", "CFS", "IS", "100", "6", "KRW"),      // 수집하지 않는 계정
 			item(null, "CFS", "IS", "100", "7", "KRW"),
 			new Item(null, "영업이익", "OFS", "IS", "100", null, null, null, "8", "KRW"), // 접수번호가 없음
-			item("당기순이익", "OFS", "IS", "1,000", null, "KRW")); // 표시 순서가 없어도 저장한다
+			item("당기순이익", "OFS", "IS", "1,000", null, "KRW")); // 표시 순서가 없어도 읽는다
 
 		FinancialExtractor.Extraction extraction = extract(2025, ReportType.Q1, items);
 		List<FinancialRecord> records = extraction.records();
@@ -115,6 +115,17 @@ class FinancialExtractorTest {
 	@Test
 	void 응답이_비어_있으면_읽은_계정이_없다() {
 		assertThat(extract(2026, ReportType.ANNUAL, List.of()).records()).isEmpty();
+	}
+
+	@Test
+	void null인_줄은_건너뛰고_JSON_null은_계정이_없는_응답으로_본다() {
+		java.util.ArrayList<Item> items = new java.util.ArrayList<>();
+		items.add(null);
+		items.add(item("매출액", "CFS", "IS", "100", "1", "KRW"));
+
+		assertThat(extract(2025, ReportType.Q1, items).records()).hasSize(1);
+		assertThat(FinancialExtractor.extract(report(2025, ReportType.Q1, "null")).records()).isEmpty();
+		assertThat(FinancialExtractor.extract(report(2025, ReportType.Q1, "{\"status\":\"000\"}")).records()).isEmpty();
 	}
 
 	@Test

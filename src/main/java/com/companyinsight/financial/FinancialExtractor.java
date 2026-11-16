@@ -36,7 +36,9 @@ public final class FinancialExtractor {
 	 * @throws tools.jackson.core.JacksonException 저장된 내용이 주요계정 응답 형식이 아닌 경우
 	 */
 	public static Extraction extract(FinancialReport report) {
-		return extract(report, MajorAccountResponse.fromJson(report.payload()).items());
+		MajorAccountResponse response = MajorAccountResponse.fromJson(report.payload());
+		// 저장된 내용이 JSON null이면 해석 결과가 null이다. 계정이 없는 응답으로 본다
+		return extract(report, response == null ? List.of() : response.items());
 	}
 
 	/**
@@ -52,7 +54,7 @@ public final class FinancialExtractor {
 		Map<String, FinancialRecord> byKey = new LinkedHashMap<>();
 		int unreadable = 0;
 		int conflicting = 0;
-		for (Item item : items.stream().sorted(BY_ORDER).toList()) {
+		for (Item item : items.stream().filter(Objects::nonNull).sorted(BY_ORDER).toList()) {
 			if (!INCOME_STATEMENT.equals(item.sheetDiv())) {
 				continue;
 			}
@@ -104,7 +106,7 @@ public final class FinancialExtractor {
 	 * 응답 한 건에서 읽은 결과.
 	 *
 	 * @param records     읽은 계정의 금액. 연결과 별도가 따로 들어 있다
-	 * @param unreadable  수집하는 계정인데 금액·통화·접수번호를 읽지 못해 건너뛴 줄 수
+	 * @param unreadable  읽는 계정인데 금액·통화·접수번호를 읽지 못해 건너뛴 줄 수
 	 * @param conflicting 같은 계정이 두 줄인데 금액이 달라, 뒤의 줄을 버린 수
 	 */
 	public record Extraction(List<FinancialRecord> records, int unreadable, int conflicting) {

@@ -18,9 +18,10 @@ public record MajorAccountResponse(String status, String message, List<Item> lis
 	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
 	/**
-	 * 응답 본문(JSON)을 읽는다. 저장해 둔 원본에서 값을 다시 뽑을 때도 쓴다.
+	 * 응답 본문(JSON)을 읽는다. 저장해 둔 응답을 조회할 때도 쓴다.
 	 *
 	 * @param json 주요계정 응답 본문
+	 * @return 해석한 응답. 본문이 JSON null이면 null
 	 * @throws tools.jackson.core.JacksonException JSON이 아니거나 형식이 다른 경우
 	 */
 	public static MajorAccountResponse fromJson(String json) {

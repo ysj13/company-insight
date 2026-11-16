@@ -97,9 +97,9 @@ class FinancialIntegrationTest {
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11012");
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11014");
 		verify(dart, times(2)).fetchMajorAccounts("00126380", 2025, "11011");
-		// 보고서 1건, 계정 14줄을 받아 1건을 새로 저장. 다시 받으면 내용이 같아 저장 0건
-		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 1));
-		assertThat(second).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 14, 0));
+		// 응답 1건을 받아 1건을 새로 저장. 다시 받으면 내용이 같아 새로 저장·변경 0건
+		assertThat(first).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 1, 1));
+		assertThat(second).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 1, 0));
 
 		// 아직 나오지 않은 보고서(응답 없음)는 행이 없다
 		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
@@ -122,7 +122,7 @@ class FinancialIntegrationTest {
 		assertThat(jdbc.sql("SELECT status, fetched, saved FROM collection_run WHERE source = :s ORDER BY id")
 			.param("s", FinancialCollector.JOB).query().listOfRows())
 			.extracting(r -> r.get("status") + ":" + r.get("fetched") + ":" + r.get("saved"))
-			.containsExactly("SUCCESS:14:1", "SUCCESS:14:0");
+			.containsExactly("SUCCESS:1:1", "SUCCESS:1:0");
 	}
 
 	@Test
@@ -177,12 +177,87 @@ class FinancialIntegrationTest {
 			.willReturn(Optional.of("{\"status\":\"000\",\"message\":\"정상\",\"list\":[]}"));
 		FinancialCollector.CollectResult emptyList = collector.collect(companyId, 2025, 2025);
 
-		assertThat(noList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 0, 0));
-		assertThat(emptyList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 0, 0));
+		assertThat(noList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 1, 0));
+		assertThat(emptyList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 1, 0));
 		assertThat(jdbc.sql("SELECT jsonb_array_length(payload -> 'list') FROM financial").query(Integer.class).single())
 			.isEqualTo(14);
 		mvc.perform(get("/api/companies/{id}/financials", companyId))
 			.andExpect(jsonPath("$[0].revenue.changeRate").value(8.8));
+	}
+
+	@Test
+	void 읽을_수_있는_계정이_없는_응답은_이미_저장된_쓸_수_있는_응답을_덮어쓰지_않는다() throws Exception {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
+		collector.collect(companyId, 2025, 2025);
+
+		// 줄은 있지만 금액을 읽을 수 없는 응답
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(response(
+			line("20251114002447", "매출액", "CFS", "-", "23"),
+			line("20251114002447", "영업이익", "CFS", "", "25")));
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 1, 0));
+		assertThat(jdbc.sql("SELECT jsonb_array_length(payload -> 'list') FROM financial").query(Integer.class).single())
+			.isEqualTo(14);
+		mvc.perform(get("/api/companies/{id}/financials", companyId))
+			.andExpect(jsonPath("$[0].revenue.changeRate").value(8.8));
+	}
+
+	@Test
+	void 처음_받는_응답은_읽을_수_있는_계정이_없어도_저장한다() throws Exception {
+		// 계정명이 다른 업종처럼, 지금 규칙으로는 읽지 못하는 응답. 규칙을 고치면 읽을 수 있게 그대로 둔다
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "영업수익", "CFS", "1,000", "1")));
+
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 1, 0, 1, 1));
+		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'account_nm' FROM financial").query(String.class).single())
+			.isEqualTo("영업수익");
+		mvc.perform(get("/api/companies/{id}/financials", companyId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
+	void 계정_줄에_null이_섞여_있어도_수집이_멈추지_않는다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(Optional.of(
+			"{\"status\":\"000\",\"message\":\"정상\",\"list\":[null,{\"rcept_no\":\"20250515000001\","
+					+ "\"account_nm\":\"매출액\",\"fs_div\":\"CFS\",\"sj_div\":\"IS\",\"thstrm_amount\":\"1,000\","
+					+ "\"ord\":\"1\",\"currency\":\"KRW\"}]}"));
+		given(dart.fetchMajorAccounts("00126380", 2025, "11012")).willReturn(response(
+			line("20250814000001", "매출액", "CFS", "2,000", "1")));
+
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 2, 0, 2, 2));
+	}
+
+	@Test
+	void 응답_본문을_읽지_못하면_그_보고서만_건너뛴다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(Optional.of("<html>점검 중</html>"));
+		given(dart.fetchMajorAccounts("00126380", 2025, "11012")).willReturn(response(
+			line("20250814000001", "매출액", "CFS", "2,000", "1")));
+
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 1, 1, 2, 1));
+		assertThat(jdbc.sql("SELECT report_type FROM financial").query(String.class).list()).containsExactly("HALF");
+	}
+
+	@Test
+	void 수집_중에_회사가_없어진_것_같은_다른_저장_오류는_건너뛰지_않고_실패로_남긴다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willAnswer(invocation -> {
+			// 응답을 받는 사이에 회사 행이 지워진 상황
+			jdbc.sql("DELETE FROM company WHERE id = :id").param("id", companyId).update();
+			return response(line("20250515000001", "매출액", "CFS", "1,000", "1"));
+		});
+
+		assertThatThrownBy(() -> collector.collect(companyId, 2025, 2025))
+			.isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+		assertThat(jdbc.sql("SELECT status || ' ' || error_kind FROM collection_run").query(String.class).single())
+			.isEqualTo("FAILED INTERNAL");
 	}
 
 	@Test
@@ -318,13 +393,36 @@ class FinancialIntegrationTest {
 	}
 
 	@Test
+	void 여러_보고서가_저장되어_있으면_4분기를_연간에서_3분기_누적을_빼서_준다() throws Exception {
+		// 삼성전자 2024년 연결 매출액(백만원): 3분기보고서 79,098,731 / 누적 225,082,634 / 전년 67,404,652 / 전년 누적 191,155,556
+		// 사업보고서 300,870,903 / 전년 258,935,494
+		given(dart.fetchMajorAccounts("00126380", 2024, "11014")).willReturn(response(new Item("20241114002642", "매출액",
+			"CFS", "IS", "79,098,731", "225,082,634", "67,404,652", "191,155,556", "23", "KRW")));
+		given(dart.fetchMajorAccounts("00126380", 2024, "11011")).willReturn(response(new Item("20250311001085", "매출액",
+			"CFS", "IS", "300,870,903", null, "258,935,494", null, "23", "KRW")));
+		collector.collect(companyId, 2024, 2024);
+
+		// 4분기 = 300,870,903 − 225,082,634 = 75,788,269. 전년 4분기 = 258,935,494 − 191,155,556 = 67,779,938 → +11.8%
+		mvc.perform(get("/api/companies/{id}/financials", companyId))
+			.andExpect(jsonPath("$.length()").value(3))
+			.andExpect(jsonPath("$[0].period").value("YEAR"))
+			.andExpect(jsonPath("$[0].revenue.changeRate").value(16.2))
+			.andExpect(jsonPath("$[1].period").value("Q4"))
+			.andExpect(jsonPath("$[1].revenue.amount").value(75788269))
+			.andExpect(jsonPath("$[1].revenue.priorAmount").value(67779938))
+			.andExpect(jsonPath("$[1].revenue.changeRate").value(11.8))
+			.andExpect(jsonPath("$[1].documentUrl").value("https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250311001085"))
+			.andExpect(jsonPath("$[2].period").value("Q3"));
+	}
+
+	@Test
 	void 저장된_응답_한_건을_읽지_못해도_나머지_보고서로_실적을_준다() throws Exception {
 		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialExtractorTest.realJson()));
 		collector.collect(companyId, 2025, 2025);
-		// 주요계정 응답 형식이 아닌 내용이 저장된 경우
+		// 주요계정 응답 형식이 아닌 내용, JSON null이 저장된 경우
 		jdbc.sql("""
 			INSERT INTO financial (company_id, source, fiscal_year, report_type, payload)
-			VALUES (:id, 'DART', 2025, 'Q1', '[1, 2]'::jsonb)
+			VALUES (:id, 'DART', 2025, 'Q1', '[1, 2]'::jsonb), (:id, 'DART', 2025, 'HALF', 'null'::jsonb)
 			""").param("id", companyId).update();
 
 		mvc.perform(get("/api/companies/{id}/financials", companyId))

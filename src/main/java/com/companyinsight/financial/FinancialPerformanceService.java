@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 
 /** 저장된 재무 응답으로 회사의 기간별 실적을 조회한다. */
 @Service
@@ -35,15 +36,17 @@ public class FinancialPerformanceService {
 		return companies.find(companyId).map(company -> PerformanceCalculator.calculate(records(companyId)));
 	}
 
-	/** 저장된 응답 한 건을 읽지 못해도 나머지 보고서로 실적을 만든다. */
+	/** 저장된 응답 한 건이 주요계정 응답 형식이 아니어도 나머지 보고서로 실적을 만든다. */
 	private List<FinancialRecord> records(long companyId) {
 		List<FinancialRecord> records = new ArrayList<>();
 		for (FinancialReport report : repository.findByCompany(companyId)) {
 			try {
 				records.addAll(FinancialExtractor.extract(report).records());
 			}
-			catch (RuntimeException e) {
-				log.warn("재무 응답을 읽지 못해 건너뜁니다(회사 {} {}년 {}): {}", companyId, report.fiscalYear(),
+			catch (JacksonException e) {
+				// 저장된 내용이 주요계정 응답 형식이 아닌 경우만 건너뛴다. 그 밖의 예외는 코드의 문제이므로 숨기지 않는다.
+				// 방문자의 요청마다 남는 로그라 debug로 둔다. 읽기 어려운 응답은 수집할 때 경고한다
+				log.debug("재무 응답을 읽지 못해 건너뜁니다(회사 {} {}년 {}): {}", companyId, report.fiscalYear(),
 					report.reportType(), e.getClass().getSimpleName());
 			}
 		}
