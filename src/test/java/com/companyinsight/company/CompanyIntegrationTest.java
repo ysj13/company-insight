@@ -78,11 +78,11 @@ class CompanyIntegrationTest {
 	}
 
 	@Test
-	void 비어_있을_때만_시작_동기화를_한다() {
+	void 성공한_적이_없을_때만_시작_동기화를_한다() {
 		given(dartClient.downloadCorpCodeZip()).willReturn(CorpCodeZipFixture.zip());
 
-		assertThat(syncService.syncIfEmpty().skipped()).isFalse();
-		assertThat(syncService.syncIfEmpty().skipped()).isTrue();
+		assertThat(syncService.syncIfNeverSucceeded().skipped()).isFalse();
+		assertThat(syncService.syncIfNeverSucceeded().skipped()).isTrue();
 	}
 
 	@Test

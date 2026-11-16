@@ -32,7 +32,7 @@ public class CompanySyncScheduler {
 	public void onStartup() {
 		if (runOnStartup) {
 			Thread.ofVirtual().name("company-sync-startup")
-				.start(() -> jobs.run(GROUP, "기업 목록 동기화(시작)", syncService::syncIfEmpty));
+				.start(() -> jobs.run(GROUP, "기업 목록 동기화(시작)", syncService::syncIfNeverSucceeded));
 		}
 	}
 

@@ -35,9 +35,12 @@ public class CompanySyncService {
 		this.clock = clock;
 	}
 
-	/** 기업 목록이 비어 있을 때만 동기화한다. 앱을 처음 띄웠을 때 쓴다. */
-	public SyncResult syncIfEmpty() {
-		return repository.count() == 0 ? sync() : SyncResult.skip();
+	/**
+	 * 한 번도 성공한 적이 없을 때만 동기화한다. 앱을 띄운 직후에 쓴다.
+	 * 행 수로 판단하지 않는 이유: 동기화가 실패한 사이 공시 수집이 회사를 몇 건 넣으면 목록이 일부만 있는데도 채워진 것으로 보인다.
+	 */
+	public SyncResult syncIfNeverSucceeded() {
+		return runs.hasSucceeded(JOB) ? SyncResult.skip() : sync();
 	}
 
 	public SyncResult sync() {

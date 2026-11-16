@@ -27,6 +27,8 @@ import org.springframework.stereotype.Component;
 public class CorpCodeParser {
 
 	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+	private static final int CORP_CODE_MAX = 8;
+	private static final int NAME_MAX = 200;
 
 	public List<CorpCode> parseListed(byte[] zip) {
 		try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip))) {
@@ -76,8 +78,8 @@ public class CorpCodeParser {
 						case "stock_code" -> stockCode = value;
 						case "modify_date" -> modifyDate = value;
 						case "list" -> {
-							if (isListed(stockCode) && corpCode != null && !corpCode.isEmpty() && name != null) {
-								result.add(new CorpCode(corpCode, stockCode, name, parseDate(modifyDate)));
+							if (isListed(stockCode) && isValidCorpCode(corpCode) && name != null && !name.isEmpty()) {
+								result.add(new CorpCode(corpCode, stockCode, truncate(name), parseDate(modifyDate)));
 							}
 						}
 						default -> { }
@@ -91,6 +93,16 @@ public class CorpCodeParser {
 			throw new IllegalStateException("CORPCODE.xml 형식이 올바르지 않습니다", e);
 		}
 		return result;
+	}
+
+	/** 고유번호는 8자리. 길이가 다르면 그 한 건만 건너뛴다. 한 건 때문에 전체 동기화가 실패하면 안 된다. */
+	private static boolean isValidCorpCode(String corpCode) {
+		return corpCode != null && !corpCode.isEmpty() && corpCode.length() <= CORP_CODE_MAX;
+	}
+
+	private static String truncate(String name) {
+		String clean = name.replace("\u0000", "");
+		return clean.length() <= NAME_MAX ? clean : clean.substring(0, NAME_MAX);
 	}
 
 	private static boolean isListed(String stockCode) {

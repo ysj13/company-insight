@@ -82,7 +82,8 @@ public class DisclosureCollector {
 				int savedOnPage = repository.saveListed(response.items());
 				saved += savedOnPage;
 
-				boolean hasListed = response.items().stream().anyMatch(DisclosureRepository::isListed);
+				boolean hasListed = response.items().stream()
+					.anyMatch(item -> DisclosureRepository.isListed(item) && DisclosureRepository.isStorable(item));
 				if (stopWhenNothingNew && hasListed && savedOnPage == 0) {
 					break;
 				}

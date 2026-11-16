@@ -39,6 +39,13 @@ public class CollectionRunRepository {
 			.orElse(true);
 	}
 
+	public boolean hasSucceeded(String source) {
+		return jdbc.sql("SELECT EXISTS (SELECT 1 FROM collection_run WHERE source = :source AND status = 'SUCCESS')")
+			.param("source", source)
+			.query(Boolean.class)
+			.single();
+	}
+
 	public void finishSuccess(long id, Instant finishedAt, int fetched, int saved, int pages) {
 		finish(id, finishedAt, "SUCCESS", fetched, saved, pages, null, null, null);
 	}

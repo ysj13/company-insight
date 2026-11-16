@@ -12,7 +12,7 @@ Java 25, Spring Boot 4.1, PostgreSQL 18, Spring Data JPA, QueryDSL, Spring Batch
 
 ## 개발 환경 설치
 
-새 컴퓨터에서 한 번 실행하면 Git, GitHub CLI, JDK 25, Docker Desktop, IntelliJ IDEA 설치부터 저장소 clone, `.env` 생성, 로컬 DB 실행, 빌드까지 진행한다. 이미 설치된 항목은 건너뛰므로 여러 번 실행해도 된다.
+새 컴퓨터에서 한 번 실행하면 Git, GitHub CLI, JDK 25, Docker Desktop, IntelliJ IDEA, DBeaver 설치부터 저장소 clone, `.env` 생성, 로컬 DB 실행, 빌드까지 진행한다. 이미 설치된 항목은 건너뛰므로 여러 번 실행해도 된다.
 
 **Windows** (PowerShell)
 
@@ -32,7 +32,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ysj
 
 필요: JDK 25, Docker
 
-`.env.example`을 `.env`로 복사하고 `POSTGRES_PASSWORD`와 `DB_PASSWORD`에 같은 값을 넣는다. (설치 스크립트를 썼다면 이미 만들어져 있다.)
+`.env.example`을 `.env`로 복사하고 `POSTGRES_PASSWORD`와 `DB_PASSWORD`에 같은 값을 넣는다. (설치 스크립트를 썼다면 이미 만들어져 있다.) DB 비밀번호는 볼륨을 처음 만들 때만 적용된다. 이미 만든 로컬 DB가 있으면 그때 쓴 값을 넣거나 `docker compose down -v`로 볼륨을 지우고 다시 만든다.
 
 ```bash
 docker compose up -d
