@@ -21,4 +21,14 @@ import java.math.BigDecimal;
 public record FinancialRecord(int fiscalYear, ReportType reportType, StatementType statementType, AccountType account,
 		BigDecimal amount, BigDecimal cumulativeAmount, BigDecimal priorAmount, BigDecimal priorCumulativeAmount,
 		String currency, Source source, String sourceKey) {
+
+	/** 보고서 한 건 안에서 행을 구분하는 키. */
+	public String key() {
+		return key(statementType, account);
+	}
+
+	/** 보고서 한 건 안에서 행을 구분하는 키. 재무제표 구분과 계정의 조합이다. */
+	public static String key(StatementType statementType, AccountType account) {
+		return statementType.name() + "/" + account.name();
+	}
 }

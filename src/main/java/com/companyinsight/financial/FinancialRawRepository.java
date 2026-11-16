@@ -11,8 +11,8 @@ import org.springframework.stereotype.Repository;
 public class FinancialRawRepository {
 
 	/**
-	 * 없으면 넣고, 있으면 받은 시각을 고친다. 응답 내용이 바뀐 경우에만 내용과 수정 시각을 바꾼다.
-	 * 돌려주는 값은 내용이 새로 들어갔거나 바뀌었는지다.
+	 * 없으면 넣고, 있으면 받은 시각을 고친다. 응답 내용이 바뀐 경우에만 수정 시각을 바꾼다.
+	 * 내용은 JSON 값으로 비교한다. 공백이나 키 순서만 다른 응답은 같은 내용이다.
 	 */
 	private static final String UPSERT = """
 		INSERT INTO financial_raw AS r (company_id, source, fiscal_year, report_type, payload)
@@ -21,7 +21,6 @@ public class FinancialRawRepository {
 		   SET fetched_at = now(),
 		       updated_at = CASE WHEN r.payload IS DISTINCT FROM EXCLUDED.payload THEN now() ELSE r.updated_at END,
 		       payload = EXCLUDED.payload
-		RETURNING (xmax = 0 OR updated_at = now())
 		""";
 
 	private static final RowMapper<FinancialRaw> RAW = (rs, i) -> new FinancialRaw(rs.getLong("company_id"),
@@ -38,17 +37,16 @@ public class FinancialRawRepository {
 	 * 보고서 한 건의 응답 원본을 저장한다. 여러 번 저장해도 결과가 같다.
 	 *
 	 * @param raw 저장할 원본
-	 * @return 새로 저장했거나 내용이 바뀌었으면 true
+	 * @throws org.springframework.dao.DataIntegrityViolationException DB가 JSON으로 받지 못하는 내용인 경우 (NUL 문자 등)
 	 */
-	public boolean upsert(FinancialRaw raw) {
-		return jdbcClient.sql(UPSERT)
+	public void upsert(FinancialRaw raw) {
+		jdbcClient.sql(UPSERT)
 			.param("companyId", raw.companyId())
 			.param("source", raw.source().name())
 			.param("fiscalYear", raw.fiscalYear())
 			.param("reportType", raw.reportType().name())
 			.param("payload", raw.payload())
-			.query(Boolean.class)
-			.single();
+			.update();
 	}
 
 	/**

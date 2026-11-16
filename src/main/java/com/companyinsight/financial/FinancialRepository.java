@@ -2,7 +2,9 @@ package com.companyinsight.financial;
 
 import com.companyinsight.common.source.Source;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -101,32 +103,55 @@ public class FinancialRepository {
 
 	/**
 	 * 보고서 한 건의 재무 행을 원본에서 뽑은 결과로 맞춘다. 뽑은 행은 추가·갱신하고,
-	 * 같은 보고서의 행 중 이번 결과에 없는 것(출처의 응답에서 사라진 계정)은 지운다.
+	 * 같은 보고서의 기존 행 중 원본에 계정 줄이 없는 것은 지운다.
 	 *
-	 * @param companyId  회사 ID
-	 * @param source     원본의 출처. 이 출처에서 온 행만 지운다
-	 * @param fiscalYear 사업연도
-	 * @param reportType 보고서 종류
-	 * @param records    원본에서 뽑은 행. 모두 같은 사업연도, 보고서 종류여야 한다
-	 * @return 추가·변경·삭제한 행 수
+	 * @param companyId   회사 ID
+	 * @param source      원본의 출처. 지우는 대상은 이 출처에서 받아 저장한 행이다
+	 * @param fiscalYear  사업연도
+	 * @param reportType  보고서 종류
+	 * @param records     원본에서 뽑은 행. 모두 이 사업연도, 보고서 종류여야 한다
+	 * @param presentKeys 원본에 줄이 있는 계정의 키({@link FinancialRecord#key()}). 여기에 없는 기존 행을 지운다.
+	 *                    비어 있으면 아무것도 지우지 않는다
+	 * @return 추가·변경한 행 수와 지운 행 수
+	 * @throws IllegalArgumentException 다른 보고서의 행이 섞여 있는 경우
 	 */
 	@Transactional
-	public int replaceReport(long companyId, Source source, int fiscalYear, ReportType reportType,
-			List<FinancialRecord> records) {
-		int changed = upsertAll(companyId, records);
-		String delete = """
+	public Replaced replaceReport(long companyId, Source source, int fiscalYear, ReportType reportType,
+			List<FinancialRecord> records, Set<String> presentKeys) {
+		for (FinancialRecord record : records) {
+			if (record.fiscalYear() != fiscalYear || record.reportType() != reportType) {
+				throw new IllegalArgumentException("다른 보고서의 재무 행이 섞여 있음: " + record.fiscalYear() + " "
+						+ record.reportType());
+			}
+		}
+		int upserted = upsertAll(companyId, records);
+		if (presentKeys.isEmpty()) {
+			return new Replaced(upserted, 0);
+		}
+		Set<String> keep = new HashSet<>(presentKeys);
+		records.forEach(record -> keep.add(record.key()));
+		int deleted = jdbcClient.sql("""
 			DELETE FROM financial
 			 WHERE company_id = :companyId AND source = :source
 			   AND fiscal_year = :fiscalYear AND report_type = :reportType
-			""";
-		var statement = records.isEmpty() ? jdbcClient.sql(delete)
-				: jdbcClient.sql(delete + " AND (statement_type || '/' || account) NOT IN (:keys)")
-					.param("keys", records.stream().map(r -> r.statementType().name() + "/" + r.account().name()).toList());
-		return changed + statement.param("companyId", companyId)
+			   AND (statement_type || '/' || account) NOT IN (:keys)
+			""")
+			.param("companyId", companyId)
 			.param("source", source.name())
 			.param("fiscalYear", fiscalYear)
 			.param("reportType", reportType.name())
+			.param("keys", keep)
 			.update();
+		return new Replaced(upserted, deleted);
+	}
+
+	/**
+	 * 보고서 한 건을 맞춘 결과.
+	 *
+	 * @param upserted 새로 저장하거나 값이 바뀐 행 수
+	 * @param deleted  원본에 계정 줄이 없어 지운 행 수
+	 */
+	public record Replaced(int upserted, int deleted) {
 	}
 
 	/**

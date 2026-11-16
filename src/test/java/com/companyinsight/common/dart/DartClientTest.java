@@ -225,6 +225,15 @@ class DartClientTest {
 	}
 
 	@Test
+	void 주요계정_응답_앞의_BOM은_떼고_돌려준다() {
+		String body = "{\"status\":\"000\",\"message\":\"정상\",\"list\":[{\"account_nm\":\"매출액\"}]}";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
+			.andRespond(withSuccess(("\uFEFF" + body).getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_JSON));
+
+		assertThat(client.fetchMajorAccounts("00126380", 2025, "11014")).contains(body);
+	}
+
+	@Test
 	void 주요계정_응답이_JSON이_아니면_PARSE_오류() {
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/fnlttSinglAcnt.json")))
 			.andRespond(withSuccess("<html>점검 중</html>", MediaType.TEXT_HTML));

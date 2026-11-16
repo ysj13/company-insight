@@ -153,8 +153,7 @@ class FinancialIntegrationTest {
 			       (SELECT e ->> 'thstrm_dt' FROM jsonb_array_elements(payload -> 'list') e
 			         WHERE e ->> 'fs_div' = 'CFS' AND e ->> 'account_nm' = '매출액') AS period,
 			       (SELECT e ->> 'thstrm_amount' FROM jsonb_array_elements(payload -> 'list') e
-			         WHERE e ->> 'fs_div' = 'CFS' AND e ->> 'account_nm' = '자산총계') AS total_assets,
-			       created_at = updated_at AS unchanged, fetched_at > created_at AS fetched_again
+			         WHERE e ->> 'fs_div' = 'CFS' AND e ->> 'account_nm' = '자산총계') AS total_assets
 			  FROM financial_raw WHERE company_id = :id
 			""").param("id", companyId).query().singleRow();
 		assertThat(raw.get("source")).isEqualTo("DART");
@@ -164,9 +163,99 @@ class FinancialIntegrationTest {
 		assertThat(raw.get("lines")).isEqualTo(14);
 		assertThat(raw.get("period")).isEqualTo("2025.01.01 ~ 2025.09.30");
 		assertThat(raw.get("total_assets")).isEqualTo("523,659,586,000,000");
-		// 같은 내용을 다시 받으면 수정 시각은 그대로이고 받은 시각만 바뀐다
-		assertThat(raw.get("unchanged")).isEqualTo(true);
-		assertThat(raw.get("fetched_again")).isEqualTo(true);
+	}
+
+	@Test
+	void 원본을_다시_받으면_받은_시각을_고치고_내용이_바뀐_경우에만_수정_시각을_바꾼다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "매출액", "CFS", "1,000", "1")));
+		collector.collect(companyId, 2025, 2025);
+		// 시각을 분명한 과거로 돌려 놓고 본다. 시계의 해상도에 기대지 않기 위해서다
+		String rewind = "UPDATE financial_raw SET created_at = now() - interval '1 day', "
+				+ "updated_at = now() - interval '1 day', fetched_at = now() - interval '1 day'";
+		String recent = "SELECT (fetched_at > now() - interval '1 hour') || ' ' || (updated_at > now() - interval '1 hour')"
+				+ " || ' ' || (created_at > now() - interval '1 hour') FROM financial_raw";
+		jdbc.sql(rewind).update();
+
+		collector.collect(companyId, 2025, 2025); // 같은 내용
+		assertThat(jdbc.sql(recent).query(String.class).single()).isEqualTo("true false false");
+
+		jdbc.sql(rewind).update();
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250601000009", "매출액", "CFS", "1,200", "1")));
+		collector.collect(companyId, 2025, 2025); // 바뀐 내용
+		assertThat(jdbc.sql(recent).query(String.class).single()).isEqualTo("true true false");
+		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'thstrm_amount' FROM financial_raw")
+			.query(String.class).single()).isEqualTo("1,200");
+	}
+
+	@Test
+	void 정상_응답인데_계정이_없으면_저장된_원본과_재무_행을_덮어쓰지_않는다() throws IOException {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014")).willReturn(Optional.of(FinancialCollectorTest.realJson()));
+		collector.collect(companyId, 2025, 2025);
+
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014"))
+			.willReturn(Optional.of("{\"status\":\"000\",\"message\":\"정상\"}"));
+		FinancialCollector.CollectResult emptyList = collector.collect(companyId, 2025, 2025);
+		given(dart.fetchMajorAccounts("00126380", 2025, "11014"))
+			.willReturn(Optional.of("{\"status\":\"000\",\"message\":\"정상\",\"list\":[]}"));
+		collector.collect(companyId, 2025, 2025);
+
+		assertThat(emptyList).isEqualTo(new FinancialCollector.CollectResult(false, 0, 1, 0, 0));
+		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(6);
+		assertThat(jdbc.sql("SELECT jsonb_array_length(payload -> 'list') FROM financial_raw").query(Integer.class).single())
+			.isEqualTo(14);
+	}
+
+	@Test
+	void 줄은_있는데_금액을_읽지_못한_계정은_기존_값을_지우지_않는다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "매출액", "CFS", "1,000", "1"),
+			line("20250515000001", "영업이익", "CFS", "100", "2")));
+		collector.collect(companyId, 2025, 2025);
+
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "매출액", "CFS", "-", "1"),
+			line("20250515000001", "영업이익", "CFS", "120", "2")));
+		FinancialCollector.CollectResult second = collector.collect(companyId, 2025, 2025);
+
+		assertThat(second.saved()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT account || ' ' || amount FROM financial ORDER BY 1").query(String.class).list())
+			.containsExactly("OPERATING_INCOME 120.00", "REVENUE 1000.00");
+	}
+
+	@Test
+	void 응답에_아는_계정이_하나도_없으면_아무것도_지우지_않는다() {
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "매출액", "CFS", "1,000", "1")));
+		collector.collect(companyId, 2025, 2025);
+
+		// 계정명이 모두 달라진 응답. 뽑는 규칙이 맞지 않는 경우와 구분할 수 없으므로 기존 값을 둔다
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(response(
+			line("20250515000001", "영업수익", "CFS", "1,000", "1")));
+		collector.collect(companyId, 2025, 2025);
+
+		assertThat(jdbc.sql("SELECT count(*) FROM financial").query(Long.class).single()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT payload -> 'list' -> 0 ->> 'account_nm' FROM financial_raw").query(String.class).single())
+			.isEqualTo("영업수익");
+	}
+
+	@Test
+	void DB가_받지_못하는_응답_한_건은_건너뛰고_나머지_보고서를_계속_받는다() {
+		// NUL 문자 이스케이프는 JSON으로는 유효하지만 PostgreSQL의 jsonb는 받지 않는다
+		given(dart.fetchMajorAccounts("00126380", 2025, "11013")).willReturn(Optional.of(
+			"{\"status\":\"000\",\"message\":\"정상\",\"list\":[{\"rcept_no\":\"20250515000001\","
+					+ "\"account_nm\":\"매출액\",\"fs_div\":\"CFS\",\"sj_div\":\"IS\",\"thstrm_amount\":\"1,000\","
+					+ "\"thstrm_nm\":\"제 1 기\\u0000\",\"ord\":\"1\",\"currency\":\"KRW\"}]}"));
+		given(dart.fetchMajorAccounts("00126380", 2025, "11012")).willReturn(response(
+			line("20250814000001", "매출액", "CFS", "2,000", "1")));
+
+		FinancialCollector.CollectResult result = collector.collect(companyId, 2025, 2025);
+
+		assertThat(result).isEqualTo(new FinancialCollector.CollectResult(false, 1, 1, 2, 1));
+		assertThat(jdbc.sql("SELECT report_type FROM financial").query(String.class).list()).containsExactly("HALF");
+		assertThat(jdbc.sql("SELECT report_type FROM financial_raw").query(String.class).list()).containsExactly("HALF");
+		assertThat(jdbc.sql("SELECT status FROM collection_run").query(String.class).single()).isEqualTo("SUCCESS");
 	}
 
 	@Test

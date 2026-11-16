@@ -21,7 +21,7 @@ COMMENT ON COLUMN financial_raw.company_id IS '회사 (company.id)';
 COMMENT ON COLUMN financial_raw.source IS '응답을 받은 출처. DART 금융감독원 전자공시시스템(단일회사 주요계정)';
 COMMENT ON COLUMN financial_raw.fiscal_year IS '조회한 사업연도';
 COMMENT ON COLUMN financial_raw.report_type IS '조회한 보고서 종류. Q1 1분기보고서, HALF 반기보고서, Q3 3분기보고서, ANNUAL 사업보고서';
-COMMENT ON COLUMN financial_raw.payload IS '출처가 준 응답 전체(JSON). 저장하지 않는 계정과 필드도 그대로 들어 있다';
+COMMENT ON COLUMN financial_raw.payload IS '출처가 준 응답 전체(JSON). financial에 뽑지 않는 계정과 필드도 들어 있다. JSON 값으로 저장해 공백과 키 순서는 원문과 다를 수 있다';
 COMMENT ON COLUMN financial_raw.fetched_at IS '출처에서 마지막으로 받은 시각. 내용이 같아도 받을 때마다 바뀐다';
 COMMENT ON COLUMN financial_raw.created_at IS '처음 저장한 시각';
 COMMENT ON COLUMN financial_raw.updated_at IS '응답 내용이 마지막으로 바뀐 시각';

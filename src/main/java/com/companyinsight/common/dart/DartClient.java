@@ -142,6 +142,9 @@ public class DartClient {
 			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "주요계정 응답이 비어 있음");
 		}
 		String body = new String(bytes, StandardCharsets.UTF_8);
+		if (body.startsWith("\uFEFF")) {
+			body = body.substring(1); // UTF-8 BOM
+		}
 		MajorAccountResponse response;
 		try {
 			response = MajorAccountResponse.fromJson(body);
