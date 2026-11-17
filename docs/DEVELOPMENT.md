@@ -33,7 +33,7 @@ com.companyinsight
 ├── disclosure    공시 수집, 규칙 분류
 ├── analysis      작업 큐, 워커, LLM 요약, 원문 대조 검증
 ├── score         호재/악재 점수, 일별 추이
-├── financial     재무 수집, 체크리스트
+├── financial     재무 수집
 ├── backfill      Spring Batch 백필
 ├── ops           수집 실행 기록, 운영자 알림
 ├── web           화면(Thymeleaf 컨트롤러)
@@ -177,5 +177,5 @@ com.companyinsight
 ### MVP에서 자리만 두는 것과 하지 않는 것
 
 - 자리만 둔다: 판단 추이 그래프, 타임라인의 예정 일정.
-- 하지 않는다: 전 종목 백필, 재무 체크리스트, 홈 공시 피드, 뉴스 수집, 배포.
+- 하지 않는다: 전 종목 백필, 홈 공시 피드, 뉴스 수집, 배포.
 
