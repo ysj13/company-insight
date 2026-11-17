@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
 <style>
-/* Layout: 공개용. ① 결론(호재/악재 막대, 계산 근거) ② 판단 근거(접힘) ③ 판단 추이 차트 ④ 실적·체크리스트(접힘) ⑤ 타임라인(일정 → 오늘 → 소식, 펼치면 핵심 3줄 + 원문). */
+/* Layout: 공개용. ① 결론(호재/악재 막대, 계산 근거) ② 판단 근거(접힘) ③ 판단 추이 차트 ④ 실적(접힘) ⑤ 타임라인(일정 → 오늘 → 소식, 펼치면 핵심 3줄 + 원문). */
 :root{
   --page:#f2f4f6; --surface:#ffffff; --sunken:#f5f6f8; --line:#e8eaee;
   --fg:#191f28; --muted:#7b8594;
@@ -122,12 +122,6 @@ h1{font-size:24px;font-weight:800;letter-spacing:-.03em}
 .fin div{background:var(--sunken);border-radius:12px;padding:14px}
 .fin dt{font-size:13px;color:var(--muted)} .fin dd{margin:0;font-size:19px;font-weight:800;letter-spacing:-.02em}
 .fin dd small{display:block;font-size:12px;font-weight:700}
-.checks{list-style:none;margin:14px 0 0;padding:0}
-.checks li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
-.checks li:last-child{border-bottom:0}
-.ck{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--surface)}
-.ck.ok{background:var(--good)} .ck.no{background:var(--line);color:var(--muted)}
-.checks .v{font-size:13px;color:var(--muted);white-space:nowrap}
 
 /* ⑤ 타임라인 */
 .tl{list-style:none;margin:8px 0 0;padding:0;position:relative}
@@ -182,13 +176,13 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding-block:0 32px;
 <script>
 /* ───────── 예시 데이터 (실제 데이터 아님) ─────────
    events: d 날짜, tone up/down/flat, imp 영향도 1~3, src 출처, t 제목, s 핵심 요약(선택)
-   fin: rev·op 억원 [올해, 작년], mg 영업이익률 % [올해, 작년], debt 부채비율 %, div 주당배당금 원
+   fin: rev·op 억원 [올해, 작년], mg 영업이익률 % [올해, 작년]
    판단 점수는 데이터에 없고 화면에서 events로 계산한다 */
 const ASOF = "2026-11-06";
 const DB = {
  "005930":{name:"삼성전자",market:"코스피",sector:"반도체",
   lede:"메모리 가격 반등과 HBM 공급 확대 기대가 최근 분위기를 끌어올리고 있어요. 다만 미국 수출 규제와 환율은 지켜봐야 해요.",
-  fin:{rev:[791000,740000],op:[104000,92000],mg:[13.1,12.4],debt:26.3,div:361},
+  fin:{rev:[791000,740000],op:[104000,92000],mg:[13.1,12.4]},
   watch:[["2026-11-13","3분기 실적 발표 콘퍼런스콜","공시"],["2026-11-20","반도체특별법 시행령 입법예고 의견 마감","법령"],["2026-12-01","미국 반도체 장비 수출 규제 최종안 발표 예정","글로벌"]],
   events:[
    {d:"2026-11-05",tone:"up",imp:3,src:"뉴스",t:"HBM 신규 고객사와 장기 공급 계약 체결 보도",s:["북미 고객사와 HBM 장기 공급 계약을 맺었다는 보도","계약 규모와 기간은 공시 전이라 확인되지 않음","회사 공식 공시가 나오면 판단을 다시 계산함"]},
@@ -207,7 +201,7 @@ const DB = {
    {d:"2026-07-03",tone:"down",imp:2,src:"뉴스",t:"스마트폰 수요 둔화로 2분기 모바일 부진 전망"}]},
  "000660":{name:"SK하이닉스",market:"코스피",sector:"반도체",
   lede:"HBM 수요 강세와 사상 최대 분기 실적이 분위기를 이끌고 있어요. 단기 급등 뒤 차익 실현과 미국 규제는 변수예요.",
-  fin:{rev:[221000,164000],op:[99000,58000],mg:[44.8,35.4],debt:49.0,div:1500},
+  fin:{rev:[221000,164000],op:[99000,58000],mg:[44.8,35.4]},
   watch:[["2026-11-12","HBM4 고객사 인증 결과 발표 예정","뉴스"],["2026-11-20","반도체특별법 시행령 입법예고 의견 마감","법령"],["2026-12-01","미국 반도체 장비 수출 규제 최종안 발표 예정","글로벌"]],
   events:[
    {d:"2026-11-04",tone:"up",imp:3,src:"뉴스",t:"HBM4 양산 시점 앞당긴다… 고객사 요청 반영"},
@@ -223,7 +217,7 @@ const DB = {
    {d:"2026-06-20",tone:"up",imp:2,src:"뉴스",t:"HBM 공급 계약 연장"}]},
  "005380":{name:"현대차",market:"코스피",sector:"자동차",
   lede:"미국 관세와 유럽 판매 둔화가 부담이에요. 하이브리드 판매 호조와 자사주 소각이 받쳐 주지만, 당분간은 악재 쪽이 조금 더 커요.",
-  fin:{rev:[432000,429000],op:[31000,36000],mg:[7.2,8.4],debt:177.5,div:12000},
+  fin:{rev:[432000,429000],op:[31000,36000],mg:[7.2,8.4]},
   watch:[["2026-11-15","한·미 관세 협상 실무회의","글로벌"],["2026-12-02","11월 글로벌 판매 실적 발표","공시"],["2026-12-10","전기차 보조금 개편안 발표 예정","법령"]],
   events:[
    {d:"2026-11-04",tone:"down",imp:2,src:"뉴스",t:"유럽 10월 판매 전년 대비 6% 감소"},
@@ -237,7 +231,7 @@ const DB = {
    {d:"2026-06-05",tone:"down",imp:3,src:"글로벌",t:"美 자동차 관세 인상 발표"}]},
  "035420":{name:"NAVER",market:"코스피",sector:"인터넷",
   lede:"AI 검색과 광고 성장은 긍정적이지만 플랫폼 규제 입법이 불확실성으로 남아 있어요. 호재와 악재가 비슷하게 맞서 있어요.",
-  fin:{rev:[29000,27000],op:[5420,4910],mg:[18.7,18.2],debt:47.1,div:1130},
+  fin:{rev:[29000,27000],op:[5420,4910],mg:[18.7,18.2]},
   watch:[["2026-11-18","온라인플랫폼법 국회 소위 심사","법령"],["2026-11-25","AI 검색 광고 상품 설명회","뉴스"],["2026-12-05","EU 디지털시장법 추가 조치 발표 예정","글로벌"]],
   events:[
    {d:"2026-11-02",tone:"up",imp:2,src:"뉴스",t:"생성형 AI 검색 전면 적용… 광고 단가 상승 기대"},
@@ -350,13 +344,6 @@ function render(){
     navPrev = evDays.filter(d=>d<a).pop() || null; navNext = evDays.find(d=>d>a) || null; }
 
   const f = co.fin, rg = f.rev[0]/f.rev[1]-1, og = f.op[0]/f.op[1]-1, mgd = f.mg[0]-f.mg[1];
-  const checks = [
-    ["매출이 1년 전보다 늘었어요", rg>0, pct(rg)],
-    ["영업이익이 1년 전보다 늘었어요", og>0, pct(og)],
-    ["영업이익률이 좋아졌어요", mgd>0, (mgd>0?"+":"")+mgd.toFixed(1)+"%p"],
-    ["부채비율이 100% 미만이에요", f.debt<100, f.debt.toFixed(1)+"%"],
-    ["배당을 주고 있어요", f.div>0, f.div>0?won(f.div)+"원":"없음"]];
-  const passed = checks.filter(c=>c[1]).length;
 
   const past = [...co.events].sort((a,b)=>b.d.localeCompare(a.d));
   const shownPast = state.more ? past : past.slice(0,PAGE);
@@ -400,12 +387,11 @@ function render(){
 
     <div class="sec">
       <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2>실적은 어때요?</h2>
-        <span class="sum num"><b>재무 체크 ${passed}/${checks.length}</b>${CHEV}</span></button>
+        <span class="sum num">${CHEV}</span></button>
       ${state.fin ? `<div class="body"><dl class="fin num">
           <div><dt>매출액</dt><dd>${won(f.rev[0])}억<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
           <div><dt>영업이익</dt><dd>${won(f.op[0])}억<small class="${toneOf(og)}">1년 전보다 ${pct(og)}</small></dd></div>
           <div><dt>영업이익률</dt><dd>${f.mg[0]}%<small class="${toneOf(mgd)}">${mgd>0?"+":""}${mgd.toFixed(1)}%p</small></dd></div></dl>
-        <ul class="checks num">${checks.map(([l,ok,v])=>`<li><span class="ck ${ok?"ok":"no"}" aria-label="${ok?"통과":"미통과"}">${ok?"✓":"–"}</span><span>${l}</span><span class="v">${v}</span></li>`).join("")}</ul>
         <p class="note">2026년 3분기 누적 · 연결 기준 · 출처 DART</p></div>` : ""}
     </div>
   </section>
