@@ -203,6 +203,9 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .day .nav{display:flex;justify-content:space-between;gap:var(--s2);margin-top:var(--s1);padding-top:var(--s1);border-top:1px solid var(--line)}
 .day .nav .tbtn{margin:0}
 .chart-box + .meta{margin-top:var(--s2)}
+/* 그래프 아래 안내: 한 줄만 보이고, 나머지 설명은 "보는 법"으로 접는다 */
+.guide{display:flex;justify-content:space-between;align-items:center;gap:var(--s1) var(--s3);flex-wrap:wrap;margin-top:var(--s1)}
+.guide-more{margin-top:var(--s1)}
 
 /* 접는 칸 */
 .disc{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--s2);min-height:44px}
@@ -438,7 +441,7 @@ const DART = "https://dart.fss.or.kr/";
 const PAGE = 6;
 
 /* view: ok 정상 / loading 불러오는 중 / fail 분석 실패(지난 판단을 보여줌) / error 불러오기 오류 */
-let state = { code:"005930", period:"3m", sel:null, moreUp:false, moreDown:false, fin:false, more:false, how:false, view:"ok", dv:null };
+let state = { code:"005930", period:"3m", sel:null, moreUp:false, moreDown:false, fin:false, more:false, how:false, guide:false, view:"ok", dv:null };
 let lastCode = "005930"; /* "공시 없는 회사"를 보다가 정상으로 돌아올 회사 */
 let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
 const $ = id => document.getElementById(id);
@@ -674,7 +677,8 @@ function render(){
         ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${TONE[e.tone]}</span><button type="button" class="t row-title" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="meta faint">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
           : `<p class="meta" style="padding:var(--s2) 0">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
         <div class="nav"><button type="button" class="tbtn" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>${icon("prev","sm")}이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" class="tbtn" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""}${icon("open","sm")}</button></div></div>`
-      : `<p class="meta faint">그래프를 누르면 그날의 판단과 공시가 보여요. 점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}`;
+      : `<div class="guide"><p class="meta faint">그래프를 누르면 그날의 판단과 공시가 보여요.</p><button type="button" class="tbtn" data-toggle="guide" aria-expanded="${state.guide}">보는 법${CHEV}</button></div>
+        ${state.guide?`<p class="meta faint guide-more">점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`:""}`}`;
 
   let finCard;
   if(!co.fin){
@@ -788,7 +792,7 @@ function showSug(){ const m=matches(q.value); hi=-1;
     : `<div class="empty" role="status">${icon("search")}<div><p class="row-title">‘${esc(q.value.trim())}’에 맞는 회사가 없어요</p><p class="meta">회사 이름이나 6자리 종목코드로 찾아 보세요. 데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</p></div></div>`;
   sug.hidden=false; }
 function pick(c){ if(!c) return; lastCode=c;
-  state={code:c,period:"3m",sel:null,moreUp:false,moreDown:false,fin:false,more:false,how:false,view:"ok",dv:null}; q.value=DB[c].name; sug.hidden=true;
+  state={code:c,period:"3m",sel:null,moreUp:false,moreDown:false,fin:false,more:false,how:false,guide:false,view:"ok",dv:null}; q.value=DB[c].name; sug.hidden=true;
   load(c); window.scrollTo({top:0,behavior:"smooth"}); }
 q.addEventListener("input",showSug); q.addEventListener("focus",showSug);
 q.addEventListener("keydown",e=>{ const bs=[...sug.querySelectorAll("button")];
