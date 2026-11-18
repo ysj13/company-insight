@@ -26,8 +26,8 @@
   --scrim:rgba(0,0,0,.55);
   /* 간격: 4px 단계 일곱 개만 */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
-  /* 모서리: 세 가지만. 큰 면(카드·패널) / 안쪽 것(칸·버튼·입력창·줄·목록) / 알약(칩·배지·세그먼트) */
-  --r-lg:16px; --r-md:12px; --r-full:999px;
+  /* 모서리: 둥근 사각형 한 가족, 세 가지만. 큰 면(카드·패널) 16 / 안쪽 것(칸·버튼·배지·세그먼트·입력창·줄) 12 / 높이 24px의 작은 칩 8. 알약 모양(양끝 반원)은 쓰지 않는다 */
+  --r-lg:16px; --r-md:12px; --r-sm:8px;
   /* 글자 크기: 다섯 개 + 좁은 화면의 화면 제목 24 */
   --fs-title:28px; --fs-value:20px; --fs-card:17px; --fs-body:15px; --fs-small:13px;
   --fast:.2s cubic-bezier(.4,0,.2,1);
@@ -88,12 +88,12 @@ h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03
 :is(.btn,.tbtn,.seg button):disabled{opacity:.4;cursor:default;pointer-events:none}
 /* 세그먼트(같은 내용을 다른 범위로 보는 선택만): 선택은 밝은 면 */
 .seg{display:inline-flex;gap:var(--s2);flex-wrap:wrap}
-.seg button{min-height:36px;padding:0 var(--s4);border-radius:var(--r-full);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);transition:border-color var(--fast),background var(--fast),color var(--fast)}
+.seg button{min-height:36px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);transition:border-color var(--fast),background var(--fast),color var(--fast)}
 .seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
 .seg button:active{background:var(--btn-press);color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
 /* 칩(누를 수 없는 표시): 호재·악재·중립과 AI. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정한다(선택된 줄 위에서도 대비가 같게) */
-.tone,.ai,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-full);white-space:nowrap}
+.tone,.ai,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-sm);white-space:nowrap}
 .tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
 .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
 .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
@@ -101,7 +101,7 @@ h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03
 .chip{color:var(--text-sub);border:1px solid var(--line-hover)}
 .by-ai{color:var(--ai)}
 /* 판단 배지: 옅은 색 면 + 가는 색 테두리, 강한 호재·악재만 색으로 채운다 */
-.badge{display:inline-flex;align-items:center;gap:var(--s2);border-radius:var(--r-full);padding:var(--s2) var(--s4);border:1px solid}
+.badge{display:inline-flex;align-items:center;gap:var(--s2);border-radius:var(--r-md);padding:var(--s2) var(--s4);border:1px solid}
 .badge.up{color:var(--up);background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);border-color:var(--up-line)}
 .badge.down{color:var(--down);background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);border-color:var(--down-line)}
 .badge.up.strong{background:var(--up);border-color:var(--up);color:var(--bg)}
@@ -134,7 +134,7 @@ h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03
 .empty .meta{margin-top:var(--s1)}
 /* 불러오는 중: 실제 배치와 같은 자리에 회색 면(900)을 둔다. 느리게 한 번씩 옅어진다 */
 .sk{display:block;background:var(--surface);border-radius:var(--r-md);animation:pulse 1.6s cubic-bezier(.4,0,.2,1) infinite}
-.sk.pill{border-radius:var(--r-full)}
+.sk.pill{border-radius:var(--r-md)}
 @keyframes pulse{50%{opacity:.5}}
 
 /* ───────── 상단 바: 위에 떠 있는 유리 ───────── */
@@ -163,8 +163,8 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .jh{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s1) var(--s2);flex-wrap:wrap}
 .vrow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4)}
 .barrow{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s4)}
-.bar{flex:1;position:relative;height:8px;border-radius:var(--r-full);background:var(--flat-soft);overflow:hidden}
-.bar i{position:absolute;top:0;bottom:0;border-radius:var(--r-full)}
+.bar{flex:1;position:relative;height:8px;border-radius:var(--r-sm);background:var(--flat-soft);overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;border-radius:var(--r-sm)}
 .bar .fill.up{background:var(--up)} .bar .fill.down{background:var(--down)} .bar .fill.flat{background:var(--flat)}
 .bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px;border-radius:0}
 .lede{margin-top:var(--s4)}
@@ -264,7 +264,7 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .inner{max-width:1040px}
 main.inner{display:grid;gap:var(--s12);padding-block:var(--s8) var(--s12)}
 .toc{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s4)}
-.toc a{display:inline-flex;align-items:center;min-height:36px;padding:0 var(--s3);border-radius:var(--r-full);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);text-decoration:none;font-size:var(--fs-small);font-weight:600;transition:background var(--fast),color var(--fast),border-color var(--fast)}
+.toc a{display:inline-flex;align-items:center;min-height:36px;padding:0 var(--s3);border-radius:var(--r-md);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);text-decoration:none;font-size:var(--fs-small);font-weight:600;transition:background var(--fast),color var(--fast),border-color var(--fast)}
 .toc a:hover{background:var(--btn-hover);color:var(--text);border-color:var(--line-selected)}
 section.sec>h2{font-size:var(--fs-value);font-weight:800;letter-spacing:-.02em;line-height:1.3}
 section.sec>h2+.meta{margin-top:var(--s2);max-width:680px}
@@ -309,8 +309,8 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
 .stage{position:relative;border-radius:var(--r-lg);overflow:hidden;padding:var(--s6) var(--s4);background:var(--bg);border:1px solid var(--line)}
 .stage .behind{position:absolute;inset:0;padding:var(--s4);color:var(--text-sub);font-size:var(--fs-body);line-height:1.6;overflow:hidden}
 .stage .behind p{margin:0 0 var(--s2)}
-.stage .behind .up-bar{display:inline-block;width:40%;height:10px;background:var(--up);border-radius:var(--r-full)}
-.stage .behind .down-bar{display:inline-block;width:30%;height:10px;background:var(--down);border-radius:var(--r-full)}
+.stage .behind .up-bar{display:inline-block;width:40%;height:10px;background:var(--up);border-radius:var(--r-sm)}
+.stage .behind .down-bar{display:inline-block;width:30%;height:10px;background:var(--down);border-radius:var(--r-sm)}
 .stage .judge{position:relative}
 .judge.glass{background:rgba(17,17,19,.6);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
 .stage-cap{margin-top:var(--s2)}
@@ -376,13 +376,13 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
   <!-- 4. 간격·모서리 -->
   <section class="sec" id="space">
     <h2>간격과 모서리</h2>
-    <p class="meta">간격은 4px 단계 일곱 개만 써요. 모서리는 세 가지: 큰 면(카드·패널) 16, 안쪽 것(칸·버튼·입력창·줄·목록) 12, 알약(칩·배지·세그먼트) 끝까지 둥글게.</p>
+    <p class="meta">간격은 4px 단계 일곱 개만 써요. 테두리가 있는 모양은 모두 둥근 사각형 한 가족이고 모서리는 세 가지예요: 큰 면 16, 안쪽 것 12, 작은 칩 8. 양끝이 반원인 알약 모양은 쓰지 않아요(카드 안에서 사각형과 섞이면 모양이 둘로 보여요). 타임라인의 점은 표시라 둥근 점이에요.</p>
     <div class="sec-body">
       <div class="card" id="space-rows"></div>
       <div class="grid">
         <div><div class="rad" style="border-radius:var(--r-lg)"><span class="meta">16</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-lg</code> 카드, 판단 카드, 패널, 시트</p></div>
-        <div><div class="rad" style="border-radius:var(--r-md)"><span class="meta">12</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-md</code> 안쪽 칸, 버튼, 입력창, 목록 줄, 자동완성, 말풍선, 로고</p></div>
-        <div><div class="rad" style="border-radius:var(--r-full)"><span class="meta">끝까지</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-full</code> 칩, 배지, 세그먼트, 판단 막대</p></div>
+        <div><div class="rad" style="border-radius:var(--r-md)"><span class="meta">12</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-md</code> 안쪽 칸, 판단 배지, 버튼, 세그먼트, 입력창, 목록 줄, 자동완성, 말풍선, 로고</p></div>
+        <div><div class="rad" style="border-radius:var(--r-sm)"><span class="meta">8</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-sm</code> 높이 24px의 칩(호재·악재·중립, AI), 판단 막대</p></div>
       </div>
     </div>
   </section>
