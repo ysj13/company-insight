@@ -6,16 +6,17 @@
 <style>
 /* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
    ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
-   검정 바탕이 기본이다. 색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
+   짙은 회색 바탕의 어두운 테마가 기본이다(순수 검정은 글자가 번져 보여 쓰지 않는다). 면은 바탕 → 카드 → 안쪽 칸 순서로 한 단계씩 밝아진다.
+   색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
-  --bg:#000; --surface:#0b0d10;
-  --text:#fafafa; --text-sub:#a1a1a1; --text-faint:#888888;
+  --bg:#121417; --card:#1a1d21; --surface:#22262b;
+  --text:#e8e9eb; --text-sub:#a8adb3; --text-faint:#949aa1;
   --tint:255,255,255;
-  --line:rgba(var(--tint),.08); --line-hover:rgba(var(--tint),.16); --line-selected:rgba(var(--tint),.30); --line-strong:rgba(var(--tint),.28);
-  --fill-hover:rgba(var(--tint),.05); --fill-selected:rgba(var(--tint),.11); --focus:rgba(var(--tint),.45);
-  --up:#f04452; --up-soft:rgba(240,68,82,.14); --down:#3182f6; --down-soft:rgba(49,130,246,.16); --flat:#a1a1a1; --flat-soft:rgba(var(--tint),.08);
-  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.14);
-  --scrim:rgba(0,0,0,.6);
+  --line:rgba(var(--tint),.07); --line-hover:rgba(var(--tint),.16); --line-selected:rgba(var(--tint),.30); --line-strong:rgba(var(--tint),.22);
+  --fill-hover:rgba(var(--tint),.05); --fill-selected:rgba(var(--tint),.08); --focus:rgba(var(--tint),.55);
+  --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --flat:#a8adb3; --flat-soft:rgba(var(--tint),.08);
+  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12);
+  --scrim:rgba(0,0,0,.55);
   --radius:16px; --radius-sm:10px; --radius-pill:999px; --fast:.2s cubic-bezier(.4,0,.2,1);
   --font:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   color-scheme:dark;
@@ -49,8 +50,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .sug .m{color:var(--text-faint);font-size:13px;white-space:nowrap}
 .sug .none{padding:11px 14px;color:var(--text-sub);font-size:13px}
 
-main.inner{display:grid;gap:16px;padding-block:24px 40px}
-.card{border:1px solid var(--line);border-radius:var(--radius);padding:24px;min-width:0}
+main.inner{display:grid;gap:20px;padding-block:28px 48px}
+/* 카드는 선이 아니라 한 단계 밝은 면으로 묶는다 */
+.card{background:var(--card);border-radius:var(--radius);padding:24px;min-width:0}
 .card>h2,.sec-h h2{font-size:17px;font-weight:700}
 .sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .divider{height:1px;border:0;margin:20px 0;background:linear-gradient(90deg,transparent,rgba(var(--tint),.12) 50%,transparent)}
@@ -60,7 +62,7 @@ main.inner{display:grid;gap:16px;padding-block:24px 40px}
 h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* ① 판단 카드: 화면에서 유일하게 2px 테두리 */
-.judge{border:2px solid var(--line-strong);border-radius:var(--radius);padding:24px;min-width:0}
+.judge{background:var(--card);border:2px solid var(--line-strong);border-radius:var(--radius);padding:24px;min-width:0}
 .judge.hold{border-style:dashed}
 .jh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text-sub)}
 .jh b{font-size:15px;font-weight:700;color:var(--text)}
@@ -75,11 +77,11 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .bar{position:relative;height:10px;border-radius:5px;background:var(--flat-soft);margin:16px 0 6px;overflow:hidden}
 .bar i{position:absolute;top:0;bottom:0;border-radius:5px}
 .bar .fill.up{background:var(--up)} .bar .fill.down{background:var(--down)} .bar .fill.flat{background:var(--flat)}
-.bar .mid{left:50%;width:2px;background:var(--bg);margin-left:-1px}
+.bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px}
 .ticks{display:flex;justify-content:space-between;font-size:13px;color:var(--text-faint)}
 .lede{font-size:17px;font-weight:500;line-height:1.65;margin-top:18px}
 .ai{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ai);background:var(--ai-soft);border-radius:var(--radius-pill);padding:1px 9px;vertical-align:2px;margin-right:6px;white-space:nowrap}
-.stale{opacity:.55} /* 분석 실패 때 지난 판단. .55면 본문이 검정 위 6:1 */
+.stale{opacity:.6} /* 분석 실패 때 지난 판단 */
 .fail{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid var(--line-hover);border-radius:12px;font-size:13px;color:var(--text-sub)}
 .btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--line-hover);font-size:15px;color:var(--text);transition:border-color var(--fast),background var(--fast)}
 .btn:hover{border-color:var(--line-selected);background:var(--fill-hover)}
@@ -91,16 +93,17 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}
-.ev .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:12px 10px;margin:0 -10px;width:calc(100% + 20px);border-radius:12px;transition:background var(--fast)}
+/* 공시 한 줄: 쉬운 말 한 줄(굵게)이 먼저, 그 아래 날짜와 DART 원문 제목(작게). 칩은 호재·악재 하나만 */
+.ev .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:14px 12px;margin:0 -12px;width:calc(100% + 24px);border-radius:12px;transition:background var(--fast)}
 .ev .row:hover{background:var(--fill-hover)}
 .ev .row:active,.ev .row[aria-current="true"]{background:var(--fill-selected)}
-.tone{font-size:13px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;margin-top:2px}
-/* 칩 배경은 바탕(--bg) 위에 한 번 겹친 색으로 고정한다. 선택된 줄 위에서도 글자 대비가 떨어지지 않게 */
-.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--bg);color:var(--up)} .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--bg);color:var(--down)} .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--bg);color:var(--text-sub)}
-.ev .t{font-size:15px;font-weight:700;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
-.ev .arr{color:var(--text-faint);font-size:13px;padding-top:2px}
-.ev .r{grid-column:2/4;font-size:15px;color:var(--text);line-height:1.5}
-.ev .s{grid-column:2/4;font-size:13px;color:var(--text-faint);display:flex;gap:6px 10px;flex-wrap:wrap}
+.tone{font-size:13px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;margin-top:1px}
+/* 칩 배경은 카드(--card) 위에 한 번 겹친 색으로 고정한다. 선택된 줄 위에서도 글자 대비가 떨어지지 않게 */
+.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)} .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)} .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
+.ev .r{font-size:15px;font-weight:700;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.ev .arr{color:var(--text-faint);font-size:15px;line-height:1.5}
+.ev .s{grid-column:2/4;font-size:13px;color:var(--text-faint);line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .chip{color:var(--text-sub);border:1px solid var(--line-hover);border-radius:var(--radius-pill);padding:0 8px;font-size:13px}
 .by-ai{color:var(--ai)}
 .more-btn{display:flex;align-items:center;gap:6px;min-height:44px;font-size:13px;color:var(--text-sub);font-weight:500}
@@ -114,7 +117,10 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .counter .s{font-size:13px;color:var(--text-faint);margin-top:4px}
 .counter .link{font-size:13px;color:var(--text-sub);min-height:32px;padding:4px 0;margin-top:2px;text-align:left;transition:color var(--fast)}
 .counter .link:hover{color:var(--text);text-decoration:underline}
-.how{font-size:13px;color:var(--text-faint);margin-top:16px;line-height:1.6}
+.how{font-size:13px;color:var(--text-sub);margin-top:8px;line-height:1.6}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:4px 12px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.foot .notice{margin:0}
+.foot .more-btn{min-height:40px}
 .notice{font-size:13px;color:var(--text-sub);margin-top:6px}
 .empty{font-size:13px;color:var(--text-sub);padding:8px 0}
 
@@ -128,7 +134,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .chart{width:100%;height:auto;display:block}
 .chart text{font-family:var(--font);font-size:13px;fill:var(--text-faint)}
 .chart .cross{stroke:var(--text-faint);stroke-dasharray:3 3;display:none}
-.chart .hdot{fill:var(--text);stroke:var(--bg);stroke-width:2;display:none}
+.chart .hdot{fill:var(--text);stroke:var(--card);stroke-width:2;display:none}
 .tip{position:absolute;pointer-events:none;display:none;background:var(--text);color:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px;white-space:nowrap;transform:translate(-50%,-125%)}
 .day{margin-top:10px;background:var(--surface);border-radius:12px;padding:12px 14px}
 .day .h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--text-sub);flex-wrap:wrap}
@@ -151,7 +157,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* ③ 실적: 정보용 칸이라 hover 없음 */
 .fin{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 0}
-.fin div{border:1px solid var(--line);border-radius:12px;padding:14px}
+.fin div{background:var(--surface);border-radius:12px;padding:14px}
 .fin dt{font-size:13px;color:var(--text-sub)} .fin dd{margin:2px 0 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
 .fin dd small{display:block;font-size:13px;font-weight:700}
 .note{font-size:13px;color:var(--text-faint);margin-top:10px}
@@ -161,17 +167,18 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .tl::before{content:"";position:absolute;left:69px;top:12px;bottom:12px;width:1px;background:var(--line-hover)}
 .tl>li{display:grid;grid-template-columns:48px 44px minmax(0,1fr);gap:0 4px;padding:4px 0;align-items:start}
 .tl .d{font-size:13px;color:var(--text-faint);text-align:right;padding-top:12px;white-space:nowrap}
-.tl .n{width:11px;height:11px;margin:16px auto 0;background:var(--flat);border-radius:50%;box-shadow:0 0 0 4px var(--bg);position:relative;z-index:1}
+.tl .n{width:11px;height:11px;margin:16px auto 0;background:var(--flat);border-radius:50%;box-shadow:0 0 0 4px var(--card);position:relative;z-index:1}
 .tl .n.up{background:none;width:0;height:0;border-radius:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--up);box-shadow:none}
 .tl .n.down{background:none;width:0;height:0;border-radius:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:10px solid var(--down);box-shadow:none}
-.tl .n.plan{background:var(--bg);box-shadow:0 0 0 4px var(--bg),inset 0 0 0 1.5px var(--text-faint)}
+.tl .n.plan{background:var(--card);box-shadow:0 0 0 4px var(--card),inset 0 0 0 1.5px var(--text-faint)}
 .tl .n.today{width:14px;height:14px;margin-top:15px;background:var(--text)}
-.tl .item{width:100%;display:block;padding:8px 10px;border-radius:12px;transition:background var(--fast)}
+.tl .item{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;padding:8px 10px;border-radius:12px;transition:background var(--fast)}
+.tl .item .s{grid-column:1} .tl .item .arr{grid-row:1;grid-column:2;color:var(--text-faint);line-height:1.5}
 .tl .item:hover{background:var(--fill-hover)}
 .tl .item:active{background:var(--fill-selected)}
 .tl .static{padding:8px 10px}
 .tl .t{font-weight:500;font-size:15px;line-height:1.5;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;word-break:keep-all;overflow-wrap:anywhere}
-.tl .s{font-size:13px;color:var(--text-faint);display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap}
+.tl .s{font-size:13px;color:var(--text-faint);word-break:keep-all;overflow-wrap:anywhere}
 .tl .today-row .t{font-weight:800} .tl .today-row .d{color:var(--text);font-weight:700}
 .tl .plan-row .t{color:var(--text-sub)}
 .tl .lbl{grid-column:3;font-size:13px;color:var(--text-faint);font-weight:700;padding:8px 10px 0}
@@ -184,12 +191,11 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .day button.t:hover{text-decoration:underline}
 
 /* ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 패널이 열린다 */
-.dv-meta{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-faint)}
-.dv-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-top:10px;word-break:keep-all;overflow-wrap:anywhere}
-.dv-verdict{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-sub);margin-top:14px}
+.dv-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-top:12px;word-break:keep-all;overflow-wrap:anywhere}
+.dv-src-title{font-size:13px;color:var(--text-sub);margin-top:6px;word-break:keep-all;overflow-wrap:anywhere}
+.dv-verdict{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-sub)}
 .dv-verdict .tone{font-size:15px;padding:2px 10px;margin:0}
-.dv-r{font-size:17px;font-weight:500;line-height:1.55;margin-top:10px}
-.dv-in{font-size:13px;color:var(--text-sub);margin-top:6px}
+.dv-in{font-size:13px;color:var(--text-faint);margin-top:12px}
 .dv-box{margin-top:18px;background:var(--surface);border-radius:12px;padding:14px 16px}
 .dv-box h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
 .dv-box ul{margin:8px 0 0;padding-left:18px;font-size:15px;line-height:1.65}
@@ -200,7 +206,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* 오른쪽 패널 (640px 이하에서는 아래에서 올라오는 시트) */
 .scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;transition:opacity var(--fast)}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--bg);border-left:1px solid var(--line-hover);
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--card);border-left:1px solid var(--line-hover);
   display:flex;flex-direction:column;transform:translateX(100%);transition:transform var(--fast)}
 .drawer.on{transform:none} .scrim.on{opacity:1} .drawer[hidden],.scrim[hidden]{display:none}
 .drawer-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line);font-size:13px;color:var(--text-sub)}
@@ -258,7 +264,7 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
 <script>
 /* ───────── 예시 데이터 (실제 데이터 아님) ─────────
    events: d 날짜, tone up/down/flat, imp 크기 0~3(flat은 0), g 공시 유형 묶음, t 공시 제목(DART 원문 그대로 보여주는 자리),
-           by 판정 방법(제목 규칙 / 본문 숫자 / AI), r 판단에 준 영향 한 줄, s 핵심 3줄(AI 요약, 선택)
+           by 판정 방법(제목 규칙 / 본문 숫자 / AI), r 무슨 일인지 쉬운 말 한 줄(목록의 주인공, 사실만), s 핵심 3줄(AI 요약, 선택)
    fin: 억원 [올해 누적, 작년 같은 기간], mg 영업이익률 %
    판단은 데이터에 없고 화면에서 events로 계산한다(점수는 코드가 계산) */
 const ASOF = "2026-11-06";
@@ -269,15 +275,15 @@ const DB = {
   watch:[["2026-11-13","기업설명회(IR) 개최","IR"],["2026-12-31","분기 배당 기준일","배당"]],
   events:[
    {d:"2026-11-05",tone:"up",imp:1,g:"공급계약",by:"본문 숫자",t:"단일판매ㆍ공급계약체결",r:"계약 금액이 최근 매출액의 1.2%",s:["메모리 반도체 공급 계약을 체결","계약 금액은 최근 매출액의 1.2%","계약 기간은 2027년 12월까지"]},
-   {d:"2026-11-04",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"임원ㆍ주요주주특정증권등소유상황보고서",r:"매매가 아닌 변동(주식 보상)이라 중립"},
+   {d:"2026-11-04",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"임원ㆍ주요주주특정증권등소유상황보고서",r:"임원이 주식 보상을 받아 보유 주식이 바뀜(매매 아님)"},
    {d:"2026-11-03",tone:"up",imp:1,g:"출자·지분 취득",by:"AI",t:"타법인주식및출자증권취득결정",r:"반도체 패키징 업체 지분 취득, 자기자본의 0.4%",s:["반도체 패키징 업체의 지분을 취득","취득 금액은 자기자본의 0.4%","취득 목적은 공급망 확보라고 밝힘"]},
-   {d:"2026-11-03",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"일정 안내라 판단에 넣지 않음"},
+   {d:"2026-11-03",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"11월 13일 기업설명회 개최 안내"},
    {d:"2026-10-28",tone:"up",imp:2,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"3분기 영업이익이 1년 전보다 13% 증가",s:["3분기 잠정 영업이익이 1년 전보다 13% 증가","매출액은 7% 증가","확정 실적은 분기보고서로 다시 나옴"]},
    {d:"2026-10-24",tone:"down",imp:1,g:"기타 경영사항",by:"AI",t:"기타경영사항(자율공시)",r:"중국 공장 장비 반입 제한 관련 안내",s:["중국 공장으로 들이는 일부 장비에 제한이 생겼다고 안내","생산 영향은 아직 정해지지 않았다고 밝힘","후속 공시가 나오면 다시 판정함"]},
    {d:"2026-10-21",tone:"down",imp:1,g:"소송",by:"본문 숫자",t:"소송등의제기ㆍ신청(일정금액이상의청구)",r:"특허 침해 소송 피소, 청구 금액은 자기자본의 0.3%",s:["해외 업체가 특허 침해 손해배상 소송을 제기","청구 금액은 자기자본의 0.3%","회사는 법적 절차로 대응한다고 밝힘"]},
-   {d:"2026-10-15",tone:"up",imp:2,g:"주주환원",by:"제목 규칙",t:"주요사항보고서(자기주식취득결정)",r:"자기주식 취득은 호재로 정한 공시 유형",s:["보통주 자기주식 취득을 결정","취득 예정 금액 3조 원","취득 기간은 2027년 2월까지"]},
+   {d:"2026-10-15",tone:"up",imp:2,g:"주주환원",by:"제목 규칙",t:"주요사항보고서(자기주식취득결정)",r:"자기주식 3조 원 취득 결정",s:["보통주 자기주식 취득을 결정","취득 예정 금액 3조 원","취득 기간은 2027년 2월까지"]},
    {d:"2026-09-18",tone:"down",imp:2,g:"소송",by:"AI",t:"소송등의판결ㆍ결정",r:"특허 소송 1심에서 배상 판결"},
-   {d:"2026-08-12",tone:"flat",imp:0,g:"정기보고서",by:"제목 규칙",t:"반기보고서 (2026.06)",r:"정기보고서는 판단에 넣지 않음"},
+   {d:"2026-08-12",tone:"flat",imp:0,g:"정기보고서",by:"제목 규칙",t:"반기보고서 (2026.06)",r:"2026년 반기보고서 제출"},
    {d:"2026-07-31",tone:"up",imp:2,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"2분기 영업이익이 1년 전보다 9% 증가"},
    {d:"2026-07-03",tone:"down",imp:1,g:"공급계약",by:"본문 숫자",t:"단일판매ㆍ공급계약해지",r:"해지된 계약 금액이 최근 매출액의 0.8%"}]},
  "000660":{name:"SK하이닉스",market:"코스피",sector:"반도체",
@@ -290,7 +296,7 @@ const DB = {
    {d:"2026-10-29",tone:"up",imp:2,g:"공급계약",by:"본문 숫자",t:"단일판매ㆍ공급계약체결",r:"계약 금액이 최근 매출액의 18%",s:["고대역폭 메모리 공급 계약을 체결","계약 금액은 최근 매출액의 18%","계약 기간은 2027년 12월까지"]},
    {d:"2026-10-22",tone:"up",imp:3,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"3분기 영업이익이 1년 전보다 71% 증가",s:["3분기 잠정 영업이익이 1년 전보다 71% 증가","분기 기준 사상 최대","매출액은 35% 증가"]},
    {d:"2026-10-15",tone:"up",imp:2,g:"주주환원",by:"본문 숫자",t:"현금ㆍ현물배당결정",r:"분기 주당 배당금이 1년 전보다 늘어남",s:["분기 현금 배당을 결정","주당 배당금이 1년 전 같은 분기보다 늘어남","배당 기준일은 9월 30일"]},
-   {d:"2026-10-08",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"주식등의대량보유상황보고서(일반)",r:"보유 비율 변동 없음"},
+   {d:"2026-10-08",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"주식등의대량보유상황보고서(일반)",r:"대량 보유자의 보유 비율 변동 없음 보고"},
    {d:"2026-09-10",tone:"down",imp:1,g:"기타 경영사항",by:"AI",t:"기타경영사항(자율공시)",r:"생산 라인 일부 점검으로 가동 일시 중단 안내"},
    {d:"2026-07-24",tone:"up",imp:3,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"2분기 영업이익이 1년 전보다 55% 증가"},
    {d:"2026-06-20",tone:"up",imp:2,g:"공급계약",by:"본문 숫자",t:"단일판매ㆍ공급계약체결",r:"계약 금액이 최근 매출액의 11%"}]},
@@ -299,7 +305,7 @@ const DB = {
   fin:{rev:[1296000,1287000],op:[93000,108000],ni:[78000,94000]},
   watch:[["2026-12-02","11월 판매 실적 공시 예정","실적"]],
   events:[
-   {d:"2026-11-04",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"일정 안내라 판단에 넣지 않음"},
+   {d:"2026-11-04",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"11월 기업설명회 개최 안내"},
    {d:"2026-11-01",tone:"down",imp:2,g:"기타 경영사항",by:"AI",t:"기타경영사항(자율공시)",r:"북미 수출 관세 비용을 4분기 실적에 반영한다고 안내",s:["북미 수출 차량의 관세 비용 증가를 안내","4분기 실적에 반영할 예정","구체적인 금액은 밝히지 않음"]},
    {d:"2026-10-24",tone:"up",imp:2,g:"주주환원",by:"본문 숫자",t:"주식소각결정",r:"발행주식총수의 1.0%를 소각",s:["보통주 자기주식 소각을 결정","소각 주식은 발행주식총수의 1.0%","소각 예정일은 11월 20일"]},
    {d:"2026-10-23",tone:"down",imp:3,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"3분기 영업이익이 1년 전보다 14% 감소",s:["3분기 잠정 영업이익이 1년 전보다 14% 감소","매출액은 1% 증가","영업이익률은 7.2%로 1년 전 8.4%보다 낮아짐"]},
@@ -321,8 +327,8 @@ const DB = {
   fin:{rev:[59000,57000],op:[3900,3600],ni:[2100,1800]},
   watch:[],
   events:[
-   {d:"2026-11-02",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"임원ㆍ주요주주특정증권등소유상황보고서",r:"매매가 아닌 변동(주식 보상)이라 중립"},
-   {d:"2026-10-30",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"일정 안내라 판단에 넣지 않음"},
+   {d:"2026-11-02",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"임원ㆍ주요주주특정증권등소유상황보고서",r:"임원이 주식 보상을 받아 보유 주식이 바뀜(매매 아님)"},
+   {d:"2026-10-30",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"11월 기업설명회 개최 안내"},
    {d:"2026-09-20",tone:"down",imp:2,g:"소송",by:"AI",t:"소송등의판결ㆍ결정",r:"손해배상 소송 1심에서 일부 패소"},
    {d:"2026-08-07",tone:"up",imp:2,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"2분기 영업이익이 1년 전보다 12% 증가"}]}
 };
@@ -363,9 +369,8 @@ const CHEV = `<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentC
 const AI = `<span class="ai">AI 요약</span>`;
 const DART = "https://dart.fss.or.kr/";
 const PAGE = 6;
-const byTxt = by => by==="AI" ? `<span class="by-ai">판정 AI</span>` : `<span>판정 ${by}</span>`;
 
-let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, fail:false, dv:null };
+let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, how:false, fail:false, dv:null };
 let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
 const $ = id => document.getElementById(id);
 let G = null; /* 차트 기하 정보 (호버용) */
@@ -394,7 +399,7 @@ function chart(co){
     if(!u && !d && f) bars += `<rect x="${bx}" y="${ym-2}" width="${bw.toFixed(1)}" height="4" rx="1" fill="var(--flat)" opacity=".6"/>`; }
   const si = state.sel && IDX[state.sel]!=null && IDX[state.sel]>=from ? IDX[state.sel] : null, hw = Math.max(cw, 8);
   const selMark = si==null ? "" : `<rect x="${(x(si)-hw/2).toFixed(1)}" y="${T}" width="${hw.toFixed(1)}" height="${SB-T}" fill="var(--fill-selected)"/>
-    <line x1="${x(si)}" x2="${x(si)}" y1="${T}" y2="${SB}" stroke="var(--text)" stroke-width="1"/><circle cx="${x(si)}" cy="${y(S[si-from])}" r="5" fill="var(--text)" stroke="var(--bg)" stroke-width="2"/>`;
+    <line x1="${x(si)}" x2="${x(si)}" y1="${T}" y2="${SB}" stroke="var(--text)" stroke-width="1"/><circle cx="${x(si)}" cy="${y(S[si-from])}" r="5" fill="var(--text)" stroke="var(--card)" stroke-width="2"/>`;
   const mid = from+Math.round(n/2);
   G = { from, n, L, W, H, T, PB, SB, cw, S, byDay };
   return `<div class="chart-box"><svg class="chart" id="svg" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="${co.name} ${periodOf(state.period)[1]} 판단 추이와 일별 공시. 좌우 방향키로 날짜를 옮길 수 있어요">
@@ -432,10 +437,9 @@ function dvHTML(co, e){
     : `<div class="dv-box"><h3>요약</h3><p style="margin:0">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
   const how = `<div class="dv-box"><h3>어떻게 판정했나요</h3><p class="how">${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
   return `<div class="dv">
-    <div class="dv-meta num"><span class="chip">${e.g}</span><span>${ymd(e.d)} · DART 공시</span></div>
-    <h2 class="dv-title" id="dv-title">${esc(e.t)}</h2>
-    <div class="dv-verdict num"><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}</div>
-    <p class="dv-r">${esc(e.r)}</p>
+    <div class="dv-verdict num"><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}<span>${ymd(e.d)} · ${e.g}</span></div>
+    <h2 class="dv-title" id="dv-title">${esc(e.r)}</h2>
+    <p class="dv-src-title">DART 공시 제목 · ${esc(e.t)}</p>
     <p class="dv-in">${inJudge}</p>
     ${sum}${how}
     <a class="btn dv-src" href="${DART}" target="_blank" rel="noopener">DART에서 원문 보기 ↗</a>
@@ -449,9 +453,8 @@ const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
 
 /* 판단 근거 한 줄 = 공시 한 건 */
 const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e))}">
-    <span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><span class="t">${esc(e.t)}</span><span class="arr" aria-hidden="true">›</span>
-    <span class="r">${esc(e.r)}</span>
-    <span class="s num"><span class="chip">${e.g}</span><span>${md(e.d)} · DART</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}${byTxt(e.by)}</span></button></li>`;
+    <span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><span class="r">${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span>
+    <span class="s num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
 
 function judgeCard(co){
   const day = state.fail ? DATES[LAST-1] : ASOF;
@@ -459,8 +462,9 @@ function judgeCard(co){
   const dir = recent.filter(e=>e.tone!=="flat"), nUp = dir.filter(e=>e.tone==="up").length, nDn = dir.length-nUp;
   const head = `<div class="jh"><b>최근 공시 기준 판단</b><span class="num">${md(day)} 기준 · 최근 30일 공시</span></div>`;
   const failBox = state.fail ? `<div class="fail"><span>${md(ASOF)} 공시 분석이 끝나지 않아 ${md(day)} 판단을 보여주고 있어요. 새 공시는 다음 분석 때 반영돼요.</span><button type="button" class="btn" data-retry><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>다시 불러오기</button></div>` : "";
-  const foot = `<p class="how">공시마다 호재·악재와 크기를 정하고(제목 규칙, 본문 숫자, 나머지는 AI), 판단은 최근 30일 공시의 크기를 더해 코드가 계산해요. 같은 공시면 언제 계산해도 같은 결과가 나와요.</p>
-    <p class="notice">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요. 공시마다 DART 원문으로 확인할 수 있어요.</p>`;
+  const foot = `<div class="foot"><p class="notice">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p>
+      <button type="button" class="more-btn" data-toggle="how" aria-expanded="${state.how}">계산 방식${CHEV}</button></div>
+    ${state.how?`<p class="how">공시마다 호재·악재와 크기를 정하고(제목 규칙, 본문 숫자, 나머지는 AI), 판단은 최근 30일 공시의 크기를 더해 코드가 계산해요. 같은 공시면 언제 계산해도 같은 결과가 나와요. 공시마다 DART 원문으로 확인할 수 있어요.</p>`:""}`;
 
   if(now.hold){
     return `<section class="judge hold" aria-label="판단">${head}
@@ -559,7 +563,7 @@ function render(){
     <p class="sub">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
     ${chart(co)}
     ${selList ? `<div class="day num"><div class="h"><b>${selHead}</b>${selMove}</div>
-        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><button type="button" class="t" data-dv="${esc(keyOf(e))}">${esc(e.t)} ›</button><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.r)}${e.imp?" · 크기 "+SIZE[e.imp]:""}</span></li>`).join("")}</ul>`
+        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><button type="button" class="t" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
           : `<p class="empty">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
         <div class="nav"><button type="button" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>← 이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""} →</button></div></div>`
       : `<p class="hint">그래프를 누르면 그날의 판단과 공시가 보여요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}
@@ -583,7 +587,7 @@ function render(){
       ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d">${md(d)}</span><span class="n plan"></span><span class="static"><span class="t">${t}</span><span class="s">${s} · 예정</span></span></li>`).join("")}
       <li class="today-row"><span class="d">${md(ASOF)}</span><span class="n today"></span><span class="static"><span class="t">오늘 · <span class="${vCls}">${vText}</span></span><span class="s">최근 공시 기준 판단</span></span></li>
       ${shownPast.map(e=>`<li><span class="d">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true"></span><div>
-          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="t">${esc(e.t)}<span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span></span><span class="s"><span class="chip">${e.g}</span>${esc(e.r)} <span aria-hidden="true">›</span></span></button>
+          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="t"><span class="sr">${TONE[e.tone]}: </span>${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span><span class="s">${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button>
         </div></li>`).join("")}
     </ul>
     ${past.length>PAGE ? `<button type="button" class="more" data-more>${state.more?"접기":`지난 공시 ${past.length-PAGE}건 더 보기`}</button>` : ""}
@@ -640,7 +644,7 @@ function showSug(){ const m=matches(q.value); hi=-1;
   sug.innerHTML = m.length ? m.map(c=>`<button type="button" data-c="${c}"><span>${DB[c].name}</span><span class="m">${c} · ${DB[c].market}</span></button>`).join("")
     : `<div class="none">데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</div>`;
   sug.hidden=false; }
-function pick(c){ if(!c) return; state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,fail:state.fail,dv:null}; q.value=DB[c].name; sug.hidden=true; render(); window.scrollTo({top:0,behavior:"smooth"}); }
+function pick(c){ if(!c) return; state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,how:false,fail:state.fail,dv:null}; q.value=DB[c].name; sug.hidden=true; render(); window.scrollTo({top:0,behavior:"smooth"}); }
 q.addEventListener("input",showSug); q.addEventListener("focus",showSug);
 q.addEventListener("keydown",e=>{ const bs=[...sug.querySelectorAll("button")];
   if(e.key==="ArrowDown") hi=Math.min(bs.length-1,hi+1); else if(e.key==="ArrowUp") hi=Math.max(0,hi-1);
