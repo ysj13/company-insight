@@ -4,16 +4,18 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
 <style>
-/* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시, 펼치면 핵심 3줄 + 원문).
+/* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
+   ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
    검정 바탕이 기본이다. 색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
   --bg:#000; --surface:#0b0d10;
-  --text:#fafafa; --text-sub:#a1a1a1; --text-faint:#7a7a7a;
+  --text:#fafafa; --text-sub:#a1a1a1; --text-faint:#888888;
   --tint:255,255,255;
   --line:rgba(var(--tint),.08); --line-hover:rgba(var(--tint),.16); --line-selected:rgba(var(--tint),.30); --line-strong:rgba(var(--tint),.28);
   --fill-hover:rgba(var(--tint),.05); --fill-selected:rgba(var(--tint),.11); --focus:rgba(var(--tint),.45);
   --up:#f04452; --up-soft:rgba(240,68,82,.14); --down:#3182f6; --down-soft:rgba(49,130,246,.16); --flat:#a1a1a1; --flat-soft:rgba(var(--tint),.08);
   --ai:#a78bfa; --ai-soft:rgba(167,139,250,.14);
+  --scrim:rgba(0,0,0,.6);
   --radius:16px; --radius-sm:10px; --radius-pill:999px; --fast:.2s cubic-bezier(.4,0,.2,1);
   --font:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   color-scheme:dark;
@@ -64,7 +66,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .jh b{font-size:15px;font-weight:700;color:var(--text)}
 .vrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
 .badge{display:inline-flex;align-items:center;gap:6px;border-radius:var(--radius-pill);padding:6px 14px;font-size:20px;font-weight:800;letter-spacing:-.02em;border:1.5px solid currentColor;line-height:1.3}
-.badge .sh{font-size:14px}
+.badge .sh{font-size:13px}
 .badge.up.strong{background:var(--up);border-color:var(--up);color:var(--bg)}
 .badge.down.strong{background:var(--down);border-color:var(--down);color:var(--bg)}
 .badge.flat{color:var(--text-sub)}
@@ -77,7 +79,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .ticks{display:flex;justify-content:space-between;font-size:13px;color:var(--text-faint)}
 .lede{font-size:17px;font-weight:500;line-height:1.65;margin-top:18px}
 .ai{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ai);background:var(--ai-soft);border-radius:var(--radius-pill);padding:1px 9px;vertical-align:2px;margin-right:6px;white-space:nowrap}
-.stale{opacity:.45}
+.stale{opacity:.55} /* 분석 실패 때 지난 판단. .55면 본문이 검정 위 6:1 */
 .fail{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid var(--line-hover);border-radius:12px;font-size:13px;color:var(--text-sub)}
 .btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--line-hover);font-size:15px;color:var(--text);transition:border-color var(--fast),background var(--fast)}
 .btn:hover{border-color:var(--line-selected);background:var(--fill-hover)}
@@ -89,11 +91,12 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}
-.ev a{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:12px 10px;margin:0 -10px;border-radius:12px;text-decoration:none;transition:background var(--fast)}
-.ev a:hover{background:var(--fill-hover)}
-.ev a:active{background:var(--fill-selected)}
+.ev .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:12px 10px;margin:0 -10px;width:calc(100% + 20px);border-radius:12px;transition:background var(--fast)}
+.ev .row:hover{background:var(--fill-hover)}
+.ev .row:active,.ev .row[aria-current="true"]{background:var(--fill-selected)}
 .tone{font-size:13px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;margin-top:2px}
-.tone.up{background:var(--up-soft);color:var(--up)} .tone.down{background:var(--down-soft);color:var(--down)} .tone.flat{background:var(--flat-soft);color:var(--text-sub)}
+/* 칩 배경은 바탕(--bg) 위에 한 번 겹친 색으로 고정한다. 선택된 줄 위에서도 글자 대비가 떨어지지 않게 */
+.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--bg);color:var(--up)} .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--bg);color:var(--down)} .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--bg);color:var(--text-sub)}
 .ev .t{font-size:15px;font-weight:700;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
 .ev .arr{color:var(--text-faint);font-size:13px;padding-top:2px}
 .ev .r{grid-column:2/4;font-size:15px;color:var(--text);line-height:1.5}
@@ -109,6 +112,8 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .counter h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
 .counter p{font-size:15px;line-height:1.55}
 .counter .s{font-size:13px;color:var(--text-faint);margin-top:4px}
+.counter .link{font-size:13px;color:var(--text-sub);min-height:32px;padding:4px 0;margin-top:2px;text-align:left;transition:color var(--fast)}
+.counter .link:hover{color:var(--text);text-decoration:underline}
 .how{font-size:13px;color:var(--text-faint);margin-top:16px;line-height:1.6}
 .notice{font-size:13px;color:var(--text-sub);margin-top:6px}
 .empty{font-size:13px;color:var(--text-sub);padding:8px 0}
@@ -170,14 +175,45 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .tl .today-row .t{font-weight:800} .tl .today-row .d{color:var(--text);font-weight:700}
 .tl .plan-row .t{color:var(--text-sub)}
 .tl .lbl{grid-column:3;font-size:13px;color:var(--text-faint);font-weight:700;padding:8px 10px 0}
-.detail{margin:4px 10px 8px;background:var(--surface);border-radius:12px;padding:12px 14px}
-.detail ul{margin:8px 0 0;padding-left:18px;font-size:15px;line-height:1.6}
-.detail .foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--text-faint)}
-.detail a{display:inline-flex;align-items:center;min-height:36px;font-weight:700;color:var(--text)}
+.tl .item[aria-current="true"]{background:var(--fill-selected)}
 .more{display:block;width:100%;text-align:center;min-height:44px;padding:12px 0 2px;font-size:13px;color:var(--text-sub);font-weight:500}
 .more:hover{color:var(--text)}
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
+.day button.t{font-weight:700;font-size:15px;line-height:1.45;text-align:left}
+.day button.t:hover{text-decoration:underline}
+
+/* ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 패널이 열린다 */
+.dv-meta{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-faint)}
+.dv-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-top:10px;word-break:keep-all;overflow-wrap:anywhere}
+.dv-verdict{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-sub);margin-top:14px}
+.dv-verdict .tone{font-size:15px;padding:2px 10px;margin:0}
+.dv-r{font-size:17px;font-weight:500;line-height:1.55;margin-top:10px}
+.dv-in{font-size:13px;color:var(--text-sub);margin-top:6px}
+.dv-box{margin-top:18px;background:var(--surface);border-radius:12px;padding:14px 16px}
+.dv-box h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
+.dv-box ul{margin:8px 0 0;padding-left:18px;font-size:15px;line-height:1.65}
+.dv-box p{font-size:13px;color:var(--text-faint);margin-top:8px}
+.dv-box .how{margin-top:0;font-size:15px;color:var(--text)}
+.dv-src{margin-top:18px;width:100%;justify-content:center;font-weight:700;text-decoration:none}
+.dv .notice{margin-top:10px}
+
+/* 오른쪽 패널 (640px 이하에서는 아래에서 올라오는 시트) */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;transition:opacity var(--fast)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--bg);border-left:1px solid var(--line-hover);
+  display:flex;flex-direction:column;transform:translateX(100%);transition:transform var(--fast)}
+.drawer.on{transform:none} .scrim.on{opacity:1} .drawer[hidden],.scrim[hidden]{display:none}
+.drawer-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line);font-size:13px;color:var(--text-sub)}
+.drawer-h .btn{min-width:44px;justify-content:center;padding:8px 10px;border-color:transparent}
+.drawer-b{flex:1;overflow:auto;padding:20px 20px 24px;overscroll-behavior:contain}
+.drawer-f{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:6px 12px}
+.drawer-f button{min-height:44px;font-size:13px;color:var(--text-sub);font-weight:500;padding:0 8px;border-radius:var(--radius-sm);transition:color var(--fast),background var(--fast)}
+.drawer-f button:hover:not(:disabled){color:var(--text);background:var(--fill-hover)}
+.drawer-f button:disabled{opacity:.4;cursor:default}
+@media (max-width:640px){
+  .drawer{top:auto;left:0;width:auto;max-height:88vh;border-left:0;border-top:1px solid var(--line-hover);border-radius:var(--radius) var(--radius) 0 0;transform:translateY(100%)}
+  .drawer-f{padding-bottom:max(6px,env(safe-area-inset-bottom,0px))}
+}
 
 footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8px 40px;line-height:1.8}
 .demo-ctl{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px}
@@ -189,6 +225,7 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
   .card,.judge{padding:20px 16px} .fin{grid-template-columns:1fr 1fr} .fin dd{font-size:17px} .disc .sum{display:none} h1{font-size:24px}
   .badge{font-size:17px}
 }
+@media (pointer:coarse){ .seg button{min-height:44px} } /* 손가락으로 누르는 기기는 44px */
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 
@@ -203,6 +240,13 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
 </header>
 
 <main class="inner gutter" id="app"></main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dv-title" hidden>
+  <div class="drawer-h"><span id="drawer-co"></span><button type="button" class="btn" data-close aria-label="공시 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="drawer-b" id="drawer-b"></div>
+  <div class="drawer-f" id="drawer-f"></div>
+</aside>
 
 <footer class="gutter">
   데모 화면 · 회사 이름 말고는 공시, 수치, 요약 모두 예시예요<br>
@@ -304,7 +348,8 @@ function scoreAt(co, iso){
   for(const e of co.events){ const k=t-dnum(e.d); if(k>=0 && k<WINDOW){ list.push(e); if(e.tone==="up") U+=e.imp; else if(e.tone==="down") D+=e.imp; } }
   return { s:(U-D)/(U+D+DAMP), U, D, list, hold: U+D===0 };
 }
-const verdictOf = s => s>=0.45?["강한 호재","up",true]:s>=0.15?["약한 호재","up",false]:s>-0.15?["중립","flat",false]:s>-0.45?["약한 악재","down",false]:["강한 악재","down",true];
+const BAND = 0.15, STRONG = 0.45; /* 단계 경계. 그래프의 선 색도 같은 경계를 쓴다 */
+const verdictOf = s => s>=STRONG?["강한 호재","up",true]:s>=BAND?["약한 호재","up",false]:s>-BAND?["중립","flat",false]:s>-STRONG?["약한 악재","down",false]:["강한 악재","down",true];
 const SHAPE = {up:"▲",down:"▼",flat:"—"};
 const SIZE = ["","작음","보통","큼"];
 
@@ -320,7 +365,8 @@ const DART = "https://dart.fss.or.kr/";
 const PAGE = 6;
 const byTxt = by => by==="AI" ? `<span class="by-ai">판정 AI</span>` : `<span>판정 ${by}</span>`;
 
-let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, open:{}, fail:false };
+let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, fail:false, dv:null };
+let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
 const $ = id => document.getElementById(id);
 let G = null; /* 차트 기하 정보 (호버용) */
 
@@ -332,7 +378,7 @@ function chart(co){
   const S = DATES.slice(from).map(d=>scoreAt(co,d).s);
   const W=680,H=270,L=4,R=74,T=12,PB=158,ST=176,B=26, SB=H-B, ym=(ST+SB)/2;
   const cw = (W-L-R)/n;
-  const x = i => L+cw*(i-from), y = v => T+(PB-T)*(1-(v+1)/2), y0 = y(0);
+  const x = i => L+cw*(i-from), y = v => T+(PB-T)*(1-(v+1)/2), y0 = y(0), yU = y(BAND), yD = y(-BAND);
   const pts = S.map((v,j)=>`${x(from+j).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const area = `${x(from).toFixed(1)},${y0} ${pts} ${x(LAST).toFixed(1)},${y0}`;
   const grid = [[1,"강한 호재"],[0.5,""],[0,"중립"],[-0.5,""],[-1,"강한 악재"]].map(([v,l])=>
@@ -352,11 +398,12 @@ function chart(co){
   const mid = from+Math.round(n/2);
   G = { from, n, L, W, H, T, PB, SB, cw, S, byDay };
   return `<div class="chart-box"><svg class="chart" id="svg" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="${co.name} ${periodOf(state.period)[1]} 판단 추이와 일별 공시. 좌우 방향키로 날짜를 옮길 수 있어요">
-    <defs><clipPath id="cu"><rect x="0" y="0" width="${W}" height="${y0}"/></clipPath><clipPath id="cd"><rect x="0" y="${y0}" width="${W}" height="${PB-y0}"/></clipPath></defs>
+    <defs><clipPath id="cu"><rect x="0" y="0" width="${W}" height="${yU}"/></clipPath><clipPath id="cf"><rect x="0" y="${yU}" width="${W}" height="${yD-yU}"/></clipPath><clipPath id="cd"><rect x="0" y="${yD}" width="${W}" height="${PB-yD+2}"/></clipPath></defs>
     ${grid}
     <polygon points="${area}" fill="var(--up-soft)" clip-path="url(#cu)"/><polygon points="${area}" fill="var(--down-soft)" clip-path="url(#cd)"/>
     <polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cu)"/>
     <polyline points="${pts}" fill="none" stroke="var(--down)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cd)"/>
+    <polyline points="${pts}" fill="none" stroke="var(--flat)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cf)"/>
     <line x1="${L}" x2="${W-R}" y1="${ym}" y2="${ym}" stroke="var(--line-hover)"/>
     <text x="${W-R+8}" y="${ST+10}">호재 공시</text><text x="${W-R+8}" y="${SB-2}">악재 공시</text>
     ${bars}
@@ -367,11 +414,44 @@ function chart(co){
   </svg><div class="tip" id="tip"></div></div>`;
 }
 
+/* ───────── 공시 한 건 (오른쪽 패널) ─────────
+   판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 패널이 열린다. 내용은 dvHTML 하나.
+   공시마다 주소(#d=…)를 붙여 공유와 뒤로 가기가 된다. 실제 화면에서는 DART 접수번호를 쓴다. */
+const keyOf = e => e.d+"|"+e.t+"|"+e.r;
+const findEv = (co,key) => co.events.find(e=>keyOf(e)===key);
+const sorted = co => [...co.events].sort((a,b)=>b.d.localeCompare(a.d));
+const BY_HOW = {"제목 규칙":"제목만으로 판정하는 공시 유형이라 본문을 읽지 않았어요.","본문 숫자":"본문 표의 숫자를 코드가 읽어 판정했어요.","AI":"본문의 글을 AI가 읽고 판정했어요."};
+const ymd = iso => iso.replaceAll("-",".");
+
+function dvHTML(co, e){
+  const age = dnum(ASOF)-dnum(e.d);
+  const inJudge = e.tone==="flat" ? "중립이라 판단 계산에 넣지 않았어요."
+    : age<WINDOW ? "최근 30일 공시라 지금 판단에 들어가 있어요." : "30일이 지나 지금 판단에는 들어가지 않아요.";
+  const sum = e.s
+    ? `<div class="dv-box">${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p>요약의 금액·비율·날짜는 코드가 원문과 맞는지 확인했어요.</p></div>`
+    : `<div class="dv-box"><h3>요약</h3><p style="margin:0">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
+  const how = `<div class="dv-box"><h3>어떻게 판정했나요</h3><p class="how">${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
+  return `<div class="dv">
+    <div class="dv-meta num"><span class="chip">${e.g}</span><span>${ymd(e.d)} · DART 공시</span></div>
+    <h2 class="dv-title" id="dv-title">${esc(e.t)}</h2>
+    <div class="dv-verdict num"><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}</div>
+    <p class="dv-r">${esc(e.r)}</p>
+    <p class="dv-in">${inJudge}</p>
+    ${sum}${how}
+    <a class="btn dv-src" href="${DART}" target="_blank" rel="noopener">DART에서 원문 보기 ↗</a>
+    <p class="notice">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p></div>`;
+}
+
+/* 이전·다음 공시 (날짜순, 이전 = 더 오래된 공시) */
+function neighbors(co,key){ const l=sorted(co), i=l.findIndex(e=>keyOf(e)===key); return { older:l[i+1]||null, newer:l[i-1]||null }; }
+const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
+  return `<button type="button" data-step="${older?esc(keyOf(older)):""}" ${older?"":"disabled"}>← 이전 공시${older?" "+md(older.d):""}</button><button type="button" data-step="${newer?esc(keyOf(newer)):""}" ${newer?"":"disabled"}>다음 공시${newer?" "+md(newer.d):""} →</button>`; };
+
 /* 판단 근거 한 줄 = 공시 한 건 */
-const evRow = e => `<li><a href="${DART}" target="_blank" rel="noopener">
-  <span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><span class="t">${esc(e.t)}</span><span class="arr" aria-hidden="true">↗</span>
-  <span class="r">${esc(e.r)}</span>
-  <span class="s num"><span class="chip">${e.g}</span><span>${md(e.d)} · DART</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}${byTxt(e.by)}</span></a></li>`;
+const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e))}">
+    <span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><span class="t">${esc(e.t)}</span><span class="arr" aria-hidden="true">›</span>
+    <span class="r">${esc(e.r)}</span>
+    <span class="s num"><span class="chip">${e.g}</span><span>${md(e.d)} · DART</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}${byTxt(e.by)}</span></button></li>`;
 
 function judgeCard(co){
   const day = state.fail ? DATES[LAST-1] : ASOF;
@@ -399,7 +479,7 @@ function judgeCard(co){
   const opp = vCls==="up" ? neg[0] : vCls==="down" ? pos[0] : null;
   const counter = vCls==="flat"
     ? `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>호재 ${nUp}건(크기 합 ${now.U})과 악재 ${nDn}건(크기 합 ${now.D})이 비슷하게 맞서 있어요. 새 공시 한 건으로 판단이 바뀔 수 있어요.</p></div>`
-    : opp ? `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>${esc(opp.r)}</p><p class="s num">${TONE[opp.tone]} · ${esc(opp.t)} · ${md(opp.d)}</p></div>`
+    : opp ? `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>${esc(opp.r)}</p><button type="button" class="link num" data-dv="${esc(keyOf(opp))}">${TONE[opp.tone]} · ${esc(opp.t)} · ${md(opp.d)} ›</button></div>`
     : `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>최근 30일에 ${vCls==="up"?"악재":"호재"}로 판정된 공시는 없었어요.</p></div>`;
 
   return `<section class="judge" aria-label="판단">${head}
@@ -418,6 +498,33 @@ function judgeCard(co){
     ${counter}
     ${foot}</section>`;
 }
+
+function fillDrawer(co,e){ const key=keyOf(e);
+  $("drawer-co").textContent = `${co.name} · 공시 한 건`;
+  $("drawer-b").innerHTML = dvHTML(co,e); $("drawer-b").scrollTop = 0;
+  $("drawer-f").innerHTML = navBtns(co,key);
+  markCurrent(key); }
+/* 패널에 열린 공시의 줄을 선택 상태로 표시 */
+const markCurrent = key => document.querySelectorAll("#app [data-dv]").forEach(b=>{ if(key && b.dataset.dv===key) b.setAttribute("aria-current","true"); else b.removeAttribute("aria-current"); });
+function openDrawer(key, from){
+  const co=DB[state.code], e=findEv(co,key); if(!e) return;
+  const wasOpen = !!state.dv; state.dv=key; if(from) opener=from;
+  fillDrawer(co,e);
+  const d=$("drawer"), s=$("scrim");
+  if(!wasOpen){ d.hidden=false; s.hidden=false; setInert(true);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ d.classList.add("on"); s.classList.add("on"); })); }
+  d.querySelector("[data-close]").focus({preventScroll:true}); }
+const setInert = on => ["header","#app","footer"].forEach(sel=>{ document.querySelector(sel).inert=on; });
+function closeDrawer(){ if(!state.dv) return; state.dv=null;
+  const d=$("drawer"), s=$("scrim"); d.classList.remove("on"); s.classList.remove("on"); setInert(false);
+  setTimeout(()=>{ if(!state.dv){ d.hidden=true; s.hidden=true; } }, 220);
+  markCurrent(null);
+  if(opener && document.contains(opener)) opener.focus({preventScroll:true}); }
+
+/* 주소: 패널을 열면 공시 주소(#d=…)가 붙고, 뒤로 가기로 닫힌다 */
+function go(key, how){ const url = "#d="+encodeURIComponent(key);
+  try{ if(how==="replace") history.replaceState({key},"",url); else history.pushState({key},"",url); }catch(_){ /* 주소를 바꿀 수 없는 미리보기 */ } }
+window.addEventListener("popstate",ev=>{ const key = ev.state && ev.state.key; if(key) openDrawer(key); else closeDrawer(); });
 
 function render(){
   const co = DB[state.code];
@@ -452,7 +559,7 @@ function render(){
     <p class="sub">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
     ${chart(co)}
     ${selList ? `<div class="day num"><div class="h"><b>${selHead}</b>${selMove}</div>
-        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><a class="t" href="${DART}" target="_blank" rel="noopener">${esc(e.t)} ↗</a><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.r)}${e.imp?" · 크기 "+SIZE[e.imp]:""}</span></li>`).join("")}</ul>`
+        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><button type="button" class="t" data-dv="${esc(keyOf(e))}">${esc(e.t)} ›</button><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.r)}${e.imp?" · 크기 "+SIZE[e.imp]:""}</span></li>`).join("")}</ul>`
           : `<p class="empty">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
         <div class="nav"><button type="button" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>← 이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""} →</button></div></div>`
       : `<p class="hint">그래프를 누르면 그날의 판단과 공시가 보여요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}
@@ -475,12 +582,9 @@ function render(){
       ${plans.length?`<li><span></span><span></span><span class="lbl">다가오는 일정 ${plans.length}건</span></li>`:""}
       ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d">${md(d)}</span><span class="n plan"></span><span class="static"><span class="t">${t}</span><span class="s">${s} · 예정</span></span></li>`).join("")}
       <li class="today-row"><span class="d">${md(ASOF)}</span><span class="n today"></span><span class="static"><span class="t">오늘 · <span class="${vCls}">${vText}</span></span><span class="s">최근 공시 기준 판단</span></span></li>
-      ${shownPast.map(e=>{ const key=e.d+e.t+e.r, op=!!state.open[key];
-        return `<li><span class="d">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true"></span><div>
-          <button type="button" class="item" data-open="${esc(key)}" aria-expanded="${op}"><span class="t">${esc(e.t)}<span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span></span><span class="s"><span class="chip">${e.g}</span>${esc(e.r)} ${CHEV}</span></button>
-          ${op?`<div class="detail">${e.s?`${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:`<p class="empty" style="padding:0">이 공시는 요약하지 않았어요. 판정은 ${e.by}로 했어요.</p>`}
-            <div class="foot num"><span>${e.imp?"크기 "+SIZE[e.imp]+" · ":""}${byTxt(e.by)}</span><a href="${DART}" target="_blank" rel="noopener">DART 원문 ↗</a></div></div>`:""}
-        </div></li>`; }).join("")}
+      ${shownPast.map(e=>`<li><span class="d">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true"></span><div>
+          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="t">${esc(e.t)}<span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span></span><span class="s"><span class="chip">${e.g}</span>${esc(e.r)} <span aria-hidden="true">›</span></span></button>
+        </div></li>`).join("")}
     </ul>
     ${past.length>PAGE ? `<button type="button" class="more" data-more>${state.more?"접기":`지난 공시 ${past.length-PAGE}건 더 보기`}</button>` : ""}
   </section>`;
@@ -507,17 +611,24 @@ function bindHover(co){
     pickDay(Math.max(from,Math.min(LAST,cur+(ev.key==="ArrowRight"?1:-1)))); });
 }
 
+/* 닫기: 공시 주소가 붙어 있으면 뒤로 가기와 같게 처리한다 */
+function dismiss(){ if(history.state && history.state.key){ history.back(); return; } closeDrawer(); }
+document.addEventListener("keydown",ev=>{ if(ev.key==="Escape" && state.dv){ ev.preventDefault(); dismiss(); } });
+
 function setDemo(fail){ state.fail=fail; document.querySelectorAll("[data-demo]").forEach(b=>b.setAttribute("aria-pressed", String((b.dataset.demo==="fail")===fail))); render(); }
 
 document.addEventListener("click",ev=>{
-  const t=ev.target.closest("[data-period],[data-go],[data-toggle],[data-more],[data-open],[data-retry],[data-demo]"); if(!t) return;
+  if(ev.target.id==="scrim"){ dismiss(); return; }
+  const t=ev.target.closest("[data-period],[data-go],[data-toggle],[data-more],[data-retry],[data-demo],[data-dv],[data-step],[data-close]"); if(!t) return;
   const d=t.dataset;
+  if(d.dv!=null){ go(d.dv, state.dv?"replace":"push"); openDrawer(d.dv, t); return; }
+  if(d.step!=null){ if(!d.step) return; go(d.step,"replace"); openDrawer(d.step); return; }
+  if("close" in d){ dismiss(); return; }
   if(d.demo){ setDemo(d.demo==="fail"); if(d.demo==="fail") window.scrollTo({top:0,behavior:"smooth"}); return; }
   if("retry" in d){ setDemo(false); const j=document.querySelector(".judge"); if(j){ j.classList.add("is-new"); } return; }
   if(d.period){ state.period=d.period; if(state.sel && IDX[state.sel] < LAST-periodOf(d.period)[2]) state.sel=null; }
   else if(d.go!=null){ if(!d.go) return; state.sel=d.go; }
   else if(d.toggle) state[d.toggle]=!state[d.toggle];
-  else if(d.open!=null) state.open[d.open]=!state.open[d.open];
   else if("more" in d) state.more=!state.more;
   render();
 });
@@ -529,7 +640,7 @@ function showSug(){ const m=matches(q.value); hi=-1;
   sug.innerHTML = m.length ? m.map(c=>`<button type="button" data-c="${c}"><span>${DB[c].name}</span><span class="m">${c} · ${DB[c].market}</span></button>`).join("")
     : `<div class="none">데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</div>`;
   sug.hidden=false; }
-function pick(c){ if(!c) return; state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,open:{},fail:state.fail}; q.value=DB[c].name; sug.hidden=true; render(); window.scrollTo({top:0,behavior:"smooth"}); }
+function pick(c){ if(!c) return; state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,fail:state.fail,dv:null}; q.value=DB[c].name; sug.hidden=true; render(); window.scrollTo({top:0,behavior:"smooth"}); }
 q.addEventListener("input",showSug); q.addEventListener("focus",showSug);
 q.addEventListener("keydown",e=>{ const bs=[...sug.querySelectorAll("button")];
   if(e.key==="ArrowDown") hi=Math.min(bs.length-1,hi+1); else if(e.key==="ArrowUp") hi=Math.max(0,hi-1);
