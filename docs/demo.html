@@ -396,7 +396,8 @@ const verdictOf = s => s>=STRONG?["강한 호재","up",true]:s>=BAND?["약한 �
 const SHAPE = {up:"▲",down:"▼",flat:"—"};
 const SIZE = ["","작음","보통","큼"];
 
-const won = v => v.toLocaleString("ko-KR");
+/* 금액(억 원 단위 값)을 읽기 쉬운 단위로: 1조 이상은 소수 둘째 자리까지 "237.3조", "1.63조", 그 아래는 "3,900억" */
+const won = v => v>=10000 ? `${(v/10000).toLocaleString("ko-KR",{maximumFractionDigits:2})}조` : `${v.toLocaleString("ko-KR")}억`;
 const pct = (v,d=1) => (v>0?"+":"")+(v*100).toFixed(d)+"%";
 const toneOf = v => v>0?"up":v<0?"down":"flat";
 const md = iso => iso.slice(5).replace("-",".");
@@ -614,10 +615,10 @@ function render(){
     <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2>실적</h2>
       <span class="sum num">영업이익 <b class="${toneOf(og)}">${pct(og)}</b>${CHEV}</span></button>
     ${state.fin ? `<dl class="fin num">
-        <div><dt>매출액</dt><dd>${won(f.rev[0])}억<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
-        <div><dt>영업이익</dt><dd>${won(f.op[0])}억<small class="${toneOf(og)}">1년 전보다 ${pct(og)}</small></dd></div>
+        <div><dt>매출액</dt><dd>${won(f.rev[0])}<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
+        <div><dt>영업이익</dt><dd>${won(f.op[0])}<small class="${toneOf(og)}">1년 전보다 ${pct(og)}</small></dd></div>
         <div><dt>영업이익률</dt><dd>${mg0.toFixed(1)}%<small class="${toneOf(mgd)}">${mgd>0?"+":""}${mgd.toFixed(1)}%p</small></dd></div>
-        <div><dt>순이익</dt><dd>${won(f.ni[0])}억<small class="${toneOf(ng)}">1년 전보다 ${pct(ng)}</small></dd></div></dl>
+        <div><dt>순이익</dt><dd>${won(f.ni[0])}<small class="${toneOf(ng)}">1년 전보다 ${pct(ng)}</small></dd></div></dl>
       <p class="note">2026년 3분기 누적 · 연결 기준 · 출처 DART</p>` : ""}
   </section>
 
