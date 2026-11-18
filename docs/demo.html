@@ -71,9 +71,6 @@ h1,.badge{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spaci
 .i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .i *{vector-effect:non-scaling-stroke}
 .i.sm{width:16px;height:16px}
-/* 모양 기호(호재 ▲, 악재 ▼, 중립 —): 채운 도형. 색만으로 구분하지 않으려고 붙인다 */
-.shape{width:12px;height:12px;flex:none;fill:currentColor;stroke:none}
-.badge .shape{width:20px;height:20px}
 
 /* ───────── 부품 ───────── */
 /* 버튼: 주(밝은 면, 화면에 하나), 보조(회색 면 + 테두리), 글자형(면 없음), 아이콘(44px 정사각) */
@@ -95,7 +92,7 @@ h1,.badge{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spaci
 .seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
 .seg button:active{background:var(--btn-press);color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
-/* 칩(누를 수 없는 표시): 호재·악재·중립과 AI. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정한다(선택된 줄 위에서도 대비가 같게) */
+/* 칩(누를 수 없는 표시): 호재·악재·중립과 AI. 기호 없이 글자로 쓴다(색만으로 구분하지 않게 글자가 늘 보인다). 면은 불투명 카드색 위에 겹친 옅은 색으로 고정한다(선택된 줄 위에서도 대비가 같게) */
 .tone,.ai,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-sm);white-space:nowrap}
 .tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
 .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
@@ -103,7 +100,7 @@ h1,.badge{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spaci
 .ai{color:var(--ai);background:linear-gradient(var(--ai-soft),var(--ai-soft)),var(--card);box-shadow:0 0 0 1px var(--ai-line),0 0 14px var(--ai-glow);vertical-align:1px;margin-right:var(--s2)}
 .chip{color:var(--text-sub);border:1px solid var(--line-hover)}
 .by-ai{color:var(--ai)}
-/* 판단 이름: 상자 없이 큰 글자 + 모양 기호. 상자를 두르면 버튼처럼 보인다. 색이 뜻(호재 빨강, 악재 파랑), 중립은 본문색, 판단 보류는 보조색 */
+/* 판단 이름: 상자 없이 큰 글자. 기호를 붙이지 않는다(글자가 뜻을 전한다). 상자를 두르면 버튼처럼 보인다. 색이 뜻(호재 빨강, 악재 파랑), 중립은 본문색, 판단 보류는 보조색 */
 .badge{display:inline-flex;align-items:center;gap:var(--s2)}
 .badge.up{color:var(--up)} .badge.down{color:var(--down)} .badge.flat{color:var(--text)} .badge.hold{color:var(--text-sub)}
 /* 입력창 */
@@ -120,6 +117,7 @@ h1,.badge{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spaci
 .row:active,.row[aria-current="true"]{background:var(--fill-selected)}
 .row .go{color:var(--text-faint);margin-top:calc((1.5em - 16px) / 2)}
 .row .meta{grid-column:2/4}
+.tw-m{display:none;font-weight:600}
 /* 카드: 한 색의 면(925) + 가는 회색 테두리(800). 누를 수 없어서 hover가 없다 */
 .card,.judge{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s6);min-width:0}
 /* 카드 안의 칸(반대로 볼 점, 날짜 목록, 실적 칸, 패널의 칸, 빈 상태) */
@@ -216,10 +214,11 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .tl::before{content:"";position:absolute;left:calc(48px + var(--s1) + 22px);top:var(--s3);bottom:var(--s3);width:1px;margin-left:-.5px;background:var(--line-hover)}
 .tl>li{display:grid;grid-template-columns:48px 44px minmax(0,1fr);gap:0 var(--s1);padding:var(--s1) 0;align-items:start}
 .tl .d{text-align:right;padding-top:var(--s3);white-space:nowrap}
-/* 선 위의 표시: 호재 ▲, 악재 ▼(모양 기호), 중립 ●, 예정 ○, 오늘 큰 ●. 카드색 칸이 선을 끊어 준다 */
+/* 선 위의 표시: 색 점(호재 빨강, 악재 파랑, 중립 회색), 예정 빈 점, 오늘 큰 점. 뜻은 둘째 줄 앞의 글자가 전한다. 카드색 칸이 선을 끊어 준다 */
 .tl .n{width:16px;height:16px;margin:var(--s3) auto 0;display:grid;place-items:center;background:var(--card);position:relative;z-index:1}
-.tl .n.up{color:var(--up)} .tl .n.down{color:var(--down)}
-.tl .n.flat::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--flat)}
+.tl .n:is(.up,.down,.flat)::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--flat)}
+.tl .n.up::after{background:var(--up)} .tl .n.down::after{background:var(--down)}
+.tl .item .tw{font-weight:600}
 .tl .n.plan::after{content:"";width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--text-faint)}
 .tl .n.today::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--text)}
 .tl .item{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r-md);transition:background var(--fast)}
@@ -271,7 +270,8 @@ footer{text-align:center;padding-block:var(--s2) var(--s12);line-height:1.8}
 .demo-ctl{justify-content:center;margin-top:var(--s3)}
 
 @media (max-width:600px){
-  .ev .tone .tw{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap} /* 휴대폰: 칩은 모양만, 글자는 화면 읽기용 */
+  /* 휴대폰: 근거 줄의 칩을 빼고 둘째 줄 앞에 호재·악재 글자(타임라인과 같은 모양). 쉬운 말 한 줄이 꺾이지 않게 */
+  .ev .row{grid-template-columns:minmax(0,1fr) auto} .ev .row>.tone{display:none} .ev .row .meta{grid-column:1} .tw-m{display:inline}
   .card,.judge{padding:var(--s6) var(--s4)} .fin{grid-template-columns:1fr 1fr} .disc .sum .v{display:none}
   h1,.badge{font-size:24px} .fin dd{font-size:var(--fs-card)}
 }
@@ -428,11 +428,6 @@ const IC = {
 };
 const icon = (k,cls) => svg(IC[k],cls);
 const CHEV = icon("expand","sm chev");
-/* 모양 기호: 호재 ▲, 악재 ▼, 중립 —. 글꼴마다 모양이 달라지는 글자 대신 채운 도형으로 그린다 */
-const SHAPE = {
-  up:  `<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10H1z"/></svg>`,
-  down:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5 1 2h10z"/></svg>`,
-  flat:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="5" width="9" height="2" rx="1"/></svg>`};
 const SIZE = ["","작음","보통","큼"];
 
 /* 금액(억 원 단위 값)을 읽기 쉬운 단위로: 1조 이상은 소수 둘째 자리까지 "237.3조", "1.63조", 그 아래는 "3,900억" */
@@ -520,7 +515,7 @@ function dvHTML(co, e){
     : `<div class="box"><h3 class="box-title">요약</h3><p class="meta">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
   const how = `<div class="box"><h3 class="box-title">어떻게 판정했나요</h3><p>${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
   return `<div class="dv">
-    <div class="dv-verdict meta num"><span class="tone ${e.tone}">${SHAPE[e.tone]}${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}<span>${ymd(e.d)} · ${e.g}</span></div>
+    <div class="dv-verdict meta num"><span class="tone ${e.tone}">${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}<span>${ymd(e.d)} · ${e.g}</span></div>
     <h2 class="dv-title" id="dv-title">${esc(e.r)}</h2>
     <p class="meta">DART 공시 제목 · ${esc(e.t)}</p>
     <p class="dv-in meta faint">${inJudge}</p>
@@ -536,8 +531,8 @@ const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
 
 /* 판단 근거 한 줄 = 공시 한 건 */
 const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e))}">
-    <span class="tone ${e.tone}">${SHAPE[e.tone]}<span class="tw">${TONE[e.tone]}</span></span><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}
-    <span class="meta faint num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
+    <span class="tone ${e.tone}">${TONE[e.tone]}</span><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}
+    <span class="meta faint num"><span class="tw-m ${e.tone}">${TONE[e.tone]} · </span>${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
 
 function judgeCard(co){
   const fail = state.view==="fail";
@@ -574,7 +569,7 @@ function judgeCard(co){
 
   return `<section class="judge" aria-label="판단">${head}
     <div class="${fail?"stale":""}">
-      <div class="vrow"><span class="badge ${vCls}">${SHAPE[vCls]}${vText}</span>
+      <div class="vrow"><span class="badge ${vCls}">${vText}</span>
         <span class="meta num">근거 공시 ${dir.length}건 · 호재 ${nUp} · 악재 ${nDn}</span></div>
       <div class="barrow meta faint"><span aria-hidden="true">악재</span><div class="bar" role="img" aria-label="호재·악재 정도: ${vText}. 가운데가 중립"><i class="fill ${vCls}" style="left:${fillL}%;width:${fillW}%"></i><i class="mid"></i></div><span aria-hidden="true">호재</span></div>
       <p class="lede ai-box">${AI}${esc(co.lede)}</p>
@@ -666,7 +661,7 @@ function render(){
     : `<p class="meta">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
     ${chart(co)}
     ${selList ? `<div class="day box num"><div class="h meta"><b class="row-title" style="color:var(--text)">${selHead}</b>${selMove}</div>
-        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]}${TONE[e.tone]}</span><button type="button" class="t row-title" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="meta faint">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
+        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${TONE[e.tone]}</span><button type="button" class="t row-title" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="meta faint">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
           : `<p class="meta" style="padding:var(--s2) 0">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
         <div class="nav"><button type="button" class="tbtn" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>${icon("prev","sm")}이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" class="tbtn" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""}${icon("open","sm")}</button></div></div>`
       : `<p class="meta faint">그래프를 누르면 그날의 판단과 공시가 보여요. 점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}`;
@@ -709,8 +704,8 @@ function render(){
       ${plans.length?`<li><span></span><span></span><span class="lbl box-title">다가오는 일정 ${plans.length}건</span></li>`:""}
       ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d meta faint">${md(d)}</span><span class="n plan"></span><span class="static"><span class="row-title">${t}</span><span class="meta faint">${s} · 예정</span></span></li>`).join("")}
       <li class="today-row"><span class="d meta">${md(ASOF)}</span><span class="n today"></span><span class="static"><span class="row-title">오늘 · <span class="${vCls}">${vText}</span></span><span class="meta faint">최근 공시 기준 판단</span></span></li>
-      ${shownPast.map(e=>`<li><span class="d meta faint">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true">${e.tone==="flat"?"":SHAPE[e.tone]}</span><div>
-          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="row-title"><span class="sr">${TONE[e.tone]}: </span>${esc(e.r)}</span>${icon("open","sm go")}<span class="meta faint">${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button>
+      ${shownPast.map(e=>`<li><span class="d meta faint">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true"></span><div>
+          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}<span class="meta faint"><span class="tw ${e.tone}">${TONE[e.tone]}</span> · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button>
         </div></li>`).join("")}
       ${none?`<li><span></span><span></span><div class="tl-empty">${emptyBox("아직 모은 공시가 없어요","새 공시가 들어오면 여기에 날짜순으로 쌓여요. 수집은 5분마다 해요.")}</div></li>`:""}
     </ul>
