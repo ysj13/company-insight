@@ -2,27 +2,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>기업 인사이트 데모</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 /* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
    ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
-   짙은 회색 바탕의 어두운 테마가 기본이다(순수 검정은 글자가 번져 보여 쓰지 않는다). 면은 바탕 → 카드 → 안쪽 칸 순서로 한 단계씩 밝아진다.
+   분위기: 다크, 테크, AI, 모던, 심플, 가독성, 글래스모피즘. 짙은 남색 바탕 위에 옅은 빛이 고정돼 있고, 카드는 그 빛을 흐리게 비추는 유리 면이다.
+   유리는 읽기를 해치지 않는 만큼만 쓴다: 글자 대비 4.5:1 이상, 배경 빛은 뜻이 있는 색(빨강·파랑·보라)을 쓰지 않는다, 움직이지 않는다.
    색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
-  --bg:#121417; --card:#1a1d21; --surface:#22262b;
-  --text:#e8e9eb; --text-sub:#a8adb3; --text-faint:#949aa1;
+  --bg:#10131a; --card:#1a1e26; /* --card는 유리 카드와 같은 색의 불투명 면. 유리를 못 쓸 때, 카드 안 칸과 칩의 바탕에 쓴다 */
+  --glass:rgba(24,28,36,.72); --glass-sheen:rgba(var(--tint),.04); --glass-edge:rgba(var(--tint),.08); --glass-hi:rgba(var(--tint),.16); --glass-blur:20px; /* 어두운 유리: 뒤 빛이 28%만 비친다 */
+  --glass-solid:rgba(22,26,33,.84); /* 위에 떠 있는 유리(상단 바, 패널): 뒤 글자가 비쳐 읽기를 방해하지 않게 더 짙게 */
+  --surface:rgba(var(--tint),.045); /* 카드 안의 한 단계 들어간 칸 */
+  --glow-a:rgba(96,112,150,.40); --glow-b:rgba(70,92,120,.30); --grid:rgba(var(--tint),.028); /* 배경 빛: 저채도 남색, 뜻 없음 */
+  --text:#e8e9eb; --text-sub:#b0b5bb; --text-faint:#9ba1a8;
   --tint:255,255,255;
   --line:rgba(var(--tint),.07); --line-hover:rgba(var(--tint),.16); --line-selected:rgba(var(--tint),.30); --line-strong:rgba(var(--tint),.22);
   --fill-hover:rgba(var(--tint),.05); --fill-selected:rgba(var(--tint),.08); --focus:rgba(var(--tint),.55);
-  --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --flat:#a8adb3; --flat-soft:rgba(var(--tint),.08);
+  --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --flat:#b0b5bb; --flat-soft:rgba(var(--tint),.08);
   --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12);
   --scrim:rgba(0,0,0,.55);
   --radius:16px; --radius-sm:10px; --radius-pill:999px; --fast:.2s cubic-bezier(.4,0,.2,1);
-  --font:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased}
+/* 배경: 움직이지 않는 저채도 빛 두 개와 아래로 갈수록 흐려지는 격자. 유리 카드가 비출 거리를 만든다 */
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(60vw 50vh at 12% -5%,var(--glow-a),transparent 70%),radial-gradient(55vw 55vh at 100% 35%,var(--glow-b),transparent 70%),
+    linear-gradient(var(--grid) 1px,transparent 1px) 0 0/48px 48px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/48px 48px;
+  -webkit-mask-image:linear-gradient(#000 0,#000 45%,rgba(0,0,0,.5));mask-image:linear-gradient(#000 0,#000 45%,rgba(0,0,0,.5))}
 h1,h2,h3,p{margin:0} h1,h2{text-wrap:balance}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left}
@@ -32,9 +42,9 @@ button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;paddin
 .gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .inner{max-width:720px;margin:0 auto}
 
-/* 상단 바: 멈춰 있는 옅은 사선 그라데이션 */
-.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;border-bottom:1px solid var(--line);
-  background:linear-gradient(135deg,rgba(var(--tint),.05) 0%,transparent 28%),linear-gradient(135deg,transparent 34%,rgba(var(--tint),.035) 42%,transparent 52%),var(--bg)}
+/* 상단 바: 위에 떠 있는 유리. 뒤로 지나가는 글자가 비치지 않게 짙게 */
+.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;border-bottom:1px solid var(--glass-edge);
+  background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(140%);backdrop-filter:blur(var(--glass-blur)) saturate(140%)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .appbar .inner{display:flex;align-items:center;gap:14px;padding-block:12px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.02em;white-space:nowrap}
@@ -44,15 +54,16 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .search input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:0 14px;font:inherit;font-size:15px;transition:border-color var(--fast)}
 .search input::placeholder{color:var(--text-faint)}
 .search input:hover{border-color:var(--line-hover)}
-.sug{position:absolute;left:0;right:0;top:50px;background:var(--surface);border:1px solid var(--line-hover);border-radius:12px;overflow:hidden;z-index:30}
+.sug{position:absolute;left:0;right:0;top:50px;background:var(--card);border:1px solid var(--line-hover);border-radius:12px;overflow:hidden;z-index:30}
 .sug button{display:flex;justify-content:space-between;gap:10px;width:100%;min-height:44px;align-items:center;padding:10px 14px;font-size:15px;transition:background var(--fast)}
 .sug button:hover,.sug button.on{background:var(--fill-hover)}
 .sug .m{color:var(--text-faint);font-size:13px;white-space:nowrap}
 .sug .none{padding:11px 14px;color:var(--text-sub);font-size:13px}
 
 main.inner{display:grid;gap:20px;padding-block:28px 48px}
-/* 카드는 선이 아니라 한 단계 밝은 면으로 묶는다 */
-.card{background:var(--card);border-radius:var(--radius);padding:24px;min-width:0}
+/* 카드는 유리 면: 옅은 흰 빛 + 뒤 배경 흐림 + 윗변이 조금 더 밝은 1px 가장자리(빛이 위에서 온다) */
+.card,.judge{background:linear-gradient(180deg,var(--glass-sheen),transparent 120px),var(--glass);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(140%);backdrop-filter:blur(var(--glass-blur)) saturate(140%);
+  border:1px solid var(--glass-edge);border-top-color:var(--glass-hi);border-radius:var(--radius);padding:24px;min-width:0;box-shadow:0 12px 32px rgba(0,0,0,.28)}
 .card>h2,.sec-h h2{font-size:17px;font-weight:700}
 .sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .divider{height:1px;border:0;margin:20px 0;background:linear-gradient(90deg,transparent,rgba(var(--tint),.12) 50%,transparent)}
@@ -62,7 +73,7 @@ main.inner{display:grid;gap:20px;padding-block:28px 48px}
 h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* ① 판단 카드: 화면에서 유일하게 2px 테두리 */
-.judge{background:var(--card);border:2px solid var(--line-strong);border-radius:var(--radius);padding:24px;min-width:0}
+.judge{border-width:2px;border-color:var(--line-strong);border-top-color:rgba(var(--tint),.30)}
 .judge.hold{border-style:dashed}
 .jh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text-sub)}
 .jh b{font-size:15px;font-weight:700;color:var(--text)}
@@ -80,7 +91,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px}
 .ticks{display:flex;justify-content:space-between;font-size:13px;color:var(--text-faint)}
 .lede{font-size:17px;font-weight:500;line-height:1.65;margin-top:18px}
-.ai{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ai);background:var(--ai-soft);border-radius:var(--radius-pill);padding:1px 9px;vertical-align:2px;margin-right:6px;white-space:nowrap}
+.ai{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ai);background:linear-gradient(var(--ai-soft),var(--ai-soft)),var(--card);border-radius:var(--radius-pill);padding:1px 9px;vertical-align:2px;margin-right:6px;white-space:nowrap;box-shadow:0 0 0 1px rgba(167,139,250,.22),0 0 14px rgba(167,139,250,.18)}
 .stale{opacity:.6} /* 분석 실패 때 지난 판단 */
 .fail{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid var(--line-hover);border-radius:12px;font-size:13px;color:var(--text-sub)}
 .btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--line-hover);font-size:15px;color:var(--text);transition:border-color var(--fast),background var(--fast)}
@@ -111,7 +122,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .chev{width:16px;height:16px;transition:transform var(--fast);flex:none}
 [aria-expanded="true"] .chev{transform:rotate(180deg)}
 .group-h{font-size:13px;color:var(--text-faint);margin:12px 0 0}
-.counter{margin-top:14px;background:var(--surface);border-radius:12px;padding:14px 16px}
+.counter{margin-top:14px;background:linear-gradient(var(--surface),var(--surface)),var(--card);border-radius:12px;padding:14px 16px}
 .counter h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
 .counter p{font-size:15px;line-height:1.55}
 .counter .s{font-size:13px;color:var(--text-faint);margin-top:4px}
@@ -136,7 +147,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .chart .cross{stroke:var(--text-faint);stroke-dasharray:3 3;display:none}
 .chart .hdot{fill:var(--text);stroke:var(--card);stroke-width:2;display:none}
 .tip{position:absolute;pointer-events:none;display:none;background:var(--text);color:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px;white-space:nowrap;transform:translate(-50%,-125%)}
-.day{margin-top:10px;background:var(--surface);border-radius:12px;padding:12px 14px}
+.day{margin-top:10px;background:linear-gradient(var(--surface),var(--surface)),var(--card);border-radius:12px;padding:12px 14px}
 .day .h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--text-sub);flex-wrap:wrap}
 .day .h b{font-weight:700;font-size:15px;color:var(--text)}
 .day ul{list-style:none;margin:6px 0 0;padding:0}
@@ -157,7 +168,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* ③ 실적: 정보용 칸이라 hover 없음 */
 .fin{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 0}
-.fin div{background:var(--surface);border-radius:12px;padding:14px}
+.fin div{background:linear-gradient(var(--surface),var(--surface)),var(--card);border-radius:12px;padding:14px}
 .fin dt{font-size:13px;color:var(--text-sub)} .fin dd{margin:2px 0 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
 .fin dd small{display:block;font-size:13px;font-weight:700}
 .note{font-size:13px;color:var(--text-faint);margin-top:10px}
@@ -196,7 +207,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 .dv-verdict{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-sub)}
 .dv-verdict .tone{font-size:15px;padding:2px 10px;margin:0}
 .dv-in{font-size:13px;color:var(--text-faint);margin-top:12px}
-.dv-box{margin-top:18px;background:var(--surface);border-radius:12px;padding:14px 16px}
+.dv-box{margin-top:18px;background:linear-gradient(var(--surface),var(--surface)),var(--card);border-radius:12px;padding:14px 16px}
 .dv-box h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
 .dv-box ul{margin:8px 0 0;padding-left:18px;font-size:15px;line-height:1.65}
 .dv-box p{font-size:13px;color:var(--text-faint);margin-top:8px}
@@ -206,7 +217,7 @@ h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
 
 /* 오른쪽 패널 (640px 이하에서는 아래에서 올라오는 시트) */
 .scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;transition:opacity var(--fast)}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--card);border-left:1px solid var(--line-hover);
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--glass-solid);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%);border-left:1px solid var(--glass-hi);
   display:flex;flex-direction:column;transform:translateX(100%);transition:transform var(--fast)}
 .drawer.on{transform:none} .scrim.on{opacity:1} .drawer[hidden],.scrim[hidden]{display:none}
 .drawer-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line);font-size:13px;color:var(--text-sub)}
@@ -232,6 +243,9 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
   .badge{font-size:17px}
 }
 @media (pointer:coarse){ .seg button{min-height:44px} } /* 손가락으로 누르는 기기는 44px */
+/* 유리를 못 쓰는 브라우저, 투명도 줄이기를 켠 사용자: 불투명 면으로 */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ .card,.judge{background:var(--card)} .appbar,.drawer{background:var(--card)} }
+@media (prefers-reduced-transparency:reduce){ .card,.judge{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none} .appbar,.drawer{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none} body::after{display:none} }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
 
