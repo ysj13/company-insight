@@ -228,7 +228,7 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
 
-/* 상태 안내 카드(불러오기 오류): 넓은 화면에서도 한 줄 전체 */
+/* 상태 안내 카드(불러오기 오류) */
 .state-card .meta{margin-top:var(--s2);font-size:var(--fs-body)}
 .state-card .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s6)}
 
@@ -519,7 +519,7 @@ const TYPES = [
 $("type-rows").innerHTML = TYPES.map(([n,s,u,ex])=>`<div class="type-row"><div>${ex}</div><div><p class="row-title">${n}</p><p class="meta">${s}<br>${u}</p></div></div>`).join("");
 
 /* 4. 간격 */
-const SPACE = [["--s1",4,"아이콘과 라벨 사이(13px 글자), 제목과 메타 사이"],["--s2",8,"아이콘과 글자 사이(15px), 칩 안 여백, 버튼 사이"],["--s3",12,"목록 줄 안 여백, 상단 바 위아래, 날짜 목록"],["--s4",16,"칸 안 여백, 카드 안 묶음 사이, 화면 양옆 여백"],["--s6",24,"카드 안 여백, 카드 사이, 두 단 사이, 패널 안 여백"],["--s8",32,"화면 위 여백"],["--s12",48,"화면 아래 여백, 이 페이지의 절 사이"]];
+const SPACE = [["--s1",4,"아이콘과 라벨 사이(13px 글자), 제목과 메타 사이"],["--s2",8,"아이콘과 글자 사이(15px), 칩 안 여백, 버튼 사이"],["--s3",12,"목록 줄 안 여백, 상단 바 위아래, 날짜 목록"],["--s4",16,"칸 안 여백, 카드 안 묶음 사이, 화면 양옆 여백"],["--s6",24,"카드 안 여백, 카드 사이, 패널 안 여백"],["--s8",32,"화면 위 여백"],["--s12",48,"화면 아래 여백, 이 페이지의 절 사이"]];
 $("space-rows").innerHTML = SPACE.map(([t,v,u])=>`<div class="space-row"><code class="meta">${t}</code><span class="meta num">${v}px</span><div><b style="width:${v*2}px"></b><p class="meta faint" style="margin-top:var(--s1)">${u}</p></div></div>`).join("");
 
 /* 5. 부품 × 상태 (상태를 멈춰서 보여준다) */

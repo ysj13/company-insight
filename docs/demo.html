@@ -231,7 +231,7 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
 
-/* 상태 안내 카드(불러오기 오류): 넓은 화면에서도 한 줄 전체 */
+/* 상태 안내 카드(불러오기 오류) */
 .state-card .meta{margin-top:var(--s2);font-size:var(--fs-body)}
 .state-card .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s6)}
 
@@ -269,15 +269,7 @@ footer{text-align:center;padding-block:var(--s2) var(--s12);line-height:1.8}
   .card,.judge{padding:var(--s6) var(--s4)} .fin{grid-template-columns:1fr 1fr} .disc .sum .v{display:none}
   h1,.badge{font-size:24px} .fin dd{font-size:var(--fs-card)}
 }
-/* 넓은 화면(1100px 이상): 두 단. 왼쪽에 판단 카드, 오른쪽에 판단 추이·실적·타임라인.
-   판단 카드를 화면에 고정하지 않는다: 카드가 화면보다 길어지면 카드 안에 스크롤이 하나 더 생겨 쓰기 불편하다 */
-@media (min-width:1100px){
-  .inner{max-width:1160px}
-  main.inner{grid-template-columns:minmax(0,460px) minmax(0,1fr);align-items:start;column-gap:var(--s6)}
-  main.inner>.co,main.inner>.state-card{grid-column:1/-1}
-  main.inner>.judge{grid-column:1;grid-row:2/span 3}
-  main.inner>.card{grid-column:2}
-}
+/* 넓은 화면도 한 단이다(최대 폭 720px, 가운데). 두 단으로 나누면 판단과 나머지가 동시에 보여 시선이 흩어지고, 판단이 주인공이라는 위계가 약해진다 */
 @media (pointer:coarse){ .seg button{min-height:44px} } /* 손가락으로 누르는 기기는 44px */
 /* 유리를 못 쓰는 브라우저, 투명도 줄이기를 켠 사용자: 상단 바와 패널을 불투명 바탕색으로 */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ .appbar,.drawer{background:var(--bg)} }
