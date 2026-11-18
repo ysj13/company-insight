@@ -6,256 +6,286 @@
 <style>
 /* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
    ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
-   분위기: 다크, 테크, AI, 모던, 심플, 가독성, 글래스모피즘. 색은 무채색만 쓰고, 뜻이 있는 색은 호재·악재·AI 셋뿐이다.
-   검정·회색은 아래 회색 단계표(한 계열) 중 하나만 쓴다. 면은 바탕 950 → 카드 925 → 안쪽 칸·버튼 900 → 선택 800으로 한 단계씩 밝아진다.
-   바탕은 한 색이다(빛·무늬 없음). 유리는 위에 떠 있는 상단 바와 공시 패널에만 쓴다.
-   색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
+   ⑥ 화면 상태: 불러오는 중(자리 표시), 분석 실패, 불러오기 오류, 공시 없는 회사, 검색 결과 없음. 화면 아래 "데모 화면 상태"로 바꿔 본다.
+   규칙은 DESIGN.md, 부품과 상태 전체는 design-system.html.
+   색·간격·모서리·글자 크기는 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
   /* 회색 단계표: 같은 계열(살짝 차가운 회색). 숫자가 작을수록 밝다 */
-  --g200:#e4e4e7; --g400:#a1a1aa; --g450:#93939c; --g600:#52525b; --g700:#3f3f46; --g800:#27272a; --g900:#18181b; --g925:#111113; --g950:#09090b;
+  --g200:#e4e4e7; --g300:#d4d4d8; --g400:#a1a1aa; --g450:#93939c; --g600:#52525b; --g700:#3f3f46; --g800:#27272a; --g900:#18181b; --g925:#111113; --g950:#09090b;
   --bg:var(--g950); /* 거의 검정. 순수 검정(#000) 위 순수 흰색은 글자가 번져 보여 둘 다 한 단계씩 낮춘다 */
   --card:var(--g925); /* 카드, 판단 카드 */
   --surface:var(--g900); /* 카드 안의 한 단계 들어간 칸, 입력창 */
-  --btn:var(--g900); /* 버튼·세그먼트의 바탕 */
   --glass-solid:rgba(9,9,11,.8); --glass-blur:24px; /* 위에 떠 있는 유리(상단 바, 패널): --g950을 80%로 */
   --text:var(--g200); --text-sub:var(--g400); --text-faint:var(--g450);
   --tint:255,255,255;
   --line:var(--g800); --line-hover:var(--g700); --line-selected:var(--g600); --line-strong:var(--g700);
-  --fill-hover:var(--g900); --fill-selected:var(--g800); --focus:rgba(var(--tint),.6);
+  /* 면의 상태: hover는 지금 면보다 한 단계, 누름·선택은 두 단계 밝게 */
+  --fill-hover:var(--g900); --fill-selected:var(--g800); /* 카드 위의 줄·글자형 버튼(기본 면 없음) */
+  --btn:var(--g900); --btn-hover:var(--g800); --btn-press:var(--g700); /* 보조 버튼·세그먼트(기본 면 900) */
+  --primary:var(--g200); --primary-hover:var(--g300); --primary-press:var(--g400); --on-primary:var(--g950); /* 주 버튼(밝은 면) */
+  --focus:rgba(var(--tint),.6);
   --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --up-line:rgba(255,92,105,.45); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --down-line:rgba(76,148,255,.45); --flat:var(--g400); --flat-soft:var(--g800);
-  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12); --ai-wash:rgba(167,139,250,.06); --ai-line:rgba(167,139,250,.32);
+  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12); --ai-wash:rgba(167,139,250,.06); --ai-line:rgba(167,139,250,.32); --ai-glow:rgba(167,139,250,.18);
   --scrim:rgba(0,0,0,.55);
-  --radius:16px; --radius-sm:10px; --radius-pill:999px; --fast:.2s cubic-bezier(.4,0,.2,1);
+  /* 간격: 4px 단계 일곱 개만 */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+  /* 모서리: 세 가지만. 큰 면(카드·패널) / 안쪽 것(칸·버튼·입력창·줄·목록) / 알약(칩·배지·세그먼트) */
+  --r-lg:16px; --r-md:12px; --r-full:999px;
+  /* 글자 크기: 다섯 개 + 좁은 화면의 화면 제목 24 */
+  --fs-title:28px; --fs-value:20px; --fs-card:17px; --fs-body:15px; --fs-small:13px;
+  --fast:.2s cubic-bezier(.4,0,.2,1);
   --font:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere} /* 한글은 단어 중간에서 줄을 바꾸지 않는다 */
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:var(--fs-body);font-weight:400;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere} /* 한글은 단어 중간에서 줄을 바꾸지 않는다 */
 h1,h2,h3,p{margin:0} h1,h2{text-wrap:balance}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left}
 :is(a,button,input,[tabindex]):focus-visible{outline:2px solid var(--focus);outline-offset:3px}
 .num{font-variant-numeric:tabular-nums}
 .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--flat)}
-.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.gutter{padding-left:max(var(--s4),env(safe-area-inset-left,0px));padding-right:max(var(--s4),env(safe-area-inset-right,0px))}
 .inner{max-width:720px;margin:0 auto}
 
-/* 상단 바: 위에 떠 있는 유리. 뒤로 지나가는 글자가 비치지 않게 짙게 */
-.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;border-bottom:1px solid var(--line);
-  background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur))}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-.appbar .inner{display:flex;align-items:center;gap:14px;padding-block:12px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.02em;white-space:nowrap}
-/* 로고: 둥근 칸을 흰 면으로 채우고 겹친 층 아이콘을 바탕색으로. 무채색 화면에서 또렷하게 */
-.logo .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--text);color:var(--bg)}
-.logo .mark svg{width:17px;height:17px}
-.search{flex:1;min-width:0;max-width:420px;position:relative}
-.search input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:0 14px;font:inherit;font-size:15px;transition:border-color var(--fast)}
-.search input::placeholder{color:var(--text-faint)}
-.search input:hover{border-color:var(--line-hover)}
-.sug{position:absolute;left:0;right:0;top:50px;background:var(--card);border:1px solid var(--line-hover);border-radius:12px;overflow:hidden;z-index:30}
-.sug button{display:flex;justify-content:space-between;gap:10px;width:100%;min-height:44px;align-items:center;padding:10px 14px;font-size:15px;transition:background var(--fast)}
-.sug button:hover,.sug button.on{background:var(--fill-hover)}
-.sug .m{color:var(--text-faint);font-size:13px;white-space:nowrap}
-.sug .none{padding:11px 14px;color:var(--text-sub);font-size:13px}
+/* ───────── 글자 역할: 이 여덟 가지만 쓴다 ───────── */
+/* 화면 제목 28/800 (폭 600px 이하 24) */
+h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03em}
+/* 큰 값 20/800: 판단 배지, 패널 제목, 실적 숫자 */
+.badge,.dv-title,.fin dd{font-size:var(--fs-value);font-weight:800;line-height:1.3;letter-spacing:-.02em}
+/* 카드 제목 17/700: 판단 카드를 포함한 모든 카드 제목, 로고 글자, 상태 안내의 제목 */
+.card-title,.logo{font-size:var(--fs-card);font-weight:700;line-height:1.4;letter-spacing:-.02em}
+/* 줄 제목 15/600: 목록 한 줄의 쉬운 말, 버튼 글자, 날짜 목록의 머리 */
+.row-title,.btn{font-size:var(--fs-body);font-weight:600;line-height:1.5}
+/* 본문 15/400: 문단, 요약 (body 기본값) */
+/* 칸 제목 13/700 보조색: 판단 근거, 반대로 볼 점, 패널 안 칸의 제목, 타임라인 묶음 이름 */
+.box-title{font-size:var(--fs-small);font-weight:700;line-height:1.5;color:var(--text-sub);letter-spacing:0}
+/* 라벨 13/600: 칩, AI 칩, 세그먼트 버튼, 글자형 버튼 */
+.chip,.tone,.ai,.seg button,.tbtn{font-size:var(--fs-small);font-weight:600;line-height:1.5;letter-spacing:0}
+/* 메타 13/400: 날짜·출처·원문 제목(옅은 색), 설명·고지(보조색) */
+.meta{font-size:var(--fs-small);font-weight:400;line-height:1.5;color:var(--text-sub);letter-spacing:0}
+.meta.faint{color:var(--text-faint)}
 
-main.inner{display:grid;gap:20px;padding-block:28px 48px}
-/* 카드: 한 색의 면(925) + 가는 회색 테두리(800). 그라데이션·반투명 없이 어디서나 같은 검정 */
-.card,.judge{background:var(--card);
-  border:1px solid var(--line);border-radius:var(--radius);padding:24px;min-width:0}
-.card>h2,.sec-h h2{font-size:17px;font-weight:700}
-.sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+/* ───────── 아이콘: 24 칸에 그린 선 아이콘, 선 굵기는 크기와 상관없이 1.5px ───────── */
+.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.i *{vector-effect:non-scaling-stroke}
+.i.sm{width:16px;height:16px}
+/* 모양 기호(호재 ▲, 악재 ▼, 중립 —): 채운 도형. 색만으로 구분하지 않으려고 붙인다 */
+.shape{width:12px;height:12px;flex:none;fill:currentColor;stroke:none}
+.badge .shape{width:16px;height:16px}
 
-/* 회사 머리: 이름이 먼저, 그 아래 한 줄. 판단 카드와 떨어뜨린다 */
-.co{padding:12px 0 8px}
-.co .meta{font-size:13px;color:var(--text-sub);margin-top:4px;letter-spacing:0}
-h1{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.3}
-
-/* ① 판단 카드: 화면에서 유일하게 2px 테두리 */
-.judge{border-width:2px;border-color:var(--line-strong);border-top-color:var(--line-selected)}
-.judge.hold{border-style:dashed}
-.jh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text-sub)}
-.jh b{font-size:15px;font-weight:700;color:var(--text)}
-.vrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
-.badge{display:inline-flex;align-items:center;gap:6px;border-radius:var(--radius-pill);padding:6px 16px;font-size:20px;font-weight:800;letter-spacing:-.02em;border:1px solid;line-height:1.3}
-/* 배지 면은 불투명 카드색 위에 겹친 옅은 색. 강한 호재·악재만 색으로 채운다 */
-.badge.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);border-color:var(--up-line)}
-.badge.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);border-color:var(--down-line)}
-.badge .sh{font-size:13px}
+/* ───────── 부품 ───────── */
+/* 버튼: 주(밝은 면, 화면에 하나), 보조(회색 면 + 테두리), 글자형(면 없음), 아이콘(44px 정사각) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-hover);background:var(--btn);color:var(--text);text-decoration:none;transition:border-color var(--fast),background var(--fast),color var(--fast)}
+.btn:hover{background:var(--btn-hover);border-color:var(--line-selected)}
+.btn:active{background:var(--btn-press)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.primary:active{background:var(--primary-press);border-color:var(--primary-press)}
+.btn.icon{min-width:44px;padding:0;border-color:transparent;background:none}
+.btn.icon:hover{background:var(--fill-hover)} .btn.icon:active{background:var(--fill-selected)}
+.tbtn{display:inline-flex;align-items:center;gap:var(--s1);text-decoration:none;min-height:44px;padding:0 var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-md);color:var(--text-sub);transition:color var(--fast),background var(--fast)}
+.tbtn:hover{color:var(--text);background:var(--fill-hover)}
+.tbtn:active{background:var(--fill-selected)}
+:is(.btn,.tbtn,.seg button):disabled{opacity:.4;cursor:default;pointer-events:none}
+/* 세그먼트(같은 내용을 다른 범위로 보는 선택만): 선택은 밝은 면 */
+.seg{display:inline-flex;gap:var(--s2);flex-wrap:wrap}
+.seg button{min-height:36px;padding:0 var(--s4);border-radius:var(--r-full);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);transition:border-color var(--fast),background var(--fast),color var(--fast)}
+.seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
+.seg button:active{background:var(--btn-press);color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
+/* 칩(누를 수 없는 표시): 호재·악재·중립과 AI. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정한다(선택된 줄 위에서도 대비가 같게) */
+.tone,.ai,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-full);white-space:nowrap}
+.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
+.tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
+.tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
+.ai{color:var(--ai);background:linear-gradient(var(--ai-soft),var(--ai-soft)),var(--card);box-shadow:0 0 0 1px var(--ai-line),0 0 14px var(--ai-glow);vertical-align:1px;margin-right:var(--s2)}
+.chip{color:var(--text-sub);border:1px solid var(--line-hover)}
+.by-ai{color:var(--ai)}
+/* 판단 배지: 옅은 색 면 + 가는 색 테두리, 강한 호재·악재만 색으로 채운다 */
+.badge{display:inline-flex;align-items:center;gap:var(--s2);border-radius:var(--r-full);padding:var(--s2) var(--s4);border:1px solid}
+.badge.up{color:var(--up);background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);border-color:var(--up-line)}
+.badge.down{color:var(--down);background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);border-color:var(--down-line)}
 .badge.up.strong{background:var(--up);border-color:var(--up);color:var(--bg)}
 .badge.down.strong{background:var(--down);border-color:var(--down);color:var(--bg)}
 .badge.flat{color:var(--text-sub);background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);border-color:var(--line-hover)}
 .badge.hold{color:var(--text-sub);border-color:var(--line-selected);border-style:dashed}
-.count{font-size:13px;color:var(--text-sub)}
-.barrow{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:13px;color:var(--text-faint)}
-.bar{flex:1;position:relative;height:8px;border-radius:4px;background:var(--flat-soft);overflow:hidden}
-.bar i{position:absolute;top:0;bottom:0;border-radius:5px}
-.bar .fill.up{background:var(--up)} .bar .fill.down{background:var(--down)} .bar .fill.flat{background:var(--flat)}
-.bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px}
-.lede{font-size:17px;font-weight:500;line-height:1.65;margin-top:18px}
-.ai{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ai);background:linear-gradient(var(--ai-soft),var(--ai-soft)),var(--card);border-radius:var(--radius-pill);padding:1px 9px;vertical-align:2px;margin-right:6px;white-space:nowrap;box-shadow:0 0 0 1px rgba(167,139,250,.22),0 0 14px rgba(167,139,250,.18)}
-.stale{opacity:.6} /* 분석 실패 때 지난 판단 */
-.fail{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid var(--line-hover);border-radius:12px;font-size:13px;color:var(--text-sub)}
-.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--line-hover);background:var(--btn);font-size:15px;color:var(--text);transition:border-color var(--fast),background var(--fast)}
-.btn:hover{border-color:var(--line-selected);background:var(--fill-hover)}
-.btn:active{background:var(--fill-selected)}
-.btn svg{width:15px;height:15px}
+/* 입력창 */
+.field{position:relative}
+.field .i{position:absolute;left:var(--s3);top:50%;margin-top:-10px;color:var(--text-faint);pointer-events:none}
+.field input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--text);padding:0 var(--s3) 0 40px;font:inherit;font-size:var(--fs-body);transition:border-color var(--fast)}
+.field input::placeholder{color:var(--text-faint)}
+.field input:hover{border-color:var(--line-hover)}
+.field input:focus{border-color:var(--line-selected)}
+.field input:disabled{opacity:.4;cursor:default}
+/* 목록 한 줄(누르면 패널이 열림): 기본 면 없음 → hover 900 → 누름·선택 800 */
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s1) var(--s3);align-items:start;padding:var(--s3);margin:0 calc(-1 * var(--s3));width:calc(100% + var(--s6));border-radius:var(--r-md);transition:background var(--fast)}
+.row:hover{background:var(--fill-hover)}
+.row:active,.row[aria-current="true"]{background:var(--fill-selected)}
+.row .go{color:var(--text-faint);margin-top:calc((1.5em - 16px) / 2)}
+.row .meta{grid-column:2/4}
+/* 카드: 한 색의 면(925) + 가는 회색 테두리(800). 누를 수 없어서 hover가 없다 */
+.card,.judge{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s6);min-width:0}
+/* 카드 안의 칸(반대로 볼 점, 날짜 목록, 실적 칸, 패널의 칸, 빈 상태) */
+.box{background:var(--surface);border-radius:var(--r-md);padding:var(--s4)}
+/* AI가 쓴 글(판단 카드의 한 줄 요약, 패널의 3줄 요약)은 옅은 보라 테두리 칸에 넣는다. 보라는 AI 전용 */
+.ai-box{background:linear-gradient(var(--ai-wash),var(--ai-wash)),var(--card);border:1px solid var(--ai-line);border-radius:var(--r-md);padding:var(--s4)}
+/* 빈 상태·검색 결과 없음: 왜 없는지(줄 제목)와 언제 생기는지(메타) */
+.empty{display:flex;gap:var(--s3);align-items:flex-start}
+.empty>.i{color:var(--text-faint);margin-top:calc((1.5em - 20px) / 2)}
+.empty .meta{margin-top:var(--s1)}
+/* 불러오는 중: 실제 배치와 같은 자리에 회색 면(900)을 둔다. 느리게 한 번씩 옅어진다 */
+.sk{display:block;background:var(--surface);border-radius:var(--r-md);animation:pulse 1.6s cubic-bezier(.4,0,.2,1) infinite}
+.sk.pill{border-radius:var(--r-full)}
+@keyframes pulse{50%{opacity:.5}}
 
-/* 판단 근거 */
-.basis-h{font-size:13px;font-weight:700;color:var(--text-sub);margin:22px 0 4px}
+/* ───────── 상단 바: 위에 떠 있는 유리 ───────── */
+.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;border-bottom:1px solid var(--line);
+  background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.appbar .inner{display:flex;align-items:center;gap:var(--s3);padding-block:var(--s3)}
+.logo{display:flex;align-items:center;gap:var(--s2);white-space:nowrap}
+/* 로고: 둥근 칸을 밝은 면으로 채우고 겹친 층 아이콘을 바탕색으로 */
+.logo .mark{width:32px;height:32px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.logo .mark svg{width:18px;height:18px}
+.search{flex:1;min-width:0;max-width:420px;position:relative}
+.sug{position:absolute;left:0;right:0;top:calc(100% + var(--s1));background:var(--card);border:1px solid var(--line-hover);border-radius:var(--r-md);overflow:hidden;z-index:30}
+.sug button{display:flex;justify-content:space-between;gap:var(--s3);width:100%;min-height:44px;align-items:center;padding:var(--s2) var(--s3);transition:background var(--fast)}
+.sug button:hover,.sug button.on{background:var(--fill-hover)}
+.sug .empty{padding:var(--s3)}
+
+/* ───────── 종목 화면 ───────── */
+main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.co .meta{margin-top:var(--s1)}
+
+/* ① 판단 카드: 화면에서 유일하게 2px 테두리 */
+.judge{border-width:2px;border-color:var(--line-strong);border-top-color:var(--line-selected)}
+.judge.hold{border-style:dashed}
+.jh{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s1) var(--s2);flex-wrap:wrap}
+.vrow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4)}
+.barrow{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s4)}
+.bar{flex:1;position:relative;height:8px;border-radius:var(--r-full);background:var(--flat-soft);overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;border-radius:var(--r-full)}
+.bar .fill.up{background:var(--up)} .bar .fill.down{background:var(--down)} .bar .fill.flat{background:var(--flat)}
+.bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px;border-radius:0}
+.lede{margin-top:var(--s4)}
+.stale{opacity:.6} /* 분석 실패 때 지난 판단 */
+.fail{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);padding:var(--s3) var(--s4);border:1px solid var(--line-hover);border-radius:var(--r-md)}
+.box-title.basis{margin:var(--s6) 0 var(--s1)}
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}
-/* 공시 한 줄: 쉬운 말 한 줄(굵게)이 먼저, 그 아래 날짜와 DART 원문 제목(작게). 칩은 호재·악재 하나만 */
-.ev .row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:14px 12px;margin:0 -12px;width:calc(100% + 24px);border-radius:12px;transition:background var(--fast)}
-.ev .row:hover{background:var(--fill-hover)}
-.ev .row:active,.ev .row[aria-current="true"]{background:var(--fill-selected)}
-.tone{font-size:13px;font-weight:700;border-radius:6px;padding:1px 8px;white-space:nowrap;margin-top:1px}
-/* 칩 배경은 카드(--card) 위에 한 번 겹친 색으로 고정한다. 선택된 줄 위에서도 글자 대비가 떨어지지 않게 */
-.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)} .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)} .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
-.ev .r{font-size:15px;font-weight:700;line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
-.ev .arr{color:var(--text-faint);font-size:15px;line-height:1.5}
-.ev .s{grid-column:2/4;font-size:13px;color:var(--text-faint);line-height:1.5;word-break:keep-all;overflow-wrap:anywhere}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.chip{color:var(--text-sub);border:1px solid var(--line-hover);border-radius:var(--radius-pill);padding:0 8px;font-size:13px}
-.by-ai{color:var(--ai)}
-.more-btn{display:flex;align-items:center;gap:6px;min-height:44px;font-size:13px;color:var(--text-sub);font-weight:500}
-.more-btn:hover{color:var(--text)}
-.chev{width:16px;height:16px;transition:transform var(--fast);flex:none}
+.counter{margin-top:var(--s4)}
+.counter .box-title{margin-bottom:var(--s1)}
+.counter .tbtn{margin-top:var(--s1)}
+.how{margin-top:var(--s2)}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:var(--s1) var(--s3);flex-wrap:wrap;margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
+.chev{transition:transform var(--fast)}
 [aria-expanded="true"] .chev{transform:rotate(180deg)}
-.group-h{font-size:13px;color:var(--text-faint);margin:12px 0 0}
-.counter{margin-top:14px;background:var(--surface);border-radius:12px;padding:14px 16px}
-.counter h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
-.counter p{font-size:15px;line-height:1.55}
-.counter .s{font-size:13px;color:var(--text-faint);margin-top:4px}
-.counter .link{font-size:13px;color:var(--text-sub);min-height:32px;padding:4px 0;margin-top:2px;text-align:left;transition:color var(--fast)}
-.counter .link:hover{color:var(--text);text-decoration:underline}
-.how{font-size:13px;color:var(--text-sub);margin-top:8px;line-height:1.6}
-.foot{display:flex;justify-content:space-between;align-items:center;gap:4px 12px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
-.foot .notice{margin:0}
-.foot .more-btn{min-height:40px}
-.notice{font-size:13px;color:var(--text-sub);margin-top:6px}
-.empty{font-size:13px;color:var(--text-sub);padding:8px 0}
 
 /* ② 판단 추이 */
-.seg{display:inline-flex;gap:6px}
-.seg button{min-height:36px;padding:6px 14px;border-radius:var(--radius-pill);border:1px solid var(--line-hover);background:var(--btn);font-size:13px;color:var(--text-sub);transition:border-color var(--fast),color var(--fast)}
-.seg button:hover{border-color:var(--line-hover);color:var(--text)}
-.seg button[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:700}
-.sub{font-size:13px;color:var(--text-sub);margin-top:4px}
-.chart-box{position:relative;margin-top:10px}
+.sec-h + .meta{margin-top:var(--s1)}
+.chart-box{position:relative;margin-top:var(--s3)}
 .chart{width:100%;height:auto;display:block}
-.chart text{font-family:var(--font);font-size:13px;fill:var(--text-faint)}
+.chart text{font-family:var(--font);font-size:var(--fs-small);fill:var(--text-faint)}
 .chart .cross{stroke:var(--text-faint);stroke-dasharray:3 3;display:none}
 .chart .hdot{fill:var(--text);stroke:var(--card);stroke-width:2;display:none}
-.tip{position:absolute;pointer-events:none;display:none;background:var(--text);color:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px;white-space:nowrap;transform:translate(-50%,-125%)}
-.day{margin-top:10px;background:var(--surface);border-radius:12px;padding:12px 14px}
-.day .h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--text-sub);flex-wrap:wrap}
-.day .h b{font-weight:700;font-size:15px;color:var(--text)}
-.day ul{list-style:none;margin:6px 0 0;padding:0}
-.day li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 10px;padding:8px 0;border-top:1px solid var(--line);align-items:start}
+.tip{position:absolute;pointer-events:none;display:none;background:var(--text);color:var(--bg);border-radius:var(--r-md);padding:var(--s1) var(--s3);font-size:var(--fs-small);font-weight:600;white-space:nowrap;transform:translate(-50%,-125%)}
+.day{margin-top:var(--s3);padding:var(--s3) var(--s4)}
+.day .h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);flex-wrap:wrap}
+.day ul{list-style:none;margin:var(--s2) 0 0;padding:0}
+.day li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 var(--s2);padding:var(--s2) 0;border-top:1px solid var(--line);align-items:start}
 .day li:first-child{border-top:0}
-.day .t{font-weight:700;font-size:15px;line-height:1.45;text-decoration:none} .day .t:hover{text-decoration:underline}
-.day .s{grid-column:2;font-size:13px;color:var(--text-faint)}
-.day .nav{display:flex;justify-content:space-between;gap:10px;margin-top:4px;padding-top:4px;border-top:1px solid var(--line)}
-.day .nav button{min-height:40px;font-size:13px;color:var(--text-sub);font-weight:500}
-.day .nav button:hover:not(:disabled){color:var(--text)}
-.day .nav button:disabled{opacity:.4;cursor:default}
-.hint{font-size:13px;color:var(--text-faint);margin-top:8px}
+.day li .meta{grid-column:2}
+.day .t{text-align:left;text-decoration:none}
+.day .t:hover{text-decoration:underline}
+.day .nav{display:flex;justify-content:space-between;gap:var(--s2);margin-top:var(--s1);padding-top:var(--s1);border-top:1px solid var(--line)}
+.day .nav .tbtn{margin:0}
+.chart-box + .meta{margin-top:var(--s2)}
 
 /* 접는 칸 */
-.disc{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px}
-.disc h2{font-size:17px;font-weight:700}
-.disc .sum{font-size:13px;color:var(--text-sub);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.disc{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--s2);min-height:44px}
+.disc .sum{display:flex;align-items:center;gap:var(--s2);white-space:nowrap}
 
 /* ③ 실적: 정보용 칸이라 hover 없음 */
-.fin{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 0}
-.fin div{background:var(--surface);border-radius:12px;padding:14px}
-.fin dt{font-size:13px;color:var(--text-sub)} .fin dd{margin:2px 0 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
-.fin dd small{display:block;font-size:13px;font-weight:700}
-.note{font-size:13px;color:var(--text-faint);margin-top:10px}
+.fin{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);margin:var(--s4) 0 0}
+.fin dd{margin:var(--s1) 0 0}
+.fin dd small{display:block;font-size:var(--fs-small);font-weight:600;letter-spacing:0}
+.fin + .meta{margin-top:var(--s3)}
+.card .empty.box{margin-top:var(--s4)}
 
 /* ④ 타임라인 */
-.tl{list-style:none;margin:10px 0 0;padding:0;position:relative}
-.tl::before{content:"";position:absolute;left:69px;top:12px;bottom:12px;width:1px;background:var(--line-hover)}
-.tl>li{display:grid;grid-template-columns:48px 44px minmax(0,1fr);gap:0 4px;padding:4px 0;align-items:start}
-.tl .d{font-size:13px;color:var(--text-faint);text-align:right;padding-top:12px;white-space:nowrap}
-.tl .n{width:11px;height:11px;margin:16px auto 0;background:var(--flat);border-radius:50%;box-shadow:0 0 0 4px var(--card);position:relative;z-index:1}
-.tl .n.up{background:none;width:0;height:0;border-radius:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:10px solid var(--up);box-shadow:none}
-.tl .n.down{background:none;width:0;height:0;border-radius:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:10px solid var(--down);box-shadow:none}
-.tl .n.plan{background:var(--card);box-shadow:0 0 0 4px var(--card),inset 0 0 0 1.5px var(--text-faint)}
-.tl .n.today{width:14px;height:14px;margin-top:15px;background:var(--text)}
-.tl .item{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;padding:8px 10px;border-radius:12px;transition:background var(--fast)}
-.tl .item .s{grid-column:1} .tl .item .arr{grid-row:1;grid-column:2;color:var(--text-faint);line-height:1.5}
+.tl{list-style:none;margin:var(--s3) 0 0;padding:0;position:relative}
+.tl::before{content:"";position:absolute;left:calc(48px + var(--s1) + 22px);top:var(--s3);bottom:var(--s3);width:1px;margin-left:-.5px;background:var(--line-hover)}
+.tl>li{display:grid;grid-template-columns:48px 44px minmax(0,1fr);gap:0 var(--s1);padding:var(--s1) 0;align-items:start}
+.tl .d{text-align:right;padding-top:var(--s3);white-space:nowrap}
+/* 선 위의 표시: 호재 ▲, 악재 ▼(모양 기호), 중립 ●, 예정 ○, 오늘 큰 ●. 카드색 칸이 선을 끊어 준다 */
+.tl .n{width:16px;height:16px;margin:var(--s3) auto 0;display:grid;place-items:center;background:var(--card);position:relative;z-index:1}
+.tl .n.up{color:var(--up)} .tl .n.down{color:var(--down)}
+.tl .n.flat::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--flat)}
+.tl .n.plan::after{content:"";width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--text-faint)}
+.tl .n.today::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--text)}
+.tl .item{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r-md);transition:background var(--fast)}
+.tl .item .meta{grid-column:1} .tl .item .go{grid-row:1;grid-column:2;color:var(--text-faint);margin-top:calc((1.5em - 16px) / 2)}
 .tl .item:hover{background:var(--fill-hover)}
-.tl .item:active{background:var(--fill-selected)}
-.tl .static{padding:8px 10px}
-.tl .t{font-weight:500;font-size:15px;line-height:1.5;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;word-break:keep-all;overflow-wrap:anywhere}
-.tl .s{font-size:13px;color:var(--text-faint);word-break:keep-all;overflow-wrap:anywhere}
-.tl .today-row .t{font-weight:800} .tl .today-row .d{color:var(--text);font-weight:700}
-.tl .plan-row .t{color:var(--text-sub)}
-.tl .lbl{grid-column:3;font-size:13px;color:var(--text-faint);font-weight:700;padding:8px 10px 0}
-.tl .item[aria-current="true"]{background:var(--fill-selected)}
-.more{display:block;width:100%;text-align:center;min-height:44px;padding:12px 0 2px;font-size:13px;color:var(--text-sub);font-weight:500}
-.more:hover{color:var(--text)}
+.tl .item:active,.tl .item[aria-current="true"]{background:var(--fill-selected)}
+.tl .static{padding:var(--s2) var(--s3);display:block}
+.tl .static>span{display:block}
+.tl .today-row .d{color:var(--text);font-weight:600}
+.tl .plan-row .row-title{color:var(--text-sub)}
+.tl .lbl{grid-column:3;padding:var(--s2) var(--s3) 0}
+.tl-empty{grid-column:3;padding:var(--s2) var(--s3)}
+.more{display:flex;justify-content:center;width:100%;margin:var(--s2) 0 0}
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
-.day button.t{font-weight:700;font-size:15px;line-height:1.45;text-align:left}
-.day button.t:hover{text-decoration:underline}
 
-/* ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 패널이 열린다 */
-.dv-title{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.4;margin-top:12px;word-break:keep-all;overflow-wrap:anywhere}
-.dv-src-title{font-size:13px;color:var(--text-sub);margin-top:6px;word-break:keep-all;overflow-wrap:anywhere}
-.dv-verdict{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--text-sub)}
-.dv-verdict .tone{font-size:15px;padding:2px 10px;margin:0}
-.dv-in{font-size:13px;color:var(--text-faint);margin-top:12px}
-.dv-box{margin-top:18px;background:var(--surface);border-radius:12px;padding:14px 16px}
-.dv-box h3{font-size:13px;font-weight:700;color:var(--text-sub);margin-bottom:6px}
-.dv-box ul{margin:8px 0 0;padding-left:18px;font-size:15px;line-height:1.65}
-.dv-box p{font-size:13px;color:var(--text-faint);margin-top:8px}
-.dv-box .how{margin-top:0;font-size:15px;color:var(--text)}
-.dv-src{margin-top:18px;width:100%;justify-content:center;font-weight:700;text-decoration:none}
-.dv .notice{margin-top:10px}
+/* 상태 안내 카드(불러오기 오류): 넓은 화면에서도 한 줄 전체 */
+.state-card .meta{margin-top:var(--s2);font-size:var(--fs-body)}
+.state-card .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s6)}
+
+/* ⑤ 공시 한 건 */
+.dv-verdict{display:flex;gap:var(--s1) var(--s2);flex-wrap:wrap;align-items:center}
+.dv-title{margin-top:var(--s3)}
+.dv-title + .meta{margin-top:var(--s2)}
+.dv-in{margin-top:var(--s3)}
+.dv .box,.dv .ai-box{margin-top:var(--s4)}
+.dv .box-title{margin-bottom:var(--s1)}
+.dv ul{margin:var(--s2) 0 0;padding-left:var(--s4);line-height:1.65}
+.dv .ai-box>.meta{margin-top:var(--s2)}
+.dv-src{margin-top:var(--s6);width:100%}
+.dv .notice{margin-top:var(--s3)}
 
 /* 오른쪽 패널 (640px 이하에서는 아래에서 올라오는 시트) */
 .scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;transition:opacity var(--fast)}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:41;background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur));border-left:1px solid var(--line);
   display:flex;flex-direction:column;transform:translateX(100%);transition:transform var(--fast)}
 .drawer.on{transform:none} .scrim.on{opacity:1} .drawer[hidden],.scrim[hidden]{display:none}
-.drawer-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line);font-size:13px;color:var(--text-sub)}
-.drawer-h .btn{min-width:44px;justify-content:center;padding:8px 10px;border-color:transparent}
-.drawer-b{flex:1;overflow:auto;padding:20px 20px 24px;overscroll-behavior:contain}
-.drawer-f{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:6px 12px}
-.drawer-f button{min-height:44px;font-size:13px;color:var(--text-sub);font-weight:500;padding:0 8px;border-radius:var(--radius-sm);transition:color var(--fast),background var(--fast)}
-.drawer-f button:hover:not(:disabled){color:var(--text);background:var(--fill-hover)}
-.drawer-f button:disabled{opacity:.4;cursor:default}
+.drawer-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3) var(--s2) var(--s6);border-bottom:1px solid var(--line)}
+.drawer-b{flex:1;overflow:auto;padding:var(--s6);overscroll-behavior:contain}
+.drawer-f{display:flex;justify-content:space-between;gap:var(--s2);border-top:1px solid var(--line);padding:var(--s1) var(--s3)}
+.drawer-f .tbtn{margin:0}
 @media (max-width:640px){
-  .drawer{top:auto;left:0;width:auto;max-height:88vh;border-left:0;border-top:1px solid var(--line-hover);border-radius:var(--radius) var(--radius) 0 0;transform:translateY(100%)}
-  .drawer-f{padding-bottom:max(6px,env(safe-area-inset-bottom,0px))}
+  .drawer{top:auto;left:0;width:auto;max-height:88vh;border-left:0;border-top:1px solid var(--line-hover);border-radius:var(--r-lg) var(--r-lg) 0 0;transform:translateY(100%)}
+  .drawer-h{padding-left:var(--s4)} .drawer-b{padding:var(--s6) var(--s4)}
+  .drawer-f{padding-bottom:max(var(--s1),env(safe-area-inset-bottom,0px))}
 }
 
-footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8px 40px;line-height:1.8}
-.demo-ctl{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px}
-.demo-ctl button{min-height:36px;padding:4px 12px;border-radius:var(--radius-pill);border:1px solid var(--line-hover);background:var(--btn);font-size:13px;color:var(--text-sub)}
-.demo-ctl button:hover{border-color:var(--line-hover);color:var(--text)}
-.demo-ctl button[aria-pressed="true"]{border-color:var(--line-selected);background:var(--fill-selected);color:var(--text)}
-
-/* AI가 쓴 글(판단 카드의 한 줄 요약, 패널의 3줄 요약)은 옅은 보라 테두리 칸에 넣는다. 보라는 AI 전용 */
-.ai-box{background:linear-gradient(var(--ai-wash),var(--ai-wash)),var(--card);border:1px solid var(--ai-line);border-radius:12px;padding:14px 16px}
-.ai-box>.ai:first-child{margin-right:8px}
+footer{text-align:center;padding-block:var(--s2) var(--s12);line-height:1.8}
+.demo-ctl{justify-content:center;margin-top:var(--s3)}
 
 @media (max-width:600px){
   .ev .tone .tw{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap} /* 휴대폰: 칩은 모양만, 글자는 화면 읽기용 */
-  .ev .tone{padding:1px 7px}
-  .card,.judge{padding:20px 16px} .fin{grid-template-columns:1fr 1fr} .fin dd{font-size:17px} .disc .sum{display:none} h1{font-size:24px}
-  .badge{font-size:17px}
+  .card,.judge{padding:var(--s6) var(--s4)} .fin{grid-template-columns:1fr 1fr} .disc .sum .v{display:none}
+  h1{font-size:24px} .badge,.fin dd{font-size:var(--fs-card)}
 }
 /* 넓은 화면(1100px 이상): 두 단. 왼쪽에 판단 카드, 오른쪽에 판단 추이·실적·타임라인.
    판단 카드를 화면에 고정하지 않는다: 카드가 화면보다 길어지면 카드 안에 스크롤이 하나 더 생겨 쓰기 불편하다 */
 @media (min-width:1100px){
   .inner{max-width:1160px}
-  main.inner{grid-template-columns:minmax(0,460px) minmax(0,1fr);align-items:start;column-gap:24px}
-  main.inner>.co{grid-column:1/-1}
+  main.inner{grid-template-columns:minmax(0,460px) minmax(0,1fr);align-items:start;column-gap:var(--s6)}
+  main.inner>.co,main.inner>.state-card{grid-column:1/-1}
   main.inner>.judge{grid-column:1;grid-row:2/span 3}
   main.inner>.card{grid-column:2}
 }
@@ -269,7 +299,8 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
 <header class="appbar gutter">
   <div class="inner">
     <div class="logo"><span class="mark" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.5 14 5.5 8 8.5 2 5.5z" fill="currentColor"/><path d="M2 8.2 8 11.2 14 8.2"/><path d="M2 10.9 8 13.9 14 10.9"/></svg></span>기업 인사이트</div>
-    <div class="search">
+    <div class="search field">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
       <input id="q" type="search" placeholder="기업명 또는 종목코드" autocomplete="off" aria-label="기업명 또는 종목코드 검색">
       <div class="sug" id="sug" hidden></div>
     </div>
@@ -280,16 +311,16 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
 
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dv-title" hidden>
-  <div class="drawer-h"><span id="drawer-co"></span><button type="button" class="btn" data-close aria-label="공시 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="drawer-h"><span class="meta" id="drawer-co"></span><button type="button" class="btn icon" data-close aria-label="공시 닫기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="drawer-b" id="drawer-b"></div>
   <div class="drawer-f" id="drawer-f"></div>
 </aside>
 
-<footer class="gutter">
+<footer class="gutter meta faint">
   데모 화면 · 회사 이름 말고는 공시, 수치, 요약 모두 예시예요<br>
   공시·재무 출처 금융감독원 전자공시시스템(DART)<br>
   AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.<br>
-  <span class="demo-ctl" role="group" aria-label="데모 화면 상태"><button type="button" data-demo="ok" aria-pressed="true">정상</button><button type="button" data-demo="fail" aria-pressed="false">분석 실패 화면 보기</button></span>
+  <span class="seg demo-ctl" role="group" aria-label="데모 화면 상태"><button type="button" data-demo="ok" aria-pressed="true">정상</button><button type="button" data-demo="loading" aria-pressed="false">불러오는 중</button><button type="button" data-demo="fail" aria-pressed="false">분석 실패</button><button type="button" data-demo="error" aria-pressed="false">불러오기 오류</button><button type="button" data-demo="empty" aria-pressed="false">공시 없는 회사</button></span>
 </footer>
 
 <script>
@@ -361,9 +392,11 @@ const DB = {
    {d:"2026-11-02",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"임원ㆍ주요주주특정증권등소유상황보고서",r:"임원이 주식 보상을 받아 보유 주식이 바뀜(매매 아님)"},
    {d:"2026-10-30",tone:"flat",imp:0,g:"IR·일정",by:"제목 규칙",t:"기업설명회(IR)개최(안내공시)",r:"11월 기업설명회 개최 안내"},
    {d:"2026-09-20",tone:"down",imp:2,g:"소송",by:"AI",t:"소송등의판결ㆍ결정",r:"손해배상 소송 1심에서 일부 패소"},
-   {d:"2026-08-07",tone:"up",imp:2,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"2분기 영업이익이 1년 전보다 12% 증가"}]}
+   {d:"2026-08-07",tone:"up",imp:2,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"2분기 영업이익이 1년 전보다 12% 증가"}]},
+ /* 공시 없는 회사의 예시(가상의 회사). 검색 목록에는 넣지 않고 "데모 화면 상태"로만 연다 */
+ "000000":{name:"새로 상장한 회사(예시)",market:"코스닥",sector:"예시",lede:"",fin:null,watch:[],events:[]}
 };
-const CODES = Object.keys(DB);
+const CODES = Object.keys(DB).filter(c=>c!=="000000");
 
 /* ───────── 날짜 ───────── */
 function bizDays(endIso,n){ const out=[]; const d=new Date(endIso+"T00:00:00Z");
@@ -387,7 +420,24 @@ function scoreAt(co, iso){
 }
 const BAND = 0.15, STRONG = 0.45; /* 단계 경계. 그래프의 선 색도 같은 경계를 쓴다 */
 const verdictOf = s => s>=STRONG?["강한 호재","up",true]:s>=BAND?["약한 호재","up",false]:s>-BAND?["중립","flat",false]:s>-STRONG?["약한 악재","down",false]:["강한 악재","down",true];
-const SHAPE = {up:"▲",down:"▼",flat:"—"};
+/* 아이콘: 24 칸에 직접 그린 선 아이콘. 선 굵기는 .i가 1.5px로 고정한다 */
+const svg = (p,cls="") => `<svg class="i${cls?" "+cls:""}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const IC = {
+  open:     "<path d='M9.5 6l6 6-6 6'/>",                                   /* 열기: 누르면 패널이 열리는 줄 */
+  prev:     "<path d='M14.5 6l-6 6 6 6'/>",                                 /* 이전 */
+  expand:   "<path d='M6 9.5l6 6 6-6'/>",                                   /* 펼치기: 열리면 180도 돈다 */
+  external: "<path d='M13 5h6v6'/><path d='M19 5l-8 8'/><path d='M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10'/>", /* 바깥 링크(DART) */
+  close:    "<path d='M6 6l12 12M18 6 6 18'/>",                             /* 닫기 */
+  reload:   "<path d='M19.5 12a7.5 7.5 0 1 1-2.2-5.3'/><path d='M17.3 2.7v4h-4'/>", /* 다시 불러오기 */
+  search:   "<circle cx='11' cy='11' r='6.5'/><path d='m16 16 4 4'/>"       /* 검색 */
+};
+const icon = (k,cls) => svg(IC[k],cls);
+const CHEV = icon("expand","sm chev");
+/* 모양 기호: 호재 ▲, 악재 ▼, 중립 —. 글꼴마다 모양이 달라지는 글자 대신 채운 도형으로 그린다 */
+const SHAPE = {
+  up:  `<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10H1z"/></svg>`,
+  down:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5 1 2h10z"/></svg>`,
+  flat:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="5" width="9" height="2" rx="1"/></svg>`};
 const SIZE = ["","작음","보통","큼"];
 
 /* 금액(억 원 단위 값)을 읽기 쉬운 단위로: 1조 이상은 소수 둘째 자리까지 "237.3조", "1.63조", 그 아래는 "3,900억" */
@@ -397,12 +447,13 @@ const toneOf = v => v>0?"up":v<0?"down":"flat";
 const md = iso => iso.slice(5).replace("-",".");
 const TONE = {up:"호재",down:"악재",flat:"중립"};
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const CHEV = `<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>`;
 const AI = `<span class="ai">AI 요약</span>`;
 const DART = "https://dart.fss.or.kr/";
 const PAGE = 6;
 
-let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, how:false, fail:false, dv:null };
+/* view: ok 정상 / loading 불러오는 중 / fail 분석 실패(지난 판단을 보여줌) / error 불러오기 오류 */
+let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, how:false, view:"ok", dv:null };
+let lastCode = "005930"; /* "공시 없는 회사"를 보다가 정상으로 돌아올 회사 */
 let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
 const $ = id => document.getElementById(id);
 let G = null; /* 차트 기하 정보 (호버용) */
@@ -470,44 +521,47 @@ function dvHTML(co, e){
   const inJudge = e.tone==="flat" ? "중립이라 판단 계산에 넣지 않았어요."
     : age<WINDOW ? "최근 30일 공시라 지금 판단에 들어가 있어요." : "30일이 지나 지금 판단에는 들어가지 않아요.";
   const sum = e.s
-    ? `<div class="dv-box ai-box">${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p>요약의 금액·비율·날짜는 코드가 원문과 맞는지 확인했어요.</p></div>`
-    : `<div class="dv-box"><h3>요약</h3><p style="margin:0">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
-  const how = `<div class="dv-box"><h3>어떻게 판정했나요</h3><p class="how">${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
+    ? `<div class="ai-box">${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p class="meta faint">요약의 금액·비율·날짜는 코드가 원문과 맞는지 확인했어요.</p></div>`
+    : `<div class="box"><h3 class="box-title">요약</h3><p class="meta">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
+  const how = `<div class="box"><h3 class="box-title">어떻게 판정했나요</h3><p>${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
   return `<div class="dv">
-    <div class="dv-verdict num"><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}<span>${ymd(e.d)} · ${e.g}</span></div>
+    <div class="dv-verdict meta num"><span class="tone ${e.tone}">${SHAPE[e.tone]}${TONE[e.tone]}</span>${e.imp?`<span>크기 ${SIZE[e.imp]}</span>`:""}<span>${ymd(e.d)} · ${e.g}</span></div>
     <h2 class="dv-title" id="dv-title">${esc(e.r)}</h2>
-    <p class="dv-src-title">DART 공시 제목 · ${esc(e.t)}</p>
-    <p class="dv-in">${inJudge}</p>
+    <p class="meta">DART 공시 제목 · ${esc(e.t)}</p>
+    <p class="dv-in meta faint">${inJudge}</p>
     ${sum}${how}
-    <a class="btn dv-src" href="${DART}" target="_blank" rel="noopener">DART에서 원문 보기 ↗</a>
-    <p class="notice">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p></div>`;
+    <a class="btn primary dv-src" href="${DART}" target="_blank" rel="noopener">DART에서 원문 보기${icon("external")}<span class="sr">(새 창)</span></a>
+    <p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p></div>`;
 }
 
 /* 이전·다음 공시 (날짜순, 이전 = 더 오래된 공시) */
 function neighbors(co,key){ const l=sorted(co), i=l.findIndex(e=>keyOf(e)===key); return { older:l[i+1]||null, newer:l[i-1]||null }; }
 const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
-  return `<button type="button" data-step="${older?esc(keyOf(older)):""}" ${older?"":"disabled"}>← 이전 공시${older?" "+md(older.d):""}</button><button type="button" data-step="${newer?esc(keyOf(newer)):""}" ${newer?"":"disabled"}>다음 공시${newer?" "+md(newer.d):""} →</button>`; };
+  return `<button type="button" class="tbtn num" data-step="${older?esc(keyOf(older)):""}" ${older?"":"disabled"}>${icon("prev","sm")}이전 공시${older?" "+md(older.d):""}</button><button type="button" class="tbtn num" data-step="${newer?esc(keyOf(newer)):""}" ${newer?"":"disabled"}>다음 공시${newer?" "+md(newer.d):""}${icon("open","sm")}</button>`; };
 
 /* 판단 근거 한 줄 = 공시 한 건 */
 const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e))}">
-    <span class="tone ${e.tone}"><span aria-hidden="true">${SHAPE[e.tone]}</span><span class="tw"> ${TONE[e.tone]}</span></span><span class="r">${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span>
-    <span class="s num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
+    <span class="tone ${e.tone}">${SHAPE[e.tone]}<span class="tw">${TONE[e.tone]}</span></span><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}
+    <span class="meta faint num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
 
 function judgeCard(co){
-  const day = state.fail ? DATES[LAST-1] : ASOF;
+  const fail = state.view==="fail";
+  const day = fail ? DATES[LAST-1] : ASOF;
   const now = scoreAt(co, day), recent = now.list;
   const dir = recent.filter(e=>e.tone!=="flat"), nUp = dir.filter(e=>e.tone==="up").length, nDn = dir.length-nUp;
-  const head = `<div class="jh"><b>최근 공시 기준 판단</b><span class="num">${md(day)} 기준 · 최근 30일 공시</span></div>`;
-  const failBox = state.fail ? `<div class="fail"><span>${md(ASOF)} 공시 분석이 끝나지 않아 ${md(day)} 판단을 보여주고 있어요. 새 공시는 다음 분석 때 반영돼요.</span><button type="button" class="btn" data-retry><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>다시 불러오기</button></div>` : "";
-  const foot = `<div class="foot"><p class="notice">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p>
-      <button type="button" class="more-btn" data-toggle="how" aria-expanded="${state.how}">계산 방식${CHEV}</button></div>
-    ${state.how?`<p class="how">공시마다 호재·악재와 크기를 정하고(제목 규칙, 본문 숫자, 나머지는 AI), 판단은 최근 30일 공시의 크기를 더해 코드가 계산해요. 같은 공시면 언제 계산해도 같은 결과가 나와요. 공시마다 DART 원문으로 확인할 수 있어요.</p>`:""}`;
+  const head = `<div class="jh"><h2 class="card-title">최근 공시 기준 판단</h2><span class="meta num">${md(day)} 기준 · 최근 30일 공시</span></div>`;
+  const failBox = fail ? `<div class="fail meta"><span>${md(ASOF)} 공시 분석이 끝나지 않아 ${md(day)} 판단을 보여주고 있어요. 새 공시는 다음 분석 때 반영돼요.</span><button type="button" class="btn" data-retry>${icon("reload")}다시 불러오기</button></div>` : "";
+  const foot = `<div class="foot"><p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p>
+      <button type="button" class="tbtn" data-toggle="how" aria-expanded="${state.how}">계산 방식${CHEV}</button></div>
+    ${state.how?`<p class="how meta">공시마다 호재·악재와 크기를 정하고(제목 규칙, 본문 숫자, 나머지는 AI), 판단은 최근 30일 공시의 크기를 더해 코드가 계산해요. 같은 공시면 언제 계산해도 같은 결과가 나와요. 공시마다 DART 원문으로 확인할 수 있어요.</p>`:""}`;
 
   if(now.hold){
+    const none = !co.events.length;
     return `<section class="judge hold" aria-label="판단">${head}
-      <div class="vrow"><span class="badge hold">판단 보류</span><span class="count num">최근 30일 공시 ${recent.length}건 · 모두 중립</span></div>
-      <p class="lede">최근 30일에 호재나 악재로 판정된 공시가 없어 판단을 내리지 않았어요. 판정된 공시가 들어오면 다시 계산해요.</p>
-      ${recent.length?`<h3 class="basis-h">최근 30일 공시</h3><ul class="ev">${recent.map(evRow).join("")}</ul>`:""}
+      <div class="vrow"><span class="badge hold">판단 보류</span><span class="meta num">${none?"모은 공시 0건":`최근 30일 공시 ${recent.length}건 · 모두 중립`}</span></div>
+      <p class="lede">${none?"아직 모은 공시가 없어 판단을 내리지 않았어요. 호재나 악재로 판정된 공시가 들어오면 계산해요."
+        :"최근 30일에 호재나 악재로 판정된 공시가 없어 판단을 내리지 않았어요. 판정된 공시가 들어오면 다시 계산해요."}</p>
+      ${recent.length?`<h3 class="box-title basis">최근 30일 공시</h3><ul class="ev">${recent.map(evRow).join("")}</ul>`:""}
       ${failBox}${foot}</section>`;
   }
 
@@ -519,25 +573,47 @@ function judgeCard(co){
   const top = main.slice(0,3), rest = dir.filter(e=>!top.includes(e)).sort(byImp);
   const opp = vCls==="up" ? neg[0] : vCls==="down" ? pos[0] : null;
   const counter = vCls==="flat"
-    ? `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>호재 ${nUp}건(크기 합 ${now.U})과 악재 ${nDn}건(크기 합 ${now.D})이 비슷하게 맞서 있어요. 새 공시 한 건으로 판단이 바뀔 수 있어요.</p></div>`
-    : opp ? `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>${esc(opp.r)}</p><button type="button" class="link num" data-dv="${esc(keyOf(opp))}">${TONE[opp.tone]} · ${esc(opp.t)} · ${md(opp.d)} ›</button></div>`
-    : `<div class="counter"><h3>반대로 볼 수 있는 점</h3><p>최근 30일에 ${vCls==="up"?"악재":"호재"}로 판정된 공시는 없었어요.</p></div>`;
+    ? `<div class="counter box"><h3 class="box-title">반대로 볼 수 있는 점</h3><p>호재 ${nUp}건(크기 합 ${now.U})과 악재 ${nDn}건(크기 합 ${now.D})이 비슷하게 맞서 있어요. 새 공시 한 건으로 판단이 바뀔 수 있어요.</p></div>`
+    : opp ? `<div class="counter box"><h3 class="box-title">반대로 볼 수 있는 점</h3><p>${esc(opp.r)}</p><button type="button" class="tbtn num" data-dv="${esc(keyOf(opp))}">${TONE[opp.tone]} · ${esc(opp.t)} · ${md(opp.d)}${icon("open","sm")}</button></div>`
+    : `<div class="counter box"><h3 class="box-title">반대로 볼 수 있는 점</h3><p>최근 30일에 ${vCls==="up"?"악재":"호재"}로 판정된 공시는 없었어요.</p></div>`;
 
   return `<section class="judge" aria-label="판단">${head}
-    <div class="${state.fail?"stale":""}">
-      <div class="vrow"><span class="badge ${vCls}${strong?" strong":""}"><span class="sh" aria-hidden="true">${SHAPE[vCls]}</span>${vText}</span>
-        <span class="count num">근거 공시 ${dir.length}건 · 호재 ${nUp} · 악재 ${nDn}</span></div>
-      <div class="barrow"><span aria-hidden="true">악재</span><div class="bar" role="img" aria-label="호재·악재 정도: ${vText}. 가운데가 중립"><i class="fill ${vCls}" style="left:${fillL}%;width:${fillW}%"></i><i class="mid"></i></div><span aria-hidden="true">호재</span></div>
+    <div class="${fail?"stale":""}">
+      <div class="vrow"><span class="badge ${vCls}${strong?" strong":""}">${SHAPE[vCls]}${vText}</span>
+        <span class="meta num">근거 공시 ${dir.length}건 · 호재 ${nUp} · 악재 ${nDn}</span></div>
+      <div class="barrow meta faint"><span aria-hidden="true">악재</span><div class="bar" role="img" aria-label="호재·악재 정도: ${vText}. 가운데가 중립"><i class="fill ${vCls}" style="left:${fillL}%;width:${fillW}%"></i><i class="mid"></i></div><span aria-hidden="true">호재</span></div>
       <p class="lede ai-box">${AI}${esc(co.lede)}</p>
     </div>
     ${failBox}
-    <h3 class="basis-h">판단 근거</h3>
+    <h3 class="box-title basis">판단 근거</h3>
     <ul class="ev">${top.map(evRow).join("")}</ul>
-    ${rest.length?`<button type="button" class="more-btn" data-toggle="all" aria-expanded="${state.all}">${state.all?"근거 접기":`나머지 근거 ${rest.length}건 보기`}${CHEV}</button>
+    ${rest.length?`<button type="button" class="tbtn" data-toggle="all" aria-expanded="${state.all}">${state.all?"근거 접기":`나머지 근거 ${rest.length}건 보기`}${CHEV}</button>
       ${state.all?`<ul class="ev">${rest.map(evRow).join("")}</ul>`:""}`:""}
     ${counter}
     ${foot}</section>`;
 }
+
+/* 빈 상태: 왜 없는지와 언제 생기는지 */
+const emptyBox = (title, desc, ic="") => `<div class="empty box">${ic?icon(ic):""}<div><p class="row-title">${title}</p><p class="meta">${desc}</p></div></div>`;
+
+/* 불러오는 중: 실제 배치와 같은 자리에 회색 면 */
+const sk = (w,h,cls="") => `<span class="sk${cls?" "+cls:""}" style="width:${w};height:${h}px"></span>`;
+function skeleton(){
+  const lines = n => Array.from({length:n},(_,i)=>`<div style="padding:var(--s3) 0;border-top:${i?"1px solid var(--line)":"0"}">${sk("80%",18)}<div style="height:var(--s2)"></div>${sk("55%",14)}</div>`).join("");
+  return `<div class="co">${sk("180px",36)}<div style="height:var(--s2)"></div>${sk("200px",16)}</div>
+  <section class="judge" aria-hidden="true">${sk("160px",22)}<div style="height:var(--s4)"></div>${sk("140px",44,"pill")}<div style="height:var(--s4)"></div>${sk("100%",8,"pill")}<div style="height:var(--s4)"></div>${sk("100%",72)}<div style="height:var(--s6)"></div>${lines(3)}</section>
+  <section class="card" aria-hidden="true">${sk("96px",22)}<div style="height:var(--s4)"></div>${sk("100%",200)}</section>
+  <section class="card" aria-hidden="true">${sk("64px",22)}</section>
+  <section class="card" aria-hidden="true">${sk("96px",22)}<div style="height:var(--s3)"></div>${lines(4)}</section>
+  <p class="sr" role="status">회사 정보를 불러오는 중이에요</p>`;
+}
+
+/* 불러오기 오류: 원인과 다음 행동. 사과하지 않는다 */
+const errorView = () => `<section class="card state-card" role="alert">
+    <h2 class="card-title">회사 정보를 불러오지 못했어요</h2>
+    <p class="meta">서버에 연결하지 못했어요. 잠시 뒤 다시 불러와 주세요. 공시 원문은 DART에서 바로 볼 수 있어요.</p>
+    <div class="actions"><button type="button" class="btn primary" data-retry>${icon("reload")}다시 불러오기</button><a class="btn" href="${DART}" target="_blank" rel="noopener">DART에서 보기${icon("external")}<span class="sr">(새 창)</span></a></div>
+  </section>`;
 
 function fillDrawer(co,e){ const key=keyOf(e);
   $("drawer-co").textContent = `${co.name} · 공시 한 건`;
@@ -567,12 +643,16 @@ function go(key, how){ const url = "#d="+encodeURIComponent(key);
 window.addEventListener("popstate",ev=>{ const key = ev.state && ev.state.key; if(key) openDrawer(key); else closeDrawer(); });
 
 function render(){
-  const co = DB[state.code];
+  const app = $("app");
+  app.setAttribute("aria-busy", String(state.view==="loading"));
+  if(state.view==="loading"){ app.innerHTML = skeleton(); G=null; return; }
+  if(state.view==="error"){ app.innerHTML = errorView(); G=null; return; }
+  const co = DB[state.code], none = !co.events.length;
   const now = scoreAt(co, ASOF), [vText,vCls] = now.hold ? ["판단 보류","flat"] : verdictOf(now.s);
   const [pKey,pLabel,n] = periodOf(state.period), from = LAST-n;
   const s0 = scoreAt(co, DATES[from]), v0 = s0.hold ? "판단 보류" : verdictOf(s0.s)[0];
   let selList = null, selHead = "", selMove = "", navPrev = null, navNext = null;
-  if(state.sel && IDX[state.sel]!=null && IDX[state.sel]>=from){
+  if(!none && state.sel && IDX[state.sel]!=null && IDX[state.sel]>=from){
     const a = state.sel, i = IDX[a], sc = scoreAt(co,a), sv = sc.s, dlt = sv - scoreAt(co,DATES[Math.max(0,i-1)]).s;
     const [svT,svC] = sc.hold ? ["판단 보류","flat"] : verdictOf(sv);
     selList = co.events.filter(e=>bday(e.d)===a);
@@ -582,53 +662,66 @@ function render(){
     const evDays = [...new Set(co.events.map(e=>bday(e.d)))].filter(d=>IDX[d]>=from).sort();
     navPrev = evDays.filter(d=>d<a).pop() || null; navNext = evDays.find(d=>d>a) || null; }
 
-  const f = co.fin, rg = f.rev[0]/f.rev[1]-1, og = f.op[0]/f.op[1]-1, ng = f.ni[0]/f.ni[1]-1;
-  const mg0 = f.op[0]/f.rev[0]*100, mg1 = f.op[1]/f.rev[1]*100, mgd = Math.round(mg0*10)/10 - Math.round(mg1*10)/10;
   const past = [...co.events].sort((a,b)=>b.d.localeCompare(a.d));
   const shownPast = state.more ? past : past.slice(0,PAGE);
   const plans = [...co.watch].sort((a,b)=>b[0].localeCompare(a[0]));
 
-  $("app").innerHTML = `
+  const trend = none
+    ? emptyBox("그릴 판단이 아직 없어요", "공시가 들어오면 날마다 판단이 쌓여 그래프가 그려져요.")
+    : `<p class="meta">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
+    ${chart(co)}
+    ${selList ? `<div class="day box num"><div class="h meta"><b class="row-title" style="color:var(--text)">${selHead}</b>${selMove}</div>
+        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]}${TONE[e.tone]}</span><button type="button" class="t row-title" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="meta faint">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
+          : `<p class="meta" style="padding:var(--s2) 0">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
+        <div class="nav"><button type="button" class="tbtn" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>${icon("prev","sm")}이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" class="tbtn" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""}${icon("open","sm")}</button></div></div>`
+      : `<p class="meta faint">그래프를 누르면 그날의 판단과 공시가 보여요. 점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}`;
+
+  let finCard;
+  if(!co.fin){
+    finCard = `<section class="card" aria-label="실적"><h2 class="card-title">실적</h2>
+      ${emptyBox("아직 모은 실적이 없어요", "분기보고서나 잠정실적 공시가 나오면 채워져요.")}</section>`;
+  } else {
+    const f = co.fin, rg = f.rev[0]/f.rev[1]-1, og = f.op[0]/f.op[1]-1, ng = f.ni[0]/f.ni[1]-1;
+    const mg0 = f.op[0]/f.rev[0]*100, mg1 = f.op[1]/f.rev[1]*100, mgd = Math.round(mg0*10)/10 - Math.round(mg1*10)/10;
+    finCard = `<section class="card" aria-label="실적">
+    <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2 class="card-title">실적</h2>
+      <span class="sum meta num"><span class="v">영업이익 <b class="${toneOf(og)}">${pct(og)}</b></span>${CHEV}</span></button>
+    ${state.fin ? `<dl class="fin num">
+        <div class="box"><dt class="meta">매출액</dt><dd>${won(f.rev[0])}<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
+        <div class="box"><dt class="meta">영업이익</dt><dd>${won(f.op[0])}<small class="${toneOf(og)}">1년 전보다 ${pct(og)}</small></dd></div>
+        <div class="box"><dt class="meta">영업이익률</dt><dd>${mg0.toFixed(1)}%<small class="${toneOf(mgd)}">${mgd>0?"+":""}${mgd.toFixed(1)}%p</small></dd></div>
+        <div class="box"><dt class="meta">순이익</dt><dd>${won(f.ni[0])}<small class="${toneOf(ng)}">1년 전보다 ${pct(ng)}</small></dd></div></dl>
+      <p class="meta faint">2026년 3분기 누적 · 연결 기준 · 출처 DART</p>` : ""}
+  </section>`;
+  }
+
+  app.innerHTML = `
   <div class="co"><h1>${co.name}</h1><div class="meta num">${state.code} · ${co.market} · ${co.sector}</div></div>
 
   ${judgeCard(co)}
 
   <section class="card" aria-label="판단 추이">
-    <div class="sec-h"><h2>판단 추이</h2>
-      <div class="seg" role="group" aria-label="기간">${PERIODS.map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${k===pKey}">${l}</button>`).join("")}</div></div>
-    <p class="sub">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
-    ${chart(co)}
-    ${selList ? `<div class="day num"><div class="h"><b>${selHead}</b>${selMove}</div>
-        ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><button type="button" class="t" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
-          : `<p class="empty">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
-        <div class="nav"><button type="button" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>← 이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""} →</button></div></div>`
-      : `<p class="hint">그래프를 누르면 그날의 판단과 공시가 보여요. 점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}
+    <div class="sec-h"><h2 class="card-title">판단 추이</h2>
+      <div class="seg" role="group" aria-label="기간">${PERIODS.map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${k===pKey}" ${none?"disabled":""}>${l}</button>`).join("")}</div></div>
+    ${trend}
   </section>
 
-  <section class="card" aria-label="실적">
-    <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2>실적</h2>
-      <span class="sum num">영업이익 <b class="${toneOf(og)}">${pct(og)}</b>${CHEV}</span></button>
-    ${state.fin ? `<dl class="fin num">
-        <div><dt>매출액</dt><dd>${won(f.rev[0])}<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
-        <div><dt>영업이익</dt><dd>${won(f.op[0])}<small class="${toneOf(og)}">1년 전보다 ${pct(og)}</small></dd></div>
-        <div><dt>영업이익률</dt><dd>${mg0.toFixed(1)}%<small class="${toneOf(mgd)}">${mgd>0?"+":""}${mgd.toFixed(1)}%p</small></dd></div>
-        <div><dt>순이익</dt><dd>${won(f.ni[0])}<small class="${toneOf(ng)}">1년 전보다 ${pct(ng)}</small></dd></div></dl>
-      <p class="note">2026년 3분기 누적 · 연결 기준 · 출처 DART</p>` : ""}
-  </section>
+  ${finCard}
 
   <section class="card" aria-label="타임라인">
-    <h2>타임라인</h2>
+    <h2 class="card-title">타임라인</h2>
     <ul class="tl num">
-      ${plans.length?`<li><span></span><span></span><span class="lbl">다가오는 일정 ${plans.length}건</span></li>`:""}
-      ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d">${md(d)}</span><span class="n plan"></span><span class="static"><span class="t">${t}</span><span class="s">${s} · 예정</span></span></li>`).join("")}
-      <li class="today-row"><span class="d">${md(ASOF)}</span><span class="n today"></span><span class="static"><span class="t">오늘 · <span class="${vCls}">${vText}</span></span><span class="s">최근 공시 기준 판단</span></span></li>
-      ${shownPast.map(e=>`<li><span class="d">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true"></span><div>
-          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="t"><span class="sr">${TONE[e.tone]}: </span>${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span><span class="s">${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button>
+      ${plans.length?`<li><span></span><span></span><span class="lbl box-title">다가오는 일정 ${plans.length}건</span></li>`:""}
+      ${plans.map(([d,t,s])=>`<li class="plan-row"><span class="d meta faint">${md(d)}</span><span class="n plan"></span><span class="static"><span class="row-title">${t}</span><span class="meta faint">${s} · 예정</span></span></li>`).join("")}
+      <li class="today-row"><span class="d meta">${md(ASOF)}</span><span class="n today"></span><span class="static"><span class="row-title">오늘 · <span class="${vCls}">${vText}</span></span><span class="meta faint">최근 공시 기준 판단</span></span></li>
+      ${shownPast.map(e=>`<li><span class="d meta faint">${md(e.d)}</span><span class="n ${e.tone}" aria-hidden="true">${e.tone==="flat"?"":SHAPE[e.tone]}</span><div>
+          <button type="button" class="item" data-dv="${esc(keyOf(e))}"><span class="row-title"><span class="sr">${TONE[e.tone]}: </span>${esc(e.r)}</span>${icon("open","sm go")}<span class="meta faint">${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button>
         </div></li>`).join("")}
+      ${none?`<li><span></span><span></span><div class="tl-empty">${emptyBox("아직 모은 공시가 없어요","새 공시가 들어오면 여기에 날짜순으로 쌓여요. 수집은 5분마다 해요.")}</div></li>`:""}
     </ul>
-    ${past.length>PAGE ? `<button type="button" class="more" data-more>${state.more?"접기":`지난 공시 ${past.length-PAGE}건 더 보기`}</button>` : ""}
+    ${past.length>PAGE ? `<div class="more"><button type="button" class="tbtn" data-more aria-expanded="${state.more}">${state.more?"접기":`지난 공시 ${past.length-PAGE}건 더 보기`}${CHEV}</button></div>` : ""}
   </section>`;
-  bindHover(co);
+  if(!none) bindHover(co); else G=null;
 }
 
 /* 호버: 가장 가까운 날로 맞춤 / 클릭: 그날 선택 / 좌우 방향키: 하루씩 이동 */
@@ -655,7 +748,19 @@ function bindHover(co){
 function dismiss(){ if(history.state && history.state.key){ history.back(); return; } closeDrawer(); }
 document.addEventListener("keydown",ev=>{ if(ev.key==="Escape" && state.dv){ ev.preventDefault(); dismiss(); } });
 
-function setDemo(fail){ state.fail=fail; document.querySelectorAll("[data-demo]").forEach(b=>b.setAttribute("aria-pressed", String((b.dataset.demo==="fail")===fail))); render(); }
+/* 데모 화면 상태: 지금 보이는 상태를 아래 버튼에 표시 */
+const demoKey = () => state.code==="000000" ? "empty" : state.view;
+const markDemo = () => document.querySelectorAll("[data-demo]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.demo===demoKey())));
+let loadTimer = null;
+function setView(view, code){ clearTimeout(loadTimer); if(code){ state.code=code; state.sel=null; } state.view=view; render(); markDemo(); }
+/* 불러오기: 자리 표시를 잠깐 보여준 뒤 정상 화면으로. 다시 불러온 판단 카드는 1.2초 밝혔다가 원래대로 */
+function load(code, flash){ setView("loading", code);
+  loadTimer = setTimeout(()=>{ setView("ok"); if(flash){ const j=document.querySelector(".judge"); if(j) j.classList.add("is-new"); } }, 700); }
+function setDemo(k){
+  const real = state.code==="000000" ? lastCode : state.code;
+  if(k==="empty") setView("ok","000000");
+  else setView(k, real);
+  if(k!=="ok") window.scrollTo({top:0,behavior:"smooth"}); }
 
 document.addEventListener("click",ev=>{
   if(ev.target.id==="scrim"){ dismiss(); return; }
@@ -664,8 +769,8 @@ document.addEventListener("click",ev=>{
   if(d.dv!=null){ go(d.dv, state.dv?"replace":"push"); openDrawer(d.dv, t); return; }
   if(d.step!=null){ if(!d.step) return; go(d.step,"replace"); openDrawer(d.step); return; }
   if("close" in d){ dismiss(); return; }
-  if(d.demo){ setDemo(d.demo==="fail"); if(d.demo==="fail") window.scrollTo({top:0,behavior:"smooth"}); return; }
-  if("retry" in d){ setDemo(false); const j=document.querySelector(".judge"); if(j){ j.classList.add("is-new"); } return; }
+  if(d.demo){ setDemo(d.demo); return; }
+  if("retry" in d){ load(null, true); return; }
   if(d.period){ state.period=d.period; if(state.sel && IDX[state.sel] < LAST-periodOf(d.period)[2]) state.sel=null; }
   else if(d.go!=null){ if(!d.go) return; state.sel=d.go; }
   else if(d.toggle) state[d.toggle]=!state[d.toggle];
@@ -673,14 +778,16 @@ document.addEventListener("click",ev=>{
   render();
 });
 
-/* 검색 자동완성 */
+/* 검색 자동완성. 맞는 회사가 없으면 왜 없는지와 어떻게 찾는지 */
 const q=$("q"), sug=$("sug"); let hi=-1;
 const matches = v => { v=v.trim().toLowerCase(); return v? CODES.filter(c=>c.includes(v)||DB[c].name.toLowerCase().includes(v)) : CODES; };
 function showSug(){ const m=matches(q.value); hi=-1;
-  sug.innerHTML = m.length ? m.map(c=>`<button type="button" data-c="${c}"><span>${DB[c].name}</span><span class="m">${c} · ${DB[c].market}</span></button>`).join("")
-    : `<div class="none">데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</div>`;
+  sug.innerHTML = m.length ? m.map(c=>`<button type="button" data-c="${c}"><span>${DB[c].name}</span><span class="meta faint num">${c} · ${DB[c].market}</span></button>`).join("")
+    : `<div class="empty" role="status">${icon("search")}<div><p class="row-title">‘${esc(q.value.trim())}’에 맞는 회사가 없어요</p><p class="meta">회사 이름이나 6자리 종목코드로 찾아 보세요. 데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</p></div></div>`;
   sug.hidden=false; }
-function pick(c){ if(!c) return; state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,how:false,fail:state.fail,dv:null}; q.value=DB[c].name; sug.hidden=true; render(); window.scrollTo({top:0,behavior:"smooth"}); }
+function pick(c){ if(!c) return; lastCode=c;
+  state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,how:false,view:"ok",dv:null}; q.value=DB[c].name; sug.hidden=true;
+  load(c); window.scrollTo({top:0,behavior:"smooth"}); }
 q.addEventListener("input",showSug); q.addEventListener("focus",showSug);
 q.addEventListener("keydown",e=>{ const bs=[...sug.querySelectorAll("button")];
   if(e.key==="ArrowDown") hi=Math.min(bs.length-1,hi+1); else if(e.key==="ArrowUp") hi=Math.max(0,hi-1);

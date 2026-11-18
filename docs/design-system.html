@@ -1,0 +1,575 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>기업 인사이트 디자인 시스템</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* 디자인 시스템 페이지. 기준 문서는 DESIGN.md, 적용 예시는 demo.html.
+   아래 "공통" 블록은 demo.html의 토큰·글자 역할·아이콘·부품 CSS를 그대로 복사한 것이다. 값을 바꾸면 두 파일을 함께 고친다. */
+/* ───────── 공통: demo.html에서 복사 (:root ~ ④ 타임라인) ───────── */
+:root{
+  /* 회색 단계표: 같은 계열(살짝 차가운 회색). 숫자가 작을수록 밝다 */
+  --g200:#e4e4e7; --g300:#d4d4d8; --g400:#a1a1aa; --g450:#93939c; --g600:#52525b; --g700:#3f3f46; --g800:#27272a; --g900:#18181b; --g925:#111113; --g950:#09090b;
+  --bg:var(--g950); /* 거의 검정. 순수 검정(#000) 위 순수 흰색은 글자가 번져 보여 둘 다 한 단계씩 낮춘다 */
+  --card:var(--g925); /* 카드, 판단 카드 */
+  --surface:var(--g900); /* 카드 안의 한 단계 들어간 칸, 입력창 */
+  --glass-solid:rgba(9,9,11,.8); --glass-blur:24px; /* 위에 떠 있는 유리(상단 바, 패널): --g950을 80%로 */
+  --text:var(--g200); --text-sub:var(--g400); --text-faint:var(--g450);
+  --tint:255,255,255;
+  --line:var(--g800); --line-hover:var(--g700); --line-selected:var(--g600); --line-strong:var(--g700);
+  /* 면의 상태: hover는 지금 면보다 한 단계, 누름·선택은 두 단계 밝게 */
+  --fill-hover:var(--g900); --fill-selected:var(--g800); /* 카드 위의 줄·글자형 버튼(기본 면 없음) */
+  --btn:var(--g900); --btn-hover:var(--g800); --btn-press:var(--g700); /* 보조 버튼·세그먼트(기본 면 900) */
+  --primary:var(--g200); --primary-hover:var(--g300); --primary-press:var(--g400); --on-primary:var(--g950); /* 주 버튼(밝은 면) */
+  --focus:rgba(var(--tint),.6);
+  --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --up-line:rgba(255,92,105,.45); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --down-line:rgba(76,148,255,.45); --flat:var(--g400); --flat-soft:var(--g800);
+  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12); --ai-wash:rgba(167,139,250,.06); --ai-line:rgba(167,139,250,.32); --ai-glow:rgba(167,139,250,.18);
+  --scrim:rgba(0,0,0,.55);
+  /* 간격: 4px 단계 일곱 개만 */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+  /* 모서리: 세 가지만. 큰 면(카드·패널) / 안쪽 것(칸·버튼·입력창·줄·목록) / 알약(칩·배지·세그먼트) */
+  --r-lg:16px; --r-md:12px; --r-full:999px;
+  /* 글자 크기: 다섯 개 + 좁은 화면의 화면 제목 24 */
+  --fs-title:28px; --fs-value:20px; --fs-card:17px; --fs-body:15px; --fs-small:13px;
+  --fast:.2s cubic-bezier(.4,0,.2,1);
+  --font:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:var(--fs-body);font-weight:400;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere} /* 한글은 단어 중간에서 줄을 바꾸지 않는다 */
+h1,h2,h3,p{margin:0} h1,h2{text-wrap:balance}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+:is(a,button,input,[tabindex]):focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.num{font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--flat)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.gutter{padding-left:max(var(--s4),env(safe-area-inset-left,0px));padding-right:max(var(--s4),env(safe-area-inset-right,0px))}
+.inner{max-width:720px;margin:0 auto}
+
+/* ───────── 글자 역할: 이 여덟 가지만 쓴다 ───────── */
+/* 화면 제목 28/800 (폭 600px 이하 24) */
+h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03em}
+/* 큰 값 20/800: 판단 배지, 패널 제목, 실적 숫자 */
+.badge,.dv-title,.fin dd{font-size:var(--fs-value);font-weight:800;line-height:1.3;letter-spacing:-.02em}
+/* 카드 제목 17/700: 판단 카드를 포함한 모든 카드 제목, 로고 글자, 상태 안내의 제목 */
+.card-title,.logo{font-size:var(--fs-card);font-weight:700;line-height:1.4;letter-spacing:-.02em}
+/* 줄 제목 15/600: 목록 한 줄의 쉬운 말, 버튼 글자, 날짜 목록의 머리 */
+.row-title,.btn{font-size:var(--fs-body);font-weight:600;line-height:1.5}
+/* 본문 15/400: 문단, 요약 (body 기본값) */
+/* 칸 제목 13/700 보조색: 판단 근거, 반대로 볼 점, 패널 안 칸의 제목, 타임라인 묶음 이름 */
+.box-title{font-size:var(--fs-small);font-weight:700;line-height:1.5;color:var(--text-sub);letter-spacing:0}
+/* 라벨 13/600: 칩, AI 칩, 세그먼트 버튼, 글자형 버튼 */
+.chip,.tone,.ai,.seg button,.tbtn{font-size:var(--fs-small);font-weight:600;line-height:1.5;letter-spacing:0}
+/* 메타 13/400: 날짜·출처·원문 제목(옅은 색), 설명·고지(보조색) */
+.meta{font-size:var(--fs-small);font-weight:400;line-height:1.5;color:var(--text-sub);letter-spacing:0}
+.meta.faint{color:var(--text-faint)}
+
+/* ───────── 아이콘: 24 칸에 그린 선 아이콘, 선 굵기는 크기와 상관없이 1.5px ───────── */
+.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.i *{vector-effect:non-scaling-stroke}
+.i.sm{width:16px;height:16px}
+/* 모양 기호(호재 ▲, 악재 ▼, 중립 —): 채운 도형. 색만으로 구분하지 않으려고 붙인다 */
+.shape{width:12px;height:12px;flex:none;fill:currentColor;stroke:none}
+.badge .shape{width:16px;height:16px}
+
+/* ───────── 부품 ───────── */
+/* 버튼: 주(밝은 면, 화면에 하나), 보조(회색 면 + 테두리), 글자형(면 없음), 아이콘(44px 정사각) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:44px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-hover);background:var(--btn);color:var(--text);text-decoration:none;transition:border-color var(--fast),background var(--fast),color var(--fast)}
+.btn:hover{background:var(--btn-hover);border-color:var(--line-selected)}
+.btn:active{background:var(--btn-press)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.primary:active{background:var(--primary-press);border-color:var(--primary-press)}
+.btn.icon{min-width:44px;padding:0;border-color:transparent;background:none}
+.btn.icon:hover{background:var(--fill-hover)} .btn.icon:active{background:var(--fill-selected)}
+.tbtn{display:inline-flex;align-items:center;gap:var(--s1);text-decoration:none;min-height:44px;padding:0 var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-md);color:var(--text-sub);transition:color var(--fast),background var(--fast)}
+.tbtn:hover{color:var(--text);background:var(--fill-hover)}
+.tbtn:active{background:var(--fill-selected)}
+:is(.btn,.tbtn,.seg button):disabled{opacity:.4;cursor:default;pointer-events:none}
+/* 세그먼트(같은 내용을 다른 범위로 보는 선택만): 선택은 밝은 면 */
+.seg{display:inline-flex;gap:var(--s2);flex-wrap:wrap}
+.seg button{min-height:36px;padding:0 var(--s4);border-radius:var(--r-full);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);transition:border-color var(--fast),background var(--fast),color var(--fast)}
+.seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
+.seg button:active{background:var(--btn-press);color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
+/* 칩(누를 수 없는 표시): 호재·악재·중립과 AI. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정한다(선택된 줄 위에서도 대비가 같게) */
+.tone,.ai,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-full);white-space:nowrap}
+.tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
+.tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
+.tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
+.ai{color:var(--ai);background:linear-gradient(var(--ai-soft),var(--ai-soft)),var(--card);box-shadow:0 0 0 1px var(--ai-line),0 0 14px var(--ai-glow);vertical-align:1px;margin-right:var(--s2)}
+.chip{color:var(--text-sub);border:1px solid var(--line-hover)}
+.by-ai{color:var(--ai)}
+/* 판단 배지: 옅은 색 면 + 가는 색 테두리, 강한 호재·악재만 색으로 채운다 */
+.badge{display:inline-flex;align-items:center;gap:var(--s2);border-radius:var(--r-full);padding:var(--s2) var(--s4);border:1px solid}
+.badge.up{color:var(--up);background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);border-color:var(--up-line)}
+.badge.down{color:var(--down);background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);border-color:var(--down-line)}
+.badge.up.strong{background:var(--up);border-color:var(--up);color:var(--bg)}
+.badge.down.strong{background:var(--down);border-color:var(--down);color:var(--bg)}
+.badge.flat{color:var(--text-sub);background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);border-color:var(--line-hover)}
+.badge.hold{color:var(--text-sub);border-color:var(--line-selected);border-style:dashed}
+/* 입력창 */
+.field{position:relative}
+.field .i{position:absolute;left:var(--s3);top:50%;margin-top:-10px;color:var(--text-faint);pointer-events:none}
+.field input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--text);padding:0 var(--s3) 0 40px;font:inherit;font-size:var(--fs-body);transition:border-color var(--fast)}
+.field input::placeholder{color:var(--text-faint)}
+.field input:hover{border-color:var(--line-hover)}
+.field input:focus{border-color:var(--line-selected)}
+.field input:disabled{opacity:.4;cursor:default}
+/* 목록 한 줄(누르면 패널이 열림): 기본 면 없음 → hover 900 → 누름·선택 800 */
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s1) var(--s3);align-items:start;padding:var(--s3);margin:0 calc(-1 * var(--s3));width:calc(100% + var(--s6));border-radius:var(--r-md);transition:background var(--fast)}
+.row:hover{background:var(--fill-hover)}
+.row:active,.row[aria-current="true"]{background:var(--fill-selected)}
+.row .go{color:var(--text-faint);margin-top:calc((1.5em - 16px) / 2)}
+.row .meta{grid-column:2/4}
+/* 카드: 한 색의 면(925) + 가는 회색 테두리(800). 누를 수 없어서 hover가 없다 */
+.card,.judge{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s6);min-width:0}
+/* 카드 안의 칸(반대로 볼 점, 날짜 목록, 실적 칸, 패널의 칸, 빈 상태) */
+.box{background:var(--surface);border-radius:var(--r-md);padding:var(--s4)}
+/* AI가 쓴 글(판단 카드의 한 줄 요약, 패널의 3줄 요약)은 옅은 보라 테두리 칸에 넣는다. 보라는 AI 전용 */
+.ai-box{background:linear-gradient(var(--ai-wash),var(--ai-wash)),var(--card);border:1px solid var(--ai-line);border-radius:var(--r-md);padding:var(--s4)}
+/* 빈 상태·검색 결과 없음: 왜 없는지(줄 제목)와 언제 생기는지(메타) */
+.empty{display:flex;gap:var(--s3);align-items:flex-start}
+.empty>.i{color:var(--text-faint);margin-top:calc((1.5em - 20px) / 2)}
+.empty .meta{margin-top:var(--s1)}
+/* 불러오는 중: 실제 배치와 같은 자리에 회색 면(900)을 둔다. 느리게 한 번씩 옅어진다 */
+.sk{display:block;background:var(--surface);border-radius:var(--r-md);animation:pulse 1.6s cubic-bezier(.4,0,.2,1) infinite}
+.sk.pill{border-radius:var(--r-full)}
+@keyframes pulse{50%{opacity:.5}}
+
+/* ───────── 상단 바: 위에 떠 있는 유리 ───────── */
+.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;border-bottom:1px solid var(--line);
+  background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.appbar .inner{display:flex;align-items:center;gap:var(--s3);padding-block:var(--s3)}
+.logo{display:flex;align-items:center;gap:var(--s2);white-space:nowrap}
+/* 로고: 둥근 칸을 밝은 면으로 채우고 겹친 층 아이콘을 바탕색으로 */
+.logo .mark{width:32px;height:32px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.logo .mark svg{width:18px;height:18px}
+.search{flex:1;min-width:0;max-width:420px;position:relative}
+.sug{position:absolute;left:0;right:0;top:calc(100% + var(--s1));background:var(--card);border:1px solid var(--line-hover);border-radius:var(--r-md);overflow:hidden;z-index:30}
+.sug button{display:flex;justify-content:space-between;gap:var(--s3);width:100%;min-height:44px;align-items:center;padding:var(--s2) var(--s3);transition:background var(--fast)}
+.sug button:hover,.sug button.on{background:var(--fill-hover)}
+.sug .empty{padding:var(--s3)}
+
+/* ───────── 종목 화면 ───────── */
+main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.co .meta{margin-top:var(--s1)}
+
+/* ① 판단 카드: 화면에서 유일하게 2px 테두리 */
+.judge{border-width:2px;border-color:var(--line-strong);border-top-color:var(--line-selected)}
+.judge.hold{border-style:dashed}
+.jh{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s1) var(--s2);flex-wrap:wrap}
+.vrow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4)}
+.barrow{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s4)}
+.bar{flex:1;position:relative;height:8px;border-radius:var(--r-full);background:var(--flat-soft);overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;border-radius:var(--r-full)}
+.bar .fill.up{background:var(--up)} .bar .fill.down{background:var(--down)} .bar .fill.flat{background:var(--flat)}
+.bar .mid{left:50%;width:2px;background:var(--card);margin-left:-1px;border-radius:0}
+.lede{margin-top:var(--s4)}
+.stale{opacity:.6} /* 분석 실패 때 지난 판단 */
+.fail{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);padding:var(--s3) var(--s4);border:1px solid var(--line-hover);border-radius:var(--r-md)}
+.box-title.basis{margin:var(--s6) 0 var(--s1)}
+.ev{list-style:none;margin:0;padding:0}
+.ev li{border-top:1px solid var(--line)}
+.ev li:first-child{border-top:0}
+.counter{margin-top:var(--s4)}
+.counter .box-title{margin-bottom:var(--s1)}
+.counter .tbtn{margin-top:var(--s1)}
+.how{margin-top:var(--s2)}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:var(--s1) var(--s3);flex-wrap:wrap;margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
+.chev{transition:transform var(--fast)}
+[aria-expanded="true"] .chev{transform:rotate(180deg)}
+
+/* ② 판단 추이 */
+.sec-h + .meta{margin-top:var(--s1)}
+.chart-box{position:relative;margin-top:var(--s3)}
+.chart{width:100%;height:auto;display:block}
+.chart text{font-family:var(--font);font-size:var(--fs-small);fill:var(--text-faint)}
+.chart .cross{stroke:var(--text-faint);stroke-dasharray:3 3;display:none}
+.chart .hdot{fill:var(--text);stroke:var(--card);stroke-width:2;display:none}
+.tip{position:absolute;pointer-events:none;display:none;background:var(--text);color:var(--bg);border-radius:var(--r-md);padding:var(--s1) var(--s3);font-size:var(--fs-small);font-weight:600;white-space:nowrap;transform:translate(-50%,-125%)}
+.day{margin-top:var(--s3);padding:var(--s3) var(--s4)}
+.day .h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);flex-wrap:wrap}
+.day ul{list-style:none;margin:var(--s2) 0 0;padding:0}
+.day li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 var(--s2);padding:var(--s2) 0;border-top:1px solid var(--line);align-items:start}
+.day li:first-child{border-top:0}
+.day li .meta{grid-column:2}
+.day .t{text-align:left;text-decoration:none}
+.day .t:hover{text-decoration:underline}
+.day .nav{display:flex;justify-content:space-between;gap:var(--s2);margin-top:var(--s1);padding-top:var(--s1);border-top:1px solid var(--line)}
+.day .nav .tbtn{margin:0}
+.chart-box + .meta{margin-top:var(--s2)}
+
+/* 접는 칸 */
+.disc{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--s2);min-height:44px}
+.disc .sum{display:flex;align-items:center;gap:var(--s2);white-space:nowrap}
+
+/* ③ 실적: 정보용 칸이라 hover 없음 */
+.fin{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);margin:var(--s4) 0 0}
+.fin dd{margin:var(--s1) 0 0}
+.fin dd small{display:block;font-size:var(--fs-small);font-weight:600;letter-spacing:0}
+.fin + .meta{margin-top:var(--s3)}
+.card .empty.box{margin-top:var(--s4)}
+
+/* ④ 타임라인 */
+.tl{list-style:none;margin:var(--s3) 0 0;padding:0;position:relative}
+.tl::before{content:"";position:absolute;left:calc(48px + var(--s1) + 22px);top:var(--s3);bottom:var(--s3);width:1px;margin-left:-.5px;background:var(--line-hover)}
+.tl>li{display:grid;grid-template-columns:48px 44px minmax(0,1fr);gap:0 var(--s1);padding:var(--s1) 0;align-items:start}
+.tl .d{text-align:right;padding-top:var(--s3);white-space:nowrap}
+/* 선 위의 표시: 호재 ▲, 악재 ▼(모양 기호), 중립 ●, 예정 ○, 오늘 큰 ●. 카드색 칸이 선을 끊어 준다 */
+.tl .n{width:16px;height:16px;margin:var(--s3) auto 0;display:grid;place-items:center;background:var(--card);position:relative;z-index:1}
+.tl .n.up{color:var(--up)} .tl .n.down{color:var(--down)}
+.tl .n.flat::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--flat)}
+.tl .n.plan::after{content:"";width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--text-faint)}
+.tl .n.today::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--text)}
+.tl .item{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r-md);transition:background var(--fast)}
+.tl .item .meta{grid-column:1} .tl .item .go{grid-row:1;grid-column:2;color:var(--text-faint);margin-top:calc((1.5em - 16px) / 2)}
+.tl .item:hover{background:var(--fill-hover)}
+.tl .item:active,.tl .item[aria-current="true"]{background:var(--fill-selected)}
+.tl .static{padding:var(--s2) var(--s3);display:block}
+.tl .static>span{display:block}
+.tl .today-row .d{color:var(--text);font-weight:600}
+.tl .plan-row .row-title{color:var(--text-sub)}
+.tl .lbl{grid-column:3;padding:var(--s2) var(--s3) 0}
+.tl-empty{grid-column:3;padding:var(--s2) var(--s3)}
+.more{display:flex;justify-content:center;width:100%;margin:var(--s2) 0 0}
+.is-new{animation:flash 1.2s ease-out}
+@keyframes flash{from{background:var(--fill-selected)}}
+
+/* 상태 안내 카드(불러오기 오류): 넓은 화면에서도 한 줄 전체 */
+.state-card .meta{margin-top:var(--s2);font-size:var(--fs-body)}
+.state-card .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s6)}
+
+/* ───────── 상태를 멈춰서 보여주기 (이 페이지 전용): 실제 :hover·:active와 같은 값 ───────── */
+.btn.is-hover{background:var(--btn-hover);border-color:var(--line-selected)} .btn.is-press{background:var(--btn-press)}
+.btn.primary.is-hover{background:var(--primary-hover);border-color:var(--primary-hover)} .btn.primary.is-press{background:var(--primary-press);border-color:var(--primary-press)}
+.btn.icon.is-hover{background:var(--fill-hover);border-color:transparent} .btn.icon.is-press{background:var(--fill-selected)}
+.tbtn.is-hover{color:var(--text);background:var(--fill-hover)} .tbtn.is-press{background:var(--fill-selected)}
+.seg button.is-hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)} .seg button.is-press{background:var(--btn-press);color:var(--text)}
+.field input.is-hover{border-color:var(--line-hover)} .field input.is-focus{border-color:var(--line-selected)}
+.row.is-hover{background:var(--fill-hover)} .row.is-press{background:var(--fill-selected)}
+.is-focus{outline:2px solid var(--focus);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ .appbar,.panel-mini{background:var(--bg)} }
+
+
+/* ───────── 이 페이지 전용 ───────── */
+.appbar{position:sticky;top:0;z-index:5;border-bottom:1px solid var(--line);background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur))}
+.appbar .inner{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding-block:var(--s3)}
+.logo{display:flex;align-items:center;gap:var(--s2);white-space:nowrap}
+.logo .mark{width:32px;height:32px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.logo .mark svg{width:18px;height:18px}
+.inner{max-width:1040px}
+main.inner{display:grid;gap:var(--s12);padding-block:var(--s8) var(--s12)}
+.toc{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s4)}
+.toc a{display:inline-flex;align-items:center;min-height:36px;padding:0 var(--s3);border-radius:var(--r-full);border:1px solid var(--line-hover);background:var(--btn);color:var(--text-sub);text-decoration:none;font-size:var(--fs-small);font-weight:600;transition:background var(--fast),color var(--fast),border-color var(--fast)}
+.toc a:hover{background:var(--btn-hover);color:var(--text);border-color:var(--line-selected)}
+section.sec>h2{font-size:var(--fs-value);font-weight:800;letter-spacing:-.02em;line-height:1.3}
+section.sec>h2+.meta{margin-top:var(--s2);max-width:680px}
+.sec-body{margin-top:var(--s6);display:grid;gap:var(--s4)}
+.grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-small)}
+th,td{text-align:left;padding:var(--s3) var(--s4);border-top:1px solid var(--line);vertical-align:middle}
+thead th{border-top:0;color:var(--text-sub);font-weight:700;white-space:nowrap}
+tbody th{font-weight:600;color:var(--text);white-space:nowrap}
+td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:var(--fs-small);color:var(--text-sub)}
+.na{color:var(--text-faint)}
+/* 색 견본 */
+.sw{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
+.sw i{display:block;height:64px;border-bottom:1px solid var(--line)}
+.sw div{padding:var(--s2) var(--s3)}
+/* 대비 표 */
+.ok{color:var(--text)} .ratio{font-variant-numeric:tabular-nums;font-weight:600}
+.pv{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:28px;padding:0 var(--s2);border-radius:var(--r-md);font-weight:600;border:1px solid var(--line)}
+/* 글자 단계 */
+.type-row{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:var(--s4);align-items:baseline;padding:var(--s4) 0;border-top:1px solid var(--line)}
+.type-row:first-child{border-top:0}
+/* 간격·모서리 */
+.space-row{display:grid;grid-template-columns:72px 48px minmax(0,1fr);gap:var(--s3);align-items:center;padding:var(--s2) 0}
+.space-row b{display:block;height:16px;background:var(--g600)}
+.rad{height:88px;border:1px solid var(--line-hover);background:var(--surface);display:grid;place-items:center}
+/* 상태 표의 칸 */
+.cell{display:flex;align-items:center;min-height:56px}
+.cell .row{margin:0;width:220px;background-clip:padding-box}
+/* 아이콘 */
+.ico{display:grid;justify-items:center;gap:var(--s2);padding:var(--s4) var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);text-align:center}
+.ico .pair{display:flex;align-items:center;gap:var(--s3);color:var(--text)}
+.ico .shape{width:16px;height:16px}
+/* 화면 상태 예시 */
+.states{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.demo-sug{position:static;margin-top:var(--s2)}
+.panel-mini{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--glass-solid);-webkit-backdrop-filter:blur(var(--glass-blur));backdrop-filter:blur(var(--glass-blur))}
+.panel-mini .h{display:flex;justify-content:space-between;align-items:center;padding:var(--s2) var(--s3) var(--s2) var(--s6);border-bottom:1px solid var(--line)}
+.panel-mini .b{padding:var(--s6)}
+/* 판단 카드 비교: 같은 뒤 배경(스크롤하며 지나가는 글) 위에 유리판과 단색판 */
+.cmp{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.stage{position:relative;border-radius:var(--r-lg);overflow:hidden;padding:var(--s6) var(--s4);background:var(--bg);border:1px solid var(--line)}
+.stage .behind{position:absolute;inset:0;padding:var(--s4);color:var(--text-sub);font-size:var(--fs-body);line-height:1.6;overflow:hidden}
+.stage .behind p{margin:0 0 var(--s2)}
+.stage .behind .up-bar{display:inline-block;width:40%;height:10px;background:var(--up);border-radius:var(--r-full)}
+.stage .behind .down-bar{display:inline-block;width:30%;height:10px;background:var(--down);border-radius:var(--r-full)}
+.stage .judge{position:relative}
+.judge.glass{background:rgba(17,17,19,.6);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+.stage-cap{margin-top:var(--s2)}
+@media (max-width:600px){ .type-row{grid-template-columns:1fr;gap:var(--s1)} section.sec>h2{font-size:var(--fs-card)} }
+</style>
+
+<header class="appbar gutter">
+  <div class="inner">
+    <div class="logo"><span class="mark" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.5 14 5.5 8 8.5 2 5.5z" fill="currentColor"/><path d="M2 8.2 8 11.2 14 8.2"/><path d="M2 10.9 8 13.9 14 10.9"/></svg></span>디자인 시스템</div>
+    <a class="tbtn" href="demo.html">데모 화면<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></a>
+  </div>
+</header>
+
+<main class="inner gutter">
+  <div>
+    <h1>기업 인사이트 디자인 시스템</h1>
+    <p class="meta" style="margin-top:var(--s2);font-size:var(--fs-body)">모든 화면이 쓰는 색, 글자, 간격, 부품과 상태, 아이콘, 화면 상태를 한곳에 모았어요. 규칙의 이유는 DESIGN.md, 실제 화면은 데모에서 볼 수 있어요.</p>
+    <nav class="toc" aria-label="목차"><a href="#color">색</a><a href="#contrast">대비</a><a href="#type">글자</a><a href="#space">간격·모서리</a><a href="#parts">부품과 상태</a><a href="#static">표시 부품</a><a href="#icons">아이콘</a><a href="#states">화면 상태</a><a href="#glass">판단 카드 유리 비교</a></nav>
+  </div>
+
+  <!-- 1. 색 -->
+  <section class="sec" id="color">
+    <h2>회색 단계표와 색 토큰</h2>
+    <p class="meta">검정·회색은 한 계열의 단계표 값만 써요. 면은 안으로 들어갈수록 한 단계씩 밝아져요: 바탕 950 → 카드 925 → 카드 안의 칸 900 → 선택 800. 뜻이 있는 색은 호재·악재·AI 셋뿐이에요.</p>
+    <div class="sec-body">
+      <div class="grid" id="grays"></div>
+      <div class="grid" id="hues"></div>
+      <div class="scroll"><table>
+        <thead><tr><th>토큰</th><th>값</th><th>쓰는 곳</th></tr></thead>
+        <tbody>
+          <tr><th>--bg / --card / --surface</th><td><code>950 / 925 / 900</code></td><td>바탕 / 카드 / 카드 안의 칸·입력창</td></tr>
+          <tr><th>--text / --text-sub / --text-faint</th><td><code>200 / 400 / 450</code></td><td>본문 / 보조·칸 제목 / 날짜·출처</td></tr>
+          <tr><th>--line / --line-hover / --line-selected / --line-strong</th><td><code>800 / 700 / 600 / 700</code></td><td>카드 테두리·줄 나눔 / 버튼 테두리 / hover 테두리·선택 / 판단 카드 테두리</td></tr>
+          <tr><th>--fill-hover / --fill-selected</th><td><code>900 / 800</code></td><td>면이 없는 줄·글자형 버튼의 hover / 누름·선택</td></tr>
+          <tr><th>--btn / --btn-hover / --btn-press</th><td><code>900 / 800 / 700</code></td><td>보조 버튼·세그먼트의 기본 / hover / 누름</td></tr>
+          <tr><th>--primary / --primary-hover / --primary-press / --on-primary</th><td><code>200 / 300 / 400 / 950</code></td><td>주 버튼(밝은 면)과 그 위 글자, 선택된 세그먼트</td></tr>
+          <tr><th>--glass-solid</th><td><code>950을 80% + 뒤 흐림 24px</code></td><td>위에 떠 있는 유리: 상단 바, 공시 패널만</td></tr>
+          <tr><th>--focus</th><td><code>흰색 60%</code></td><td>키보드 포커스 테두리 2px</td></tr>
+          <tr><th>--up / --down / --ai</th><td><code>#ff5c69 / #4c94ff / #a78bfa</code></td><td>호재 / 악재 / AI가 한 일</td></tr>
+          <tr><th>--up-soft / --down-soft / --ai-soft</th><td><code>12%</code></td><td>칩·배지의 옅은 면(불투명 카드색 위에 겹침)</td></tr>
+          <tr><th>--ai-wash / --ai-line</th><td><code>보라 6% / 32%</code></td><td>AI가 쓴 글을 담는 칸의 면 / 테두리</td></tr>
+          <tr><th>--scrim</th><td><code>검정 55%</code></td><td>패널이 열렸을 때 뒤 화면을 덮는 막</td></tr>
+        </tbody></table></div>
+    </div>
+  </section>
+
+  <!-- 2. 대비 -->
+  <section class="sec" id="contrast">
+    <h2>대비 표</h2>
+    <p class="meta">이 페이지가 토큰 값으로 WCAG 식을 직접 계산한 값이에요(반투명 색은 아래 면에 합성해서 계산). 글자는 4.5:1, 포커스 테두리는 3:1 이상이어야 해요. 쓸 수 없는 상태(투명도 .4)와 분석 실패 때 흐린 지난 판단(.6)은 예외예요.</p>
+    <div class="sec-body"><div class="scroll"><table>
+      <thead><tr><th>조합</th><th>보기</th><th>대비</th><th>기준</th></tr></thead>
+      <tbody id="contrast-rows"></tbody></table></div></div>
+  </section>
+
+  <!-- 3. 글자 -->
+  <section class="sec" id="type">
+    <h2>글자 단계</h2>
+    <p class="meta">Pretendard, 줄 간격 1.6(제목 1.3~1.4), 숫자는 자리 맞춤(tabular-nums). 역할은 아래 여덟 가지뿐이고, 크기는 13·15·17·20·28(폭 600px 이하의 화면 제목 24)만 써요. 판단 카드의 제목도 다른 카드 제목과 같은 "카드 제목"이에요.</p>
+    <div class="sec-body"><div class="card" id="type-rows"></div></div>
+  </section>
+
+  <!-- 4. 간격·모서리 -->
+  <section class="sec" id="space">
+    <h2>간격과 모서리</h2>
+    <p class="meta">간격은 4px 단계 일곱 개만 써요. 모서리는 세 가지: 큰 면(카드·패널) 16, 안쪽 것(칸·버튼·입력창·줄·목록) 12, 알약(칩·배지·세그먼트) 끝까지 둥글게.</p>
+    <div class="sec-body">
+      <div class="card" id="space-rows"></div>
+      <div class="grid">
+        <div><div class="rad" style="border-radius:var(--r-lg)"><span class="meta">16</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-lg</code> 카드, 판단 카드, 패널, 시트</p></div>
+        <div><div class="rad" style="border-radius:var(--r-md)"><span class="meta">12</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-md</code> 안쪽 칸, 버튼, 입력창, 목록 줄, 자동완성, 말풍선, 로고</p></div>
+        <div><div class="rad" style="border-radius:var(--r-full)"><span class="meta">끝까지</span></div><p class="meta" style="margin-top:var(--s2)"><code>--r-full</code> 칩, 배지, 세그먼트, 판단 막대</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 부품과 상태 -->
+  <section class="sec" id="parts">
+    <h2>누를 수 있는 부품과 상태</h2>
+    <p class="meta">hover는 지금 면보다 한 단계, 누름·선택은 두 단계 밝게 해요. 크기와 위치는 바뀌지 않고 색만 바뀌어요(0.2초). 포커스 테두리는 절대 빼지 않아요. 주 버튼은 한 화면(패널)에 하나만 둬요. 아래 표는 각 상태를 멈춰서 보여줘요. 실제로 마우스를 올리고 눌러 볼 수도 있어요.</p>
+    <div class="sec-body"><div class="scroll"><table>
+      <thead><tr><th>부품</th><th>기본</th><th>hover</th><th>누름</th><th>선택</th><th>포커스</th><th>쓸 수 없음</th></tr></thead>
+      <tbody id="state-rows"></tbody></table></div>
+      <p class="meta faint">입력창의 포커스는 테두리를 한 단계 밝게(600) 하고 바깥 포커스 테두리를 함께 그려요. 세그먼트는 같은 내용을 다른 범위로 보는 선택(기간)에만 써요. 탭은 쓰지 않아요.</p>
+    </div>
+  </section>
+
+  <!-- 6. 표시 부품 -->
+  <section class="sec" id="static">
+    <h2>표시 부품 (누를 수 없음)</h2>
+    <p class="meta">칩, 배지, 카드, 칸은 누를 수 없어서 hover·누름 상태가 없어요. 누를 수 없는 것에 hover를 두면 눌리는 것처럼 보이기 때문이에요.</p>
+    <div class="sec-body">
+      <div class="card"><h3 class="box-title">칩: 호재·악재·중립과 AI. 한 줄에 하나까지</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)" id="chips"></div>
+        <h3 class="box-title" style="margin-top:var(--s6)">판단 배지: 다섯 단계 + 판단 보류(점선)</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s3)" id="badges"></div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
+        <div class="card"><h3 class="card-title">카드</h3><p class="meta" style="margin-top:var(--s2)">925 면, 1px 800 테두리, 모서리 16, 안 여백 24(폭 600px 이하 24·16). 그림자 없음.</p></div>
+        <div class="judge"><h3 class="card-title">판단 카드</h3><p class="meta" style="margin-top:var(--s2)">화면에서 유일하게 2px 테두리(700), 윗변만 600. 판단 보류는 점선.</p></div>
+        <div class="card"><div class="box"><h3 class="box-title">카드 안의 칸</h3><p style="margin-top:var(--s1)">900 면, 모서리 12, 안 여백 16. 반대로 볼 점, 날짜 목록, 실적 칸.</p></div></div>
+        <div class="card"><div class="ai-box"><span class="ai">AI 요약</span>AI가 쓴 글만 이 보라 칸에 넣어요. 보라는 AI 전용이에요.</div></div>
+      </div>
+      <div class="panel-mini" style="max-width:440px"><div class="h"><span class="meta">삼성전자 · 공시 한 건</span><button type="button" class="btn icon" aria-label="닫기 보기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="b"><span class="meta">공시 패널: 위에 떠 있는 유리(950 80% + 흐림 24px). 폭 440px, 폭 640px 이하에서는 아래 시트. 열리면 오른쪽(시트는 아래)에서 밀려 들어와요.</span></div></div>
+    </div>
+  </section>
+
+  <!-- 7. 아이콘 -->
+  <section class="sec" id="icons">
+    <h2>아이콘</h2>
+    <p class="meta">24 칸에 직접 그린 선 아이콘이에요. 선 굵기는 크기와 상관없이 1.5px, 끝은 둥글게. 글자 옆(13px)에는 16px, 버튼·입력창(15px)에는 20px로 써요. 아이콘만 있는 버튼에는 이름(aria-label)을 붙이고, 아이콘은 화면 읽기에서 숨겨요. 호재·악재·중립의 모양 기호는 채운 도형이에요(글꼴마다 모양이 달라지는 ▲ 글자를 쓰지 않아요).</p>
+    <div class="sec-body"><div class="grid" id="icons-grid"></div></div>
+  </section>
+
+  <!-- 8. 화면 상태 -->
+  <section class="sec" id="states">
+    <h2>화면 상태</h2>
+    <p class="meta">비어 있거나 실패한 상태도 이유와 다음 행동을 말해요. 오류는 빨강을 쓰지 않아요(빨강은 호재). 데모 화면 아래의 "데모 화면 상태"로 실제 배치에서 볼 수 있어요.</p>
+    <div class="sec-body states">
+      <div class="card" aria-hidden="true"><h3 class="box-title" style="margin-bottom:var(--s3)">불러오는 중</h3>
+        <span class="sk" style="width:60%;height:22px"></span><div style="height:var(--s4)"></div><span class="sk pill" style="width:140px;height:44px"></span><div style="height:var(--s4)"></div><span class="sk" style="width:100%;height:72px"></span>
+        <p class="meta faint" style="margin-top:var(--s3)">실제 배치와 같은 자리에 900 면. 1.6초에 한 번 옅어져요(움직임 줄이기면 멈춤).</p></div>
+      <div class="card"><h3 class="box-title" style="margin-bottom:var(--s3)">공시가 없는 회사</h3>
+        <span class="badge hold">판단 보류</span>
+        <div class="empty box" style="margin-top:var(--s4)"><div><p class="row-title">아직 모은 공시가 없어요</p><p class="meta">새 공시가 들어오면 여기에 날짜순으로 쌓여요. 수집은 5분마다 해요.</p></div></div></div>
+      <div class="card"><h3 class="box-title" style="margin-bottom:var(--s3)">불러오기 오류</h3>
+        <p class="card-title">회사 정보를 불러오지 못했어요</p>
+        <p class="meta" style="margin-top:var(--s2)">서버에 연결하지 못했어요. 잠시 뒤 다시 불러와 주세요.</p>
+        <div style="display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s4)"><button type="button" class="btn primary"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M17.3 2.7v4h-4"/></svg>다시 불러오기</button></div></div>
+      <div class="card"><h3 class="box-title" style="margin-bottom:var(--s3)">검색 결과 없음</h3>
+        <div class="field"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" value="없는회사" aria-label="검색 예시" readonly></div>
+        <div class="sug demo-sug"><div class="empty"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><div><p class="row-title">‘없는회사’에 맞는 회사가 없어요</p><p class="meta">회사 이름이나 6자리 종목코드로 찾아 보세요.</p></div></div></div></div>
+      <div class="card"><h3 class="box-title" style="margin-bottom:var(--s3)">분석 실패</h3>
+        <div class="stale"><span class="badge up"><svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10H1z"/></svg>약한 호재</span></div>
+        <div class="fail meta"><span>11.06 공시 분석이 끝나지 않아 11.05 판단을 보여주고 있어요.</span><button type="button" class="btn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M17.3 2.7v4h-4"/></svg>다시 불러오기</button></div></div>
+      <div class="card"><h3 class="box-title" style="margin-bottom:var(--s3)">요약이 없는 공시</h3>
+        <div class="box"><h3 class="box-title">요약</h3><p class="meta" style="margin-top:var(--s1)">중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.</p></div>
+        <div class="box" style="margin-top:var(--s3)"><h3 class="box-title">요약</h3><p class="meta" style="margin-top:var(--s1)">요약을 아직 만들지 않았어요. 다음 분석 때 채워져요.</p></div></div>
+    </div>
+  </section>
+
+  <!-- 9. 판단 카드 유리 비교 -->
+  <section class="sec" id="glass">
+    <h2>판단 카드: 유리 버전과 지금 단색 버전</h2>
+    <p class="meta">두 카드 뒤에 같은 글(스크롤하며 지나가는 내용)을 깔았어요. 유리는 뒤가 흐리게 비치고, 단색은 가려요. 바탕이 한 색일 때는 둘이 똑같아 보여서, 유리의 차이는 뒤로 무언가 지나갈 때만 생겨요.</p>
+    <div class="sec-body">
+      <div class="cmp">
+        <div><div class="stage"><div class="behind" aria-hidden="true" id="behind-a"></div>
+          <div class="judge glass" id="glass-card"></div></div>
+          <p class="meta stage-cap"><b>유리</b> · 925를 60% + 뒤 흐림 24px</p></div>
+        <div><div class="stage"><div class="behind" aria-hidden="true" id="behind-b"></div>
+          <div class="judge" id="solid-card"></div></div>
+          <p class="meta stage-cap"><b>단색 (지금)</b> · 925 불투명</p></div>
+      </div>
+      <div class="box">
+        <h3 class="box-title">결론: 판단 카드는 단색으로 둔다</h3>
+        <p style="margin-top:var(--s1)">판단 카드는 화면의 기준점이라 언제나 같은 모습이어야 해요. 유리는 뒤에 무엇이 지나가느냐에 따라 면의 밝기가 달라져, 옅은 글씨의 대비를 미리 보장할 수 없어요(아래 측정). 판단 카드는 화면에 고정하지 않아서 뒤로 글이 지나갈 일도 없어요. 유리는 위에 떠서 글이 그 아래로 지나가는 상단 바와 공시 패널에만 써요.</p>
+        <p class="meta" id="glass-measure" style="margin-top:var(--s2)"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="gutter meta faint" style="text-align:center;padding-block:var(--s2) var(--s12)">기업 인사이트 · 디자인 시스템 · 기준 문서 DESIGN.md</footer>
+
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const svg = (p,cls="") => `<svg class="i${cls?" "+cls:""}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const IC = {
+  open:["열기","누르면 패널이 열리는 줄의 끝","<path d='M9.5 6l6 6-6 6'/>"],
+  prev:["이전","패널·날짜 목록의 이전 공시","<path d='M14.5 6l-6 6 6 6'/>"],
+  expand:["펼치기","접는 칸. 열리면 180도 돈다","<path d='M6 9.5l6 6 6-6'/>"],
+  external:["바깥 링크","DART 원문(새 창)","<path d='M13 5h6v6'/><path d='M19 5l-8 8'/><path d='M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10'/>"],
+  close:["닫기","공시 패널","<path d='M6 6l12 12M18 6 6 18'/>"],
+  reload:["다시 불러오기","분석 실패, 불러오기 오류","<path d='M19.5 12a7.5 7.5 0 1 1-2.2-5.3'/><path d='M17.3 2.7v4h-4'/>"],
+  search:["검색","검색창, 검색 결과 없음","<circle cx='11' cy='11' r='6.5'/><path d='m16 16 4 4'/>"]};
+const SHAPE = {
+  up:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 11 10H1z"/></svg>`,
+  down:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10.5 1 2h10z"/></svg>`,
+  flat:`<svg class="shape" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="5" width="9" height="2" rx="1"/></svg>`};
+const $ = id => document.getElementById(id);
+
+/* 1. 색 견본 */
+const GRAYS = [["950","바탕"],["925","카드"],["900","안쪽 칸·버튼"],["800","선·선택 면"],["700","버튼 테두리·누름"],["600","선택 테두리"],["450","옅은 글씨"],["400","보조 글씨"],["300","주 버튼 hover"],["200","본문"]];
+$("grays").innerHTML = GRAYS.map(([k,r])=>`<div class="sw"><i style="background:var(--g${k})"></i><div><b class="row-title">${k}</b><p class="meta">${css("--g"+k)} · ${r}</p></div></div>`).join("");
+const HUES = [["--up","호재"],["--down","악재"],["--ai","AI가 한 일"]];
+$("hues").innerHTML = HUES.map(([k,r])=>`<div class="sw"><i style="background:var(${k})"></i><div><b class="row-title" style="color:var(${k})">${r}</b><p class="meta">${css(k)} · 옅은 면 12%</p></div></div>`).join("");
+
+/* 2. 대비: 토큰 값으로 직접 계산 */
+const parse = v => { v=v.trim(); if(v.startsWith("#")){ const h=v.slice(1); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)).concat(1); }
+  const m=v.match(/rgba?\(([^)]+)\)/); const p=m[1].split(",").map(Number); return [p[0],p[1],p[2],p[3]??1]; };
+const resolve = n => { let v=css(n); while(v.startsWith("var(")) v=css(v.slice(4,-1)); return v; };
+const over = (fg,bg) => { const a=fg[3]; return [0,1,2].map(i=>Math.round(fg[i]*a+bg[i]*(1-a))).concat(1); };
+const lum = c => { const s=c.slice(0,3).map(v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4}); return .2126*s[0]+.7152*s[1]+.0722*s[2]; };
+const ratio = (a,b) => { const x=lum(a),y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+/* 면: 반투명이면 base 위에 합성 */
+const face = (n, base="--card") => { const c=parse(resolve(n)); return c[3]<1 ? over(c, face(base)) : c; };
+const PAIRS = [
+  ["본문 / 바탕","--text","--bg"],["본문 / 카드","--text","--card"],["본문 / 안쪽 칸","--text","--surface"],["본문 / 선택된 줄","--text","--fill-selected"],["본문 / 보조 버튼 누름","--text","--btn-press"],
+  ["보조 / 바탕","--text-sub","--bg"],["보조 / 카드","--text-sub","--card"],["보조 / 안쪽 칸","--text-sub","--surface"],["보조 / 선택된 줄·세그먼트 hover","--text-sub","--fill-selected"],
+  ["옅은 / 바탕","--text-faint","--bg"],["옅은 / 카드","--text-faint","--card"],["옅은 / 안쪽 칸","--text-faint","--surface"],["옅은 / 선택된 줄","--text-faint","--fill-selected"],
+  ["주 버튼 글자 / 기본","--on-primary","--primary"],["주 버튼 글자 / hover","--on-primary","--primary-hover"],["주 버튼 글자 / 누름","--on-primary","--primary-press"],
+  ["호재 / 카드","--up","--card"],["호재 / 안쪽 칸","--up","--surface"],["호재 / 선택된 줄","--up","--fill-selected"],["호재 / 칩·배지 면","--up","--up-soft"],
+  ["악재 / 카드","--down","--card"],["악재 / 안쪽 칸","--down","--surface"],["악재 / 선택된 줄","--down","--fill-selected"],["악재 / 칩·배지 면","--down","--down-soft"],
+  ["AI 보라 / 카드","--ai","--card"],["AI 보라 / 안쪽 칸","--ai","--surface"],["AI 보라 / AI 칩 면","--ai","--ai-soft"],["AI 보라 / AI 칸","--ai","--ai-wash"],
+  ["본문 / AI 칸","--text","--ai-wash"],["옅은 / AI 칸","--text-faint","--ai-wash"],
+  ["강한 호재 배지 글자","--bg","--up"],["강한 악재 배지 글자","--bg","--down"],
+  ["포커스 테두리 / 바탕 (선, 3:1)","--focus","--bg",3],["포커스 테두리 / 카드 (선, 3:1)","--focus","--card",3]];
+$("contrast-rows").innerHTML = PAIRS.map(([l,f,b,min=4.5])=>{ const bg=face(b), fg=parse(resolve(f)), fc=fg[3]<1?over(fg,bg):fg, r=ratio(fc,bg);
+  return `<tr><th>${l}</th><td><span class="pv" style="background:rgb(${bg.slice(0,3)});color:rgb(${fc.slice(0,3)})">가나 12</span></td><td class="ratio">${r.toFixed(1)} : 1</td><td>${r>=min?`<span class="ok">${min} 이상</span>`:`<b class="up">${min} 미만</b>`}</td></tr>`; }).join("");
+
+/* 3. 글자 단계 */
+const TYPES = [
+  ["화면 제목","28 / 800 / 1.3 (폭 600px 이하 24)","회사 이름",`<span style="font-size:var(--fs-title);font-weight:800;letter-spacing:-.03em;line-height:1.3">삼성전자</span>`],
+  ["큰 값","20 / 800 / 1.3 (폭 600px 이하 17)","판단 배지, 패널 제목, 실적 숫자",`<span class="dv-title" style="margin:0;display:block">237.3조</span>`],
+  ["카드 제목","17 / 700 / 1.4","모든 카드 제목(판단 카드 포함), 상태 안내의 제목, 로고 글자",`<span class="card-title">최근 공시 기준 판단</span>`],
+  ["줄 제목","15 / 600 / 1.5","목록 한 줄의 쉬운 말, 버튼 글자, 빈 상태의 제목",`<span class="row-title">3분기 영업이익이 1년 전보다 13% 증가</span>`],
+  ["본문","15 / 400 / 1.6","문단, AI 요약, 반대로 볼 점",`<span>잠정실적의 영업이익 증가와 자기주식 취득이 최근 공시의 분위기를 이끌고 있어요.</span>`],
+  ["칸 제목","13 / 700 / 1.5 · 보조색","판단 근거, 반대로 볼 점, 패널 칸 제목, 타임라인 묶음",`<span class="box-title">판단 근거</span>`],
+  ["라벨","13 / 600 / 1.5","칩, AI 칩, 세그먼트, 글자형 버튼",`<span class="tbtn" style="margin:0;padding:0;min-height:0">나머지 근거 3건 보기</span>`],
+  ["메타","13 / 400 / 1.5 · 보조색 또는 옅은 색","설명·고지(보조), 날짜·출처·원문 제목(옅은)",`<span class="meta faint">10.28 · 연결재무제표기준영업(잠정)실적(공정공시)</span>`]];
+$("type-rows").innerHTML = TYPES.map(([n,s,u,ex])=>`<div class="type-row"><div>${ex}</div><div><p class="row-title">${n}</p><p class="meta">${s}<br>${u}</p></div></div>`).join("");
+
+/* 4. 간격 */
+const SPACE = [["--s1",4,"아이콘과 라벨 사이(13px 글자), 제목과 메타 사이"],["--s2",8,"아이콘과 글자 사이(15px), 칩 안 여백, 버튼 사이"],["--s3",12,"목록 줄 안 여백, 상단 바 위아래, 날짜 목록"],["--s4",16,"칸 안 여백, 카드 안 묶음 사이, 화면 양옆 여백"],["--s6",24,"카드 안 여백, 카드 사이, 두 단 사이, 패널 안 여백"],["--s8",32,"화면 위 여백"],["--s12",48,"화면 아래 여백, 이 페이지의 절 사이"]];
+$("space-rows").innerHTML = SPACE.map(([t,v,u])=>`<div class="space-row"><code class="meta">${t}</code><span class="meta num">${v}px</span><div><b style="width:${v*2}px"></b><p class="meta faint" style="margin-top:var(--s1)">${u}</p></div></div>`).join("");
+
+/* 5. 부품 × 상태 (상태를 멈춰서 보여준다) */
+const S = ["","is-hover","is-press","sel","is-focus","dis"];
+const na = `<span class="na">—</span>`;
+const cell = h => `<td><div class="cell">${h}</div></td>`;
+const PARTS = [
+  ["주 버튼", s => s==="sel"?na:`<button type="button" class="btn primary ${s}" ${s==="dis"?"disabled":""}>원문 보기${svg(IC.external[2])}</button>`],
+  ["보조 버튼", s => s==="sel"?na:`<button type="button" class="btn ${s}" ${s==="dis"?"disabled":""}>${svg(IC.reload[2])}다시 불러오기</button>`],
+  ["글자형 버튼", s => s==="sel"?na:`<button type="button" class="tbtn ${s}" style="margin:0" ${s==="dis"?"disabled":""}>계산 방식${svg(IC.expand[2],"sm")}</button>`],
+  ["아이콘 버튼", s => s==="sel"?na:`<button type="button" class="btn icon ${s}" aria-label="닫기 보기" ${s==="dis"?"disabled":""}>${svg(IC.close[2])}</button>`],
+  ["세그먼트", s => `<span class="seg"><button type="button" class="${s==="sel"?"":s}" aria-pressed="${s==="sel"}" ${s==="dis"?"disabled":""}>3개월</button></span>`],
+  ["입력창", s => s==="sel"||s==="is-press"?na:`<span class="field" style="width:200px;display:block"><svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC.search[2]}</svg><input type="search" class="${s}" placeholder="기업명 또는 종목코드" aria-label="입력창 보기" ${s==="dis"?"disabled":""}></span>`],
+  ["목록 줄", s => `<button type="button" class="row ${s==="sel"?"":s}" ${s==="sel"?'aria-current="true"':""} ${s==="dis"?"disabled style='opacity:.4'":""}><span class="tone up">${SHAPE.up}호재</span><span class="row-title">자기주식 취득</span>${svg(IC.open[2],"sm go")}<span class="meta faint">10.15 · 주요사항보고서</span></button>`]];
+$("state-rows").innerHTML = PARTS.map(([n,f])=>`<tr><th>${n}</th>${S.map(s=>s==="dis"&&n==="목록 줄"?cell(na):cell(f(s))).join("")}</tr>`).join("");
+
+/* 6. 칩·배지 */
+const TONE={up:"호재",down:"악재",flat:"중립"};
+$("chips").innerHTML = ["up","down","flat"].map(t=>`<span class="tone ${t}">${SHAPE[t]}${TONE[t]}</span>`).join("")+`<span class="ai" style="margin:0">AI 요약</span><span class="by-ai meta" style="color:var(--ai)">AI 판정</span>`;
+$("badges").innerHTML = [["up strong","up","강한 호재"],["up","up","약한 호재"],["flat","flat","중립"],["down","down","약한 악재"],["down strong","down","강한 악재"]].map(([c,s,t])=>`<span class="badge ${c}">${SHAPE[s]}${t}</span>`).join("")+`<span class="badge hold">판단 보류</span>`;
+
+/* 7. 아이콘 */
+$("icons-grid").innerHTML = Object.values(IC).map(([n,u,p])=>`<div class="ico"><div class="pair">${svg(p,"sm")}${svg(p)}</div><p class="row-title">${n}</p><p class="meta faint">${u}</p></div>`).join("")
+  + ["up","down","flat"].map(t=>`<div class="ico"><div class="pair" style="color:var(--${t==="flat"?"text-sub":t})">${SHAPE[t]}</div><p class="row-title">${TONE[t]} 모양</p><p class="meta faint">칩, 배지, 타임라인 표시</p></div>`).join("");
+
+/* 9. 판단 카드 비교 */
+const behind = `<p>판단 추이 · 3개월 전 중립 → 지금 약한 호재</p><p><span class="up-bar"></span></p><p>3분기 영업이익이 1년 전보다 13% 증가</p><p>자기주식 3조 원 취득 결정</p><p><span class="down-bar"></span></p><p>특허 침해 소송 피소, 청구 금액은 자기자본의 0.3%</p><p>중국 공장 장비 반입 제한 관련 안내</p><p>계약 금액이 최근 매출액의 1.2%</p><p>반도체 패키징 업체 지분 취득</p><p>11월 13일 기업설명회 개최 안내</p>`;
+$("behind-a").innerHTML = behind; $("behind-b").innerHTML = behind;
+const judge = `<div class="jh"><h3 class="card-title">최근 공시 기준 판단</h3><span class="meta num">11.06 기준</span></div>
+  <div class="vrow"><span class="badge up">${SHAPE.up}약한 호재</span><span class="meta">근거 공시 6건</span></div>
+  <p class="meta faint" style="margin-top:var(--s3)">10.28 · 연결재무제표기준영업(잠정)실적(공정공시)</p>`;
+$("glass-card").innerHTML = judge; $("solid-card").innerHTML = judge;
+/* 유리 면의 밝기는 뒤에 따라 달라진다: 뒤가 바탕일 때와 보조 글씨(400)·빨강 막대가 지나갈 때의 옅은 글씨 대비(흐림을 빼고 합성한 근삿값) */
+{ const glass=[17,17,19,.6], faint=parse(resolve("--text-faint"));
+  const vals=[["바탕",resolve("--bg")],["보조 글씨",resolve("--text-sub")],["호재 막대",resolve("--up")]].map(([n,c])=>{ const f=over(glass,parse(c)); return `${n} ${ratio(faint,f).toFixed(1)}:1`; });
+  $("glass-measure").textContent = `유리 위 옅은 글씨의 대비(뒤에 무엇이 있느냐에 따라): ${vals.join(", ")}. 흐림이 섞으면 이 사이 값이 돼요. 단색은 늘 ${ratio(faint,parse(resolve("--card"))).toFixed(1)}:1이에요.`; }
+</script>
