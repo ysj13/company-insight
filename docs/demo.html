@@ -23,14 +23,14 @@
   --fill-hover:rgba(var(--tint),.04); --fill-selected:rgba(var(--tint),.09); --focus:rgba(var(--tint),.6);
   --btn:#18181b; /* 버튼·세그먼트의 바탕 */
   --up:#ff5c69; --up-soft:rgba(255,92,105,.12); --up-line:rgba(255,92,105,.45); --down:#4c94ff; --down-soft:rgba(76,148,255,.12); --down-line:rgba(76,148,255,.45); --flat:#a1a1aa; --flat-soft:rgba(var(--tint),.08);
-  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12);
+  --ai:#a78bfa; --ai-soft:rgba(167,139,250,.12); --ai-wash:rgba(167,139,250,.06); --ai-line:rgba(167,139,250,.32);
   --scrim:rgba(0,0,0,.55);
   --radius:16px; --radius-sm:10px; --radius-pill:999px; --fast:.2s cubic-bezier(.4,0,.2,1);
   --font:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere} /* 한글은 단어 중간에서 줄을 바꾸지 않는다 */
 /* 배경: 움직이지 않는 아주 옅은 흰 빛 두 개와 아래로 갈수록 흐려지는 격자. 유리 카드가 비출 거리를 만든다 */
 body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(60vw 50vh at 12% -5%,var(--glow-a),transparent 70%),radial-gradient(55vw 55vh at 100% 35%,var(--glow-b),transparent 70%),
@@ -54,7 +54,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 /* 로고: 둥근 칸을 흰 면으로 채우고 겹친 층 아이콘을 바탕색으로. 무채색 화면에서 또렷하게 */
 .logo .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--text);color:var(--bg)}
 .logo .mark svg{width:17px;height:17px}
-.search{flex:1;min-width:0;position:relative}
+.search{flex:1;min-width:0;max-width:420px;position:relative}
 .search input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:0 14px;font:inherit;font-size:15px;transition:border-color var(--fast)}
 .search input::placeholder{color:var(--text-faint)}
 .search input:hover{border-color:var(--line-hover)}
@@ -246,7 +246,13 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
 .demo-ctl button:hover{border-color:var(--line-hover);color:var(--text)}
 .demo-ctl button[aria-pressed="true"]{border-color:var(--line-selected);background:var(--fill-selected);color:var(--text)}
 
+/* AI가 쓴 글(판단 카드의 한 줄 요약, 패널의 3줄 요약)은 옅은 보라 테두리 칸에 넣는다. 보라는 AI 전용 */
+.ai-box{background:linear-gradient(var(--ai-wash),var(--ai-wash)),var(--card);border:1px solid var(--ai-line);border-radius:12px;padding:14px 16px}
+.ai-box>.ai:first-child{margin-right:8px}
+
 @media (max-width:600px){
+  .ev .tone .tw{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap} /* 휴대폰: 칩은 모양만, 글자는 화면 읽기용 */
+  .ev .tone{padding:1px 7px}
   .card,.judge{padding:20px 16px} .fin{grid-template-columns:1fr 1fr} .fin dd{font-size:17px} .disc .sum{display:none} h1{font-size:24px}
   .badge{font-size:17px}
 }
@@ -469,7 +475,7 @@ function dvHTML(co, e){
   const inJudge = e.tone==="flat" ? "중립이라 판단 계산에 넣지 않았어요."
     : age<WINDOW ? "최근 30일 공시라 지금 판단에 들어가 있어요." : "30일이 지나 지금 판단에는 들어가지 않아요.";
   const sum = e.s
-    ? `<div class="dv-box">${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p>요약의 금액·비율·날짜는 코드가 원문과 맞는지 확인했어요.</p></div>`
+    ? `<div class="dv-box ai-box">${AI}<ul>${e.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p>요약의 금액·비율·날짜는 코드가 원문과 맞는지 확인했어요.</p></div>`
     : `<div class="dv-box"><h3>요약</h3><p style="margin:0">${e.tone==="flat"?"중립 공시는 요약하지 않아요. 제목과 원문으로 확인해 주세요.":"요약을 아직 만들지 않았어요. 다음 분석 때 채워져요."}</p></div>`;
   const how = `<div class="dv-box"><h3>어떻게 판정했나요</h3><p class="how">${e.by==="AI"?`<span class="by-ai">AI</span> · `:""}${BY_HOW[e.by]}</p></div>`;
   return `<div class="dv">
@@ -489,7 +495,7 @@ const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
 
 /* 판단 근거 한 줄 = 공시 한 건 */
 const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e))}">
-    <span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><span class="r">${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span>
+    <span class="tone ${e.tone}"><span aria-hidden="true">${SHAPE[e.tone]}</span><span class="tw"> ${TONE[e.tone]}</span></span><span class="r">${esc(e.r)}</span><span class="arr" aria-hidden="true">›</span>
     <span class="s num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
 
 function judgeCard(co){
@@ -527,7 +533,7 @@ function judgeCard(co){
       <div class="vrow"><span class="badge ${vCls}${strong?" strong":""}"><span class="sh" aria-hidden="true">${SHAPE[vCls]}</span>${vText}</span>
         <span class="count num">근거 공시 ${dir.length}건 · 호재 ${nUp} · 악재 ${nDn}</span></div>
       <div class="barrow"><span aria-hidden="true">악재</span><div class="bar" role="img" aria-label="호재·악재 정도: ${vText}. 가운데가 중립"><i class="fill ${vCls}" style="left:${fillL}%;width:${fillW}%"></i><i class="mid"></i></div><span aria-hidden="true">호재</span></div>
-      <p class="lede">${AI}${esc(co.lede)}</p>
+      <p class="lede ai-box">${AI}${esc(co.lede)}</p>
     </div>
     ${failBox}
     <h3 class="basis-h">판단 근거</h3>
