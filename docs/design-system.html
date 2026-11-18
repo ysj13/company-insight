@@ -165,6 +165,13 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .box-title.basis{margin:var(--s6) 0 var(--s1)}
 .evi .sec-h + .basis{margin-top:var(--s4)}
 .grp-empty{padding:var(--s2) 0}
+.grp-h{display:flex;align-items:center;margin:var(--s6) 0 var(--s1)}
+.evi .sec-h + .grp-h{margin-top:var(--s4)}
+/* 묶음 칩: 면이 있는 칩은 글자보다 바깥이 먼저 눈에 들어와, 줄 글자와 같은 선에 두면 왼쪽으로 나와 보인다. 4px 안으로 들여 눈으로 맞춘다 */
+.grp-h .tone{margin-left:var(--s1)}
+.row.nochip{grid-template-columns:minmax(0,1fr) auto}
+.row.nochip .meta{grid-column:1}
+
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}

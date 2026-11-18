@@ -168,6 +168,13 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .box-title.basis{margin:var(--s6) 0 var(--s1)}
 .evi .sec-h + .basis{margin-top:var(--s4)}
 .grp-empty{padding:var(--s2) 0}
+.grp-h{display:flex;align-items:center;margin:var(--s6) 0 var(--s1)}
+.evi .sec-h + .grp-h{margin-top:var(--s4)}
+/* 묶음 칩: 면이 있는 칩은 글자보다 바깥이 먼저 눈에 들어와, 줄 글자와 같은 선에 두면 왼쪽으로 나와 보인다. 4px 안으로 들여 눈으로 맞춘다 */
+.grp-h .tone{margin-left:var(--s1)}
+.row.nochip{grid-template-columns:minmax(0,1fr) auto}
+.row.nochip .meta{grid-column:1}
+
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}
@@ -562,10 +569,9 @@ function judgeCard(co){
    같은 공시는 한 곳에만 나온다 */
 function evidenceCard(co){
   const now = scoreAt(co, judgeDay()), dir = now.list.filter(e=>e.tone!=="flat");
-  const headH = `<div class="sec-h"><h2 class="card-title">판단 근거</h2><span class="meta">최근 30일 · 크기 큰 순서</span></div>`;
   if(now.hold){
     const none = !co.events.length;
-    return `<section class="card evi" aria-label="판단 근거">${headH}
+    return `<section class="card evi" aria-label="판단 근거"><div class="sec-h"><h2 class="card-title">판단 근거</h2><span class="meta">최근 30일</span></div>
       ${emptyBox("판단에 쓴 공시가 없어요", none ? "공시가 들어오면 호재·악재로 판정된 공시가 여기에 모여요."
         : `최근 30일 공시 ${now.list.length}건은 모두 중립이라 판단에 들어가지 않아요. 중립 공시는 타임라인에서 볼 수 있어요.`)}</section>`;
   }
@@ -575,11 +581,14 @@ function evidenceCard(co){
   const order = vCls==="down" ? ["down","up"] : vCls==="up" ? ["up","down"] : (now.D>now.U ? ["down","up"] : ["up","down"]);
   const show = k => vCls==="flat" ? 2 : (k===order[0] ? 3 : 2);
   const KEY = {up:"moreUp", down:"moreDown"};
+  /* 묶음 제목을 칩("호재 4건")으로 두고, 줄에는 칩을 붙이지 않는다(칩은 묶음마다 한 번) */
+  const row = e => `<li><button type="button" class="row nochip" data-dv="${esc(keyOf(e))}"><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}
+    <span class="meta faint num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
   const group = k => { const l = G[k], n = show(k), open = state[KEY[k]], rest = l.length-n;
-    return `<h3 class="box-title basis">${TONE[k]} 공시 ${l.length}건</h3>
-      ${l.length ? `<ul class="ev">${(open?l:l.slice(0,n)).map(evRow).join("")}</ul>` : `<p class="meta grp-empty">최근 30일에 ${TONE[k]}로 판정된 공시는 없어요.</p>`}
-      ${rest>0 ? `<button type="button" class="tbtn" data-toggle="${KEY[k]}" aria-expanded="${!!open}">${open?"접기":`${TONE[k]} 공시 ${rest}건 더 보기`}${CHEV}</button>` : ""}`; };
-  return `<section class="card evi" aria-label="판단 근거">${headH}${order.map(group).join("")}</section>`;
+    return `<h3 class="grp-h"><span class="tone ${k}">${TONE[k]} ${l.length}건</span></h3>
+      ${l.length ? `<ul class="ev">${(open?l:l.slice(0,n)).map(row).join("")}</ul>` : `<p class="meta grp-empty">최근 30일에 ${TONE[k]}로 판정된 공시는 없어요.</p>`}
+      ${rest>0 ? `<button type="button" class="tbtn" data-toggle="${KEY[k]}" aria-expanded="${!!open}">${open?"접기":`${rest}건 더 보기`}${CHEV}</button>` : ""}`; };
+  return `<section class="card evi" aria-label="판단 근거"><div class="sec-h"><h2 class="card-title">판단 근거</h2><span class="meta">최근 30일 · 크기 큰 순서</span></div>${order.map(group).join("")}</section>`;
 }
 
 /* 빈 상태: 왜 없는지와 언제 생기는지 */
