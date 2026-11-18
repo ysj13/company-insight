@@ -170,8 +170,8 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .grp-empty{padding:var(--s2) 0}
 .grp-h{display:flex;align-items:center;margin:var(--s6) 0 var(--s1)}
 .evi .sec-h + .grp-h{margin-top:var(--s4)}
-/* 묶음 칩: 면이 있는 칩은 글자보다 바깥이 먼저 눈에 들어와, 줄 글자와 같은 선에 두면 왼쪽으로 나와 보인다. 4px 안으로 들여 눈으로 맞춘다 */
-.grp-h .tone{margin-left:var(--s1)}
+/* 묶음 칩: 면이 있는 칩은 글자보다 바깥이 먼저 눈에 들어와, 줄 글자와 같은 선(0)이면 왼쪽으로, 4px이면 오른쪽으로 보인다. 2px 들여 눈으로 맞춘다(간격 단계 밖의 시각 보정값, 이 한 곳만) */
+.grp-h .tone{margin-left:2px}
 .row.nochip{grid-template-columns:minmax(0,1fr) auto}
 .row.nochip .meta{grid-column:1}
 
