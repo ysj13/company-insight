@@ -7,7 +7,7 @@
 /* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
    ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
    분위기: 다크, 테크, AI, 모던, 심플, 가독성, 글래스모피즘. 색은 무채색(차가운 회색 계열)만 쓰고, 뜻이 있는 색은 호재·악재·AI 셋뿐이다.
-   거의 검정인 바탕 위에 아주 옅은 흰 빛과 격자가 고정돼 있고, 카드는 가는 회색 테두리를 두른 어두운 유리 면이다.
+   거의 검정인 바탕 위에 아주 옅은 흰 빛이 고정돼 있고, 카드는 가는 회색 테두리를 두른 어두운 유리 면이다.
    유리는 읽기를 해치지 않는 만큼만 쓴다: 글자 대비 4.5:1 이상, 바탕 빛은 무채색, 움직이지 않는다.
    색은 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
@@ -16,7 +16,7 @@
   --glass:rgba(24,24,27,.6); --glass-sheen:rgba(var(--tint),.03); --glass-edge:#27272a; --glass-hi:#3a3a40; --glass-blur:24px;
   --glass-solid:rgba(9,9,11,.8); /* 위에 떠 있는 유리(상단 바, 패널) */
   --surface:rgba(var(--tint),.04); /* 카드 안의 한 단계 들어간 칸(--card 위에 겹친다) */
-  --glow-a:rgba(var(--tint),.055); --glow-b:rgba(var(--tint),.035); --grid:rgba(var(--tint),.025); /* 바탕 빛: 무채색, 뜻 없음 */
+  --glow-a:rgba(var(--tint),.055); --glow-b:rgba(var(--tint),.035); /* 바탕 빛: 무채색, 뜻 없음 */
   --text:#e4e4e7; --text-sub:#a1a1aa; --text-faint:#909099;
   --tint:255,255,255;
   --line:#27272a; --line-hover:#3f3f46; --line-selected:#52525b; --line-strong:#3f3f46;
@@ -31,11 +31,9 @@
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;letter-spacing:-.01em;margin:0;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere} /* 한글은 단어 중간에서 줄을 바꾸지 않는다 */
-/* 배경: 움직이지 않는 아주 옅은 흰 빛 두 개와 아래로 갈수록 흐려지는 격자. 유리 카드가 비출 거리를 만든다 */
+/* 배경: 움직이지 않는 아주 옅은 흰 빛 두 개. 유리 카드가 비출 거리를 만든다(격자는 쓰지 않는다) */
 body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:radial-gradient(60vw 50vh at 12% -5%,var(--glow-a),transparent 70%),radial-gradient(55vw 55vh at 100% 35%,var(--glow-b),transparent 70%),
-    linear-gradient(var(--grid) 1px,transparent 1px) 0 0/48px 48px,linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/48px 48px;
-  -webkit-mask-image:linear-gradient(#000 0,#000 45%,rgba(0,0,0,.5));mask-image:linear-gradient(#000 0,#000 45%,rgba(0,0,0,.5))}
+  background:radial-gradient(60vw 50vh at 12% -5%,var(--glow-a),transparent 70%),radial-gradient(55vw 55vh at 100% 35%,var(--glow-b),transparent 70%)}
 h1,h2,h3,p{margin:0} h1,h2{text-wrap:balance}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left}
