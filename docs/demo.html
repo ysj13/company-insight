@@ -51,8 +51,9 @@ button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;paddin
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .appbar .inner{display:flex;align-items:center;gap:14px;padding-block:12px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.02em;white-space:nowrap}
-.logo .mark{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(var(--tint),.10);border:1px solid rgba(var(--tint),.20)}
-.logo .mark svg{width:14px;height:14px}
+/* 로고: 둥근 칸을 흰 면으로 채우고 겹친 층 아이콘을 바탕색으로. 무채색 화면에서 또렷하게 */
+.logo .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.logo .mark svg{width:17px;height:17px}
 .search{flex:1;min-width:0;position:relative}
 .search input{width:100%;height:44px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:0 14px;font:inherit;font-size:15px;transition:border-color var(--fast)}
 .search input::placeholder{color:var(--text-faint)}
@@ -249,6 +250,15 @@ footer{text-align:center;font-size:13px;color:var(--text-faint);padding-block:8p
   .card,.judge{padding:20px 16px} .fin{grid-template-columns:1fr 1fr} .fin dd{font-size:17px} .disc .sum{display:none} h1{font-size:24px}
   .badge{font-size:17px}
 }
+/* 넓은 화면(1100px 이상): 두 단. 왼쪽에 판단 카드, 오른쪽에 판단 추이·실적·타임라인.
+   판단 카드를 화면에 고정하지 않는다: 카드가 화면보다 길어지면 카드 안에 스크롤이 하나 더 생겨 쓰기 불편하다 */
+@media (min-width:1100px){
+  .inner{max-width:1160px}
+  main.inner{grid-template-columns:minmax(0,460px) minmax(0,1fr);align-items:start;column-gap:24px}
+  main.inner>.co{grid-column:1/-1}
+  main.inner>.judge{grid-column:1;grid-row:2/span 3}
+  main.inner>.card{grid-column:2}
+}
 @media (pointer:coarse){ .seg button{min-height:44px} } /* 손가락으로 누르는 기기는 44px */
 /* 유리를 못 쓰는 브라우저, 투명도 줄이기를 켠 사용자: 불투명 면으로 */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){ .card,.judge{background:var(--card)} .appbar,.drawer{background:var(--card)} }
@@ -401,12 +411,17 @@ function dayEvents(co){ const m={}; co.events.forEach(e=>{ const k=bday(e.d); (m
 /* 위: 판단 선 / 아래: 일별 공시 막대(호재는 위, 악재는 아래, 높이는 크기 합) */
 function chart(co){
   const n = periodOf(state.period)[2], from = LAST-n;
-  const S = DATES.slice(from).map(d=>scoreAt(co,d).s);
+  const SC = DATES.slice(from).map(d=>scoreAt(co,d)), S = SC.map(c=>c.s), HOLD = SC.map(c=>c.hold);
   const W=680,H=270,L=4,R=44,T=12,PB=158,ST=176,B=26, SB=H-B, ym=(ST+SB)/2;
   const cw = (W-L-R)/n;
   const x = i => L+cw*(i-from), y = v => T+(PB-T)*(1-(v+1)/2), y0 = y(0), yU = y(BAND), yD = y(-BAND);
-  const pts = S.map((v,j)=>`${x(from+j).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const P = S.map((v,j)=>`${x(from+j).toFixed(1)},${y(v).toFixed(1)}`), pts = P.join(" ");
   const area = `${x(from).toFixed(1)},${y0} ${pts} ${x(LAST).toFixed(1)},${y0}`;
+  /* 선을 판단이 있는 구간과 판단 보류 구간(양 끝 날이 모두 보류)으로 나눈다. 보류 구간은 회색 점선 */
+  const runs = []; for(let j=1;j<P.length;j++){ const hold = HOLD[j-1] && HOLD[j], last = runs[runs.length-1];
+    if(last && last.hold===hold) last.p.push(P[j]); else runs.push({hold, p:[P[j-1],P[j]]}); }
+  const line = (stroke,clip) => runs.filter(r=>!r.hold).map(r=>`<polyline points="${r.p.join(" ")}" fill="none" stroke="var(${stroke})" stroke-width="2" stroke-linejoin="round" clip-path="url(#${clip})"/>`).join("");
+  const holdLines = runs.filter(r=>r.hold).map(r=>`<polyline points="${r.p.join(" ")}" fill="none" stroke="var(--text-faint)" stroke-width="1.5" stroke-dasharray="3 4"/>`).join("");
   /* 격자 점선 없이: 중립 구간(판단 단계 경계 ±BAND)만 옅은 띠로, 이름표는 호재·중립·악재 셋 */
   const grid = `<rect x="${L}" y="${yU}" width="${W-R-L}" height="${yD-yU}" fill="var(--fill-hover)"/>
     <line x1="${L}" x2="${W-R}" y1="${y0}" y2="${y0}" stroke="var(--line-hover)"/>
@@ -429,9 +444,7 @@ function chart(co){
     <defs><clipPath id="cu"><rect x="0" y="0" width="${W}" height="${yU}"/></clipPath><clipPath id="cf"><rect x="0" y="${yU}" width="${W}" height="${yD-yU}"/></clipPath><clipPath id="cd"><rect x="0" y="${yD}" width="${W}" height="${PB-yD+2}"/></clipPath></defs>
     ${grid}
     <polygon points="${area}" fill="var(--up-soft)" clip-path="url(#cu)"/><polygon points="${area}" fill="var(--down-soft)" clip-path="url(#cd)"/>
-    <polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cu)"/>
-    <polyline points="${pts}" fill="none" stroke="var(--down)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cd)"/>
-    <polyline points="${pts}" fill="none" stroke="var(--flat)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cf)"/>
+    ${line("--up","cu")}${line("--down","cd")}${line("--flat","cf")}${holdLines}
     <line x1="${L}" x2="${W-R}" y1="${ym}" y2="${ym}" stroke="var(--line)"/>
     <text x="${W-R+8}" y="${ym+4}">공시</text>
     ${bars}
@@ -580,7 +593,7 @@ function render(){
   ${judgeCard(co)}
 
   <section class="card" aria-label="판단 추이">
-    <div class="sec-h"><h2>판단은 어떻게 바뀌어 왔나요?</h2>
+    <div class="sec-h"><h2>판단 추이</h2>
       <div class="seg" role="group" aria-label="기간">${PERIODS.map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${k===pKey}">${l}</button>`).join("")}</div></div>
     <p class="sub">${pLabel} 전 <b>${v0}</b> → 지금 <b class="${vCls}">${vText}</b></p>
     ${chart(co)}
@@ -588,11 +601,11 @@ function render(){
         ${selList.length ? `<ul>${selList.map(e=>`<li><span class="tone ${e.tone}">${SHAPE[e.tone]} ${TONE[e.tone]}</span><button type="button" class="t" data-dv="${esc(keyOf(e))}">${esc(e.r)}</button><span class="s">${e.d!==state.sel?md(e.d)+"(주말) · ":""}${esc(e.t)}</span></li>`).join("")}</ul>`
           : `<p class="empty">이날 들어온 공시는 없어요. 판단은 최근 30일 공시로 계산돼요.</p>`}
         <div class="nav"><button type="button" data-go="${navPrev||""}" ${navPrev?"":"disabled"}>← 이전 공시${navPrev?" "+md(navPrev):""}</button><button type="button" data-go="${navNext||""}" ${navNext?"":"disabled"}>다음 공시${navNext?" "+md(navNext):""} →</button></div></div>`
-      : `<p class="hint">그래프를 누르면 그날의 판단과 공시가 보여요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}
+      : `<p class="hint">그래프를 누르면 그날의 판단과 공시가 보여요. 점선은 호재·악재 공시가 없어 판단을 보류한 기간이에요. 아래 막대는 그날 들어온 호재·악재 공시이고, 길수록 크기가 커요.</p>`}
   </section>
 
   <section class="card" aria-label="실적">
-    <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2>실적은 어때요?</h2>
+    <button type="button" class="disc" data-toggle="fin" aria-expanded="${state.fin}"><h2>실적</h2>
       <span class="sum num">영업이익 <b class="${toneOf(og)}">${pct(og)}</b>${CHEV}</span></button>
     ${state.fin ? `<dl class="fin num">
         <div><dt>매출액</dt><dd>${won(f.rev[0])}억<small class="${toneOf(rg)}">1년 전보다 ${pct(rg)}</small></dd></div>
