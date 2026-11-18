@@ -4,7 +4,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-/* 종목 화면 데모. ① 판단 카드(판단, 근거 3개, 반대로 볼 점, 고지) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
+/* 종목 화면 데모. ① 판단 카드(판단, 막대, AI 한 줄 요약, 고지) ①-1 판단 근거(호재 공시·악재 공시 묶음) ② 판단 추이 ③ 실적(접힘) ④ 타임라인(일정 → 오늘 → 지난 공시).
    ⑤ 공시 한 건: 판단 근거, 그래프의 날짜 목록, 타임라인 어디서 눌러도 같은 오른쪽 패널(좁은 화면은 아래 시트)이 열린다.
    ⑥ 화면 상태: 불러오는 중(자리 표시), 분석 실패, 불러오기 오류, 공시 없는 회사, 검색 결과 없음. 화면 아래 "데모 화면 상태"로 바꿔 본다.
    규칙은 DESIGN.md, 부품과 상태 전체는 design-system.html.
@@ -59,7 +59,7 @@ h1,.badge{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spaci
 /* 줄 제목 15/600: 목록 한 줄의 쉬운 말, 버튼 글자, 날짜 목록의 머리 */
 .row-title,.btn{font-size:var(--fs-body);font-weight:600;line-height:1.5}
 /* 본문 15/400: 문단, 요약 (body 기본값) */
-/* 칸 제목 13/700 보조색: 판단 근거, 반대로 볼 점, 패널 안 칸의 제목, 타임라인 묶음 이름 */
+/* 칸 제목 13/700 보조색: 호재 공시·악재 공시 묶음 이름, 패널 안 칸의 제목, 타임라인 묶음 이름 */
 .box-title{font-size:var(--fs-small);font-weight:700;line-height:1.5;color:var(--text-sub);letter-spacing:0}
 /* 라벨 13/600: 칩, AI 칩, 세그먼트 버튼, 글자형 버튼 */
 .chip,.tone,.ai,.seg button,.tbtn{font-size:var(--fs-small);font-weight:600;line-height:1.5;letter-spacing:0}
@@ -166,6 +166,8 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .stale{opacity:.6} /* 분석 실패 때 지난 판단 */
 .fail{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);padding:var(--s3) var(--s4);border:1px solid var(--line-hover);border-radius:var(--r-md)}
 .box-title.basis{margin:var(--s6) 0 var(--s1)}
+.evi .sec-h + .basis{margin-top:var(--s4)}
+.grp-empty{padding:var(--s2) 0}
 .ev{list-style:none;margin:0;padding:0}
 .ev li{border-top:1px solid var(--line)}
 .ev li:first-child{border-top:0}
@@ -428,7 +430,7 @@ const DART = "https://dart.fss.or.kr/";
 const PAGE = 6;
 
 /* view: ok 정상 / loading 불러오는 중 / fail 분석 실패(지난 판단을 보여줌) / error 불러오기 오류 */
-let state = { code:"005930", period:"3m", sel:null, all:false, fin:false, more:false, how:false, view:"ok", dv:null };
+let state = { code:"005930", period:"3m", sel:null, moreUp:false, moreDown:false, fin:false, more:false, how:false, view:"ok", dv:null };
 let lastCode = "005930"; /* "공시 없는 회사"를 보다가 정상으로 돌아올 회사 */
 let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
 const $ = id => document.getElementById(id);
@@ -520,9 +522,11 @@ const evRow = e => `<li><button type="button" class="row" data-dv="${esc(keyOf(e
     <span class="tone ${e.tone}">${TONE[e.tone]}</span><span class="row-title">${esc(e.r)}</span>${icon("open","sm go")}
     <span class="meta faint num">${md(e.d)} · ${esc(e.t)}${e.by==="AI"?` · <span class="by-ai">AI 판정</span>`:""}</span></button></li>`;
 
+/* 판단 카드: 판단 이름, 막대, AI 한 줄 요약, 고지만. 근거 공시는 바로 아래 "판단 근거" 카드에 둔다 */
+const judgeDay = () => state.view==="fail" ? DATES[LAST-1] : ASOF;
 function judgeCard(co){
   const fail = state.view==="fail";
-  const day = fail ? DATES[LAST-1] : ASOF;
+  const day = judgeDay();
   const now = scoreAt(co, day), recent = now.list;
   const dir = recent.filter(e=>e.tone!=="flat"), nUp = dir.filter(e=>e.tone==="up").length, nDn = dir.length-nUp;
   const head = `<div class="jh"><h2 class="card-title">최근 공시 기준 판단</h2><span class="meta num">${md(day)} 기준 · 최근 30일 공시</span></div>`;
@@ -537,24 +541,11 @@ function judgeCard(co){
       <div class="vrow"><span class="badge hold">판단 보류</span><span class="meta num">${none?"모은 공시 0건":`최근 30일 공시 ${recent.length}건 · 모두 중립`}</span></div>
       <p class="lede">${none?"아직 모은 공시가 없어 판단을 내리지 않았어요. 호재나 악재로 판정된 공시가 들어오면 계산해요."
         :"최근 30일에 호재나 악재로 판정된 공시가 없어 판단을 내리지 않았어요. 판정된 공시가 들어오면 다시 계산해요."}</p>
-      ${recent.length?`<h3 class="box-title basis">최근 30일 공시</h3><ul class="ev">${recent.map(evRow).join("")}</ul>`:""}
       ${failBox}${foot}</section>`;
   }
 
-  const [vText,vCls,strong] = verdictOf(now.s);
+  const [vText,vCls] = verdictOf(now.s);
   const fillL = now.s>=0 ? 50 : 50+now.s*50, fillW = Math.abs(now.s)*50;
-  const byImp = (a,b)=> b.imp-a.imp || b.d.localeCompare(a.d);
-  const pos = dir.filter(e=>e.tone==="up").sort(byImp), neg = dir.filter(e=>e.tone==="down").sort(byImp);
-  const main = vCls==="up" ? pos : vCls==="down" ? neg : [...dir].sort(byImp);
-  const top = main.slice(0,3), rest = dir.filter(e=>!top.includes(e)).sort(byImp);
-  const opp = vCls==="up" ? neg[0] : vCls==="down" ? pos[0] : null;
-  /* 반대로 볼 수 있는 점: 판단 근거와 같은 제목 + 같은 공시 줄. 카드 안의 칸(900)에 넣지 않는다(줄의 hover 면이 칸과 같은 900이라 보이지 않는다) */
-  const cHead = `<h3 class="box-title basis">반대로 볼 수 있는 점</h3>`;
-  const counter = vCls==="flat"
-    ? `<div class="counter">${cHead}<p>호재 ${nUp}건(크기 합 ${now.U})과 악재 ${nDn}건(크기 합 ${now.D})이 비슷하게 맞서 있어요. 새 공시 한 건으로 판단이 바뀔 수 있어요.</p></div>`
-    : opp ? `<div class="counter">${cHead}<ul class="ev">${evRow(opp)}</ul></div>`
-    : `<div class="counter">${cHead}<p class="meta">최근 30일에 ${vCls==="up"?"악재":"호재"}로 판정된 공시는 없었어요.</p></div>`;
-
   return `<section class="judge" aria-label="판단">${head}
     <div class="${fail?"stale":""}">
       <div class="vrow"><span class="badge ${vCls}">${vText}</span>
@@ -563,12 +554,32 @@ function judgeCard(co){
       <p class="lede ai-box">${AI}${esc(co.lede)}</p>
     </div>
     ${failBox}
-    <h3 class="box-title basis">판단 근거</h3>
-    <ul class="ev">${top.map(evRow).join("")}</ul>
-    ${rest.length?`<button type="button" class="tbtn" data-toggle="all" aria-expanded="${state.all}">${state.all?"근거 접기":`나머지 근거 ${rest.length}건 보기`}${CHEV}</button>
-      ${state.all?`<ul class="ev">${rest.map(evRow).join("")}</ul>`:""}`:""}
-    ${counter}
     ${foot}</section>`;
+}
+
+/* 판단 근거 카드: 판단에 들어간 최근 30일 공시를 "호재 공시" / "악재 공시" 두 묶음으로(각각 크기 큰 순서).
+   판단 쪽 묶음을 먼저 둔다. 처음엔 판단 쪽 3건, 반대쪽 2건(중립이면 크기 합이 큰 쪽부터 2건씩)만 보이고 나머지는 묶음마다 펼친다.
+   같은 공시는 한 곳에만 나온다 */
+function evidenceCard(co){
+  const now = scoreAt(co, judgeDay()), dir = now.list.filter(e=>e.tone!=="flat");
+  const headH = `<div class="sec-h"><h2 class="card-title">판단 근거</h2><span class="meta">최근 30일 · 크기 큰 순서</span></div>`;
+  if(now.hold){
+    const none = !co.events.length;
+    return `<section class="card evi" aria-label="판단 근거">${headH}
+      ${emptyBox("판단에 쓴 공시가 없어요", none ? "공시가 들어오면 호재·악재로 판정된 공시가 여기에 모여요."
+        : `최근 30일 공시 ${now.list.length}건은 모두 중립이라 판단에 들어가지 않아요. 중립 공시는 타임라인에서 볼 수 있어요.`)}</section>`;
+  }
+  const vCls = verdictOf(now.s)[1];
+  const byImp = (a,b)=> b.imp-a.imp || b.d.localeCompare(a.d);
+  const G = { up: dir.filter(e=>e.tone==="up").sort(byImp), down: dir.filter(e=>e.tone==="down").sort(byImp) };
+  const order = vCls==="down" ? ["down","up"] : vCls==="up" ? ["up","down"] : (now.D>now.U ? ["down","up"] : ["up","down"]);
+  const show = k => vCls==="flat" ? 2 : (k===order[0] ? 3 : 2);
+  const KEY = {up:"moreUp", down:"moreDown"};
+  const group = k => { const l = G[k], n = show(k), open = state[KEY[k]], rest = l.length-n;
+    return `<h3 class="box-title basis">${TONE[k]} 공시 ${l.length}건</h3>
+      ${l.length ? `<ul class="ev">${(open?l:l.slice(0,n)).map(evRow).join("")}</ul>` : `<p class="meta grp-empty">최근 30일에 ${TONE[k]}로 판정된 공시는 없어요.</p>`}
+      ${rest>0 ? `<button type="button" class="tbtn" data-toggle="${KEY[k]}" aria-expanded="${!!open}">${open?"접기":`${TONE[k]} 공시 ${rest}건 더 보기`}${CHEV}</button>` : ""}`; };
+  return `<section class="card evi" aria-label="판단 근거">${headH}${order.map(group).join("")}</section>`;
 }
 
 /* 빈 상태: 왜 없는지와 언제 생기는지 */
@@ -579,7 +590,8 @@ const sk = (w,h,cls="") => `<span class="sk${cls?" "+cls:""}" style="width:${w};
 function skeleton(){
   const lines = n => Array.from({length:n},(_,i)=>`<div style="padding:var(--s3) 0;border-top:${i?"1px solid var(--line)":"0"}">${sk("80%",18)}<div style="height:var(--s2)"></div>${sk("55%",14)}</div>`).join("");
   return `<div class="co">${sk("180px",36)}<div style="height:var(--s2)"></div>${sk("200px",16)}</div>
-  <section class="judge" aria-hidden="true">${sk("160px",22)}<div style="height:var(--s4)"></div>${sk("160px",36)}<div style="height:var(--s4)"></div>${sk("100%",8,"pill")}<div style="height:var(--s4)"></div>${sk("100%",72)}<div style="height:var(--s6)"></div>${lines(3)}</section>
+  <section class="judge" aria-hidden="true">${sk("160px",22)}<div style="height:var(--s4)"></div>${sk("160px",36)}<div style="height:var(--s4)"></div>${sk("100%",8,"pill")}<div style="height:var(--s4)"></div>${sk("100%",72)}</section>
+  <section class="card" aria-hidden="true">${sk("96px",22)}<div style="height:var(--s3)"></div>${lines(3)}</section>
   <section class="card" aria-hidden="true">${sk("96px",22)}<div style="height:var(--s4)"></div>${sk("100%",200)}</section>
   <section class="card" aria-hidden="true">${sk("64px",22)}</section>
   <section class="card" aria-hidden="true">${sk("96px",22)}<div style="height:var(--s3)"></div>${lines(4)}</section>
@@ -678,6 +690,8 @@ function render(){
 
   ${judgeCard(co)}
 
+  ${evidenceCard(co)}
+
   <section class="card" aria-label="판단 추이">
     <div class="sec-h"><h2 class="card-title">판단 추이</h2>
       <div class="seg" role="group" aria-label="기간">${PERIODS.map(([k,l])=>`<button type="button" data-period="${k}" aria-pressed="${k===pKey}" ${none?"disabled":""}>${l}</button>`).join("")}</div></div>
@@ -764,7 +778,7 @@ function showSug(){ const m=matches(q.value); hi=-1;
     : `<div class="empty" role="status">${icon("search")}<div><p class="row-title">‘${esc(q.value.trim())}’에 맞는 회사가 없어요</p><p class="meta">회사 이름이나 6자리 종목코드로 찾아 보세요. 데모에는 ${CODES.map(c=>DB[c].name).join(", ")}만 있어요.</p></div></div>`;
   sug.hidden=false; }
 function pick(c){ if(!c) return; lastCode=c;
-  state={code:c,period:"3m",sel:null,all:false,fin:false,more:false,how:false,view:"ok",dv:null}; q.value=DB[c].name; sug.hidden=true;
+  state={code:c,period:"3m",sel:null,moreUp:false,moreDown:false,fin:false,more:false,how:false,view:"ok",dv:null}; q.value=DB[c].name; sug.hidden=true;
   load(c); window.scrollTo({top:0,behavior:"smooth"}); }
 q.addEventListener("input",showSug); q.addEventListener("focus",showSug);
 q.addEventListener("keydown",e=>{ const bs=[...sug.querySelectorAll("button")];
