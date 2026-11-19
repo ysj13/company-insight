@@ -460,6 +460,68 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
+	void 한도_초과로_소스가_정지되면_다음_회사는_호출하지_않는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		insertCompany("00164742", "005380", "현대자동차");
+		ExternalApiException quota = ExternalApiException.of(DartClient.SOURCE, ErrorKind.QUOTA_EXCEEDED, "020",
+			"요청 제한을 초과하였습니다.");
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 2,
+			itemOn("00126380", "005930", "Y", "20261030000101", "연결재무제표기준영업(잠정)실적(공정공시)", "20261030")));
+		given(dart.listDisclosures("00126380", FROM, TO, 2)).willThrow(quota);
+		// 실패를 기록하면서 소스가 정지된다. 첫 회사는 정지 전, 둘째 회사는 정지 뒤다
+		given(pauses.pausedNow(DartClient.SOURCE)).willReturn(java.util.Optional.empty(), java.util.Optional.of(
+			new SourcePauseRegistry.Pause(java.time.Instant.MAX, ErrorKind.QUOTA_EXCEEDED, "020")));
+
+		DisclosureCollector.CompanyCollectResult result = collector.collectByStockCodes(List.of("005930", "005380"), FROM,
+			TO);
+
+		// 실패한 회사가 그 전까지 받은 1건은 결과에서 빠지지만 DB와 기록에는 남는다
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(2, 0, 0, 0));
+		verify(pauses).pauseFor(quota);
+		verify(dart, never()).listDisclosures(eq("00164742"), any(), any(), anyInt());
+		assertThat(jdbc.sql("SELECT count(*) FROM disclosure").query(Long.class).single()).isEqualTo(1);
+		Map<String, Object> run = jdbc
+			.sql("SELECT status, error_kind, fetched::int AS fetched, saved::int AS saved FROM collection_run").query()
+			.singleRow();
+		assertThat(run).containsEntry("status", "FAILED").containsEntry("error_kind", "QUOTA_EXCEEDED")
+			.containsEntry("fetched", 1).containsEntry("saved", 1);
+	}
+
+	@Test
+	void 오래된_페이지를_나중에_읽어도_마지막_공시일과_시장_구분이_뒤로_가지_않는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		// 최신 공시는 유가증권(Y), 1년 전 공시는 코스닥(K)으로 실려 온 경우
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 2,
+			itemOn("00126380", "005930", "Y", "20261030000101", "기업설명회(IR)개최", "20261030")));
+		given(dart.listDisclosures("00126380", FROM, TO, 2)).willReturn(page(2, 2,
+			itemOn("00126380", "005930", "K", "20251121000789", "기업설명회(IR)개최", "20251121")));
+
+		collector.collectByStockCodes(List.of("005930"), FROM, TO);
+		collector.collectByStockCodes(List.of("005930"), FROM, TO);
+
+		Map<String, Object> company = jdbc
+			.sql("SELECT market, last_disclosed_on::text AS last FROM company WHERE source_key = '00126380'").query()
+			.singleRow();
+		assertThat(company).containsEntry("market", "Y").containsEntry("last", "2026-10-30");
+	}
+
+	@Test
+	void 회사_지정_수집으로_다시_받으면_나중에_철회된_공시를_중립으로_돌린다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 1,
+			new Item("00126380", "삼성전자", "005930", "Y", "주식소각결정", "20260129000001", "삼성전자", "20260129", "유")));
+		collector.collectByStockCodes(List.of("005930"), FROM, TO);
+		assertThat(classificationOf("20260129000001")).containsEntry("tone", "POSITIVE");
+
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 1,
+			new Item("00126380", "삼성전자", "005930", "Y", "주식소각결정", "20260129000001", "삼성전자", "20260129", "유철")));
+		collector.collectByStockCodes(List.of("005930"), FROM, TO);
+
+		assertThat(classificationOf("20260129000001")).containsEntry("remark", "유철").containsEntry("is_withdrawn", true)
+			.containsEntry("tone", "NEUTRAL");
+	}
+
+	@Test
 	void 기간에_공시가_없는_회사는_0건으로_끝난다() {
 		insertCompany("00164742", "005380", "현대자동차");
 		given(dart.listDisclosures("00164742", FROM, TO, 1))

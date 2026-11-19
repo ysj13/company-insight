@@ -121,7 +121,7 @@ public class DisclosureCollector {
 			}
 			catch (RuntimeException e) {
 				// DART 호출 실패는 collection_run에도 남는다. 한도 초과처럼 소스가 정지되는 오류면 다음 회사는 건너뛴 것으로 끝난다
-				log.warn("공시 수집(회사 지정) 실패(종목코드 {}): {}", stockCode, e.getMessage());
+				log.warn("공시 수집(회사 지정) 실패(종목코드 {}, 고유번호 {}): {}", stockCode, corpCode.get(), e.getMessage());
 			}
 		}
 		log.info("공시 수집(회사 지정 {}~{}): 종목코드 {}개 중 {}곳을 받음, 받은 {}건, 새로 저장 {}건", from, to, requested,
@@ -200,8 +200,8 @@ public class DisclosureCollector {
 	 *
 	 * @param requested 요청한 종목코드 수 (중복 제외)
 	 * @param collected 실제로 받은 회사 수. 회사를 찾지 못했거나 실패한 종목코드, 키가 없거나 소스가 정지 중이라 건너뛴 회사는 빠진다
-	 * @param fetched   DART에서 받은 공시 수
-	 * @param saved     새로 저장한 공시 수
+	 * @param fetched   DART에서 받은 공시 수. 도중에 실패한 회사가 그 전까지 받은 것은 빠진다 (collection_run에는 남는다)
+	 * @param saved     새로 저장한 공시 수. 도중에 실패한 회사가 그 전까지 저장한 것은 빠진다
 	 */
 	public record CompanyCollectResult(int requested, int collected, int fetched, int saved) {
 	}

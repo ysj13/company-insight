@@ -70,6 +70,19 @@ class DisclosureSchedulerTest {
 	}
 
 	@Test
+	void 월말과_윤년에도_기간이_설정한_개월을_넘지_않는다() {
+		// 3월 31일에 1개월이면 3월 1일부터다 (2월 28일 다음 날)
+		scheduler("2026-03-31T09:00:00+09:00", false, new DisclosureCollectProperties(List.of("005930"), 1))
+			.runStartupJobs();
+		verify(collector).collectByStockCodes(List.of("005930"), LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+
+		// 윤년 2월 29일에 12개월이면 전년 3월 1일부터다 (전년 2월 28일 다음 날)
+		scheduler("2028-02-29T09:00:00+09:00", false, new DisclosureCollectProperties(List.of("005930"), 12))
+			.runStartupJobs();
+		verify(collector).collectByStockCodes(List.of("005930"), LocalDate.of(2027, 3, 1), LocalDate.of(2028, 2, 29));
+	}
+
+	@Test
 	void 설정의_빈_값과_공백은_걸러지고_기간이_없거나_틀리면_12개월이다() {
 		DisclosureCollectProperties properties = new DisclosureCollectProperties(
 			Arrays.asList(" 005930 ", "", null, "000660"), 0);

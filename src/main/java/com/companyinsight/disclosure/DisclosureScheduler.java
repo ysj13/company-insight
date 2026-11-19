@@ -4,6 +4,8 @@ import com.companyinsight.common.schedule.ExclusiveJobRunner;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DisclosureScheduler {
+
+	private static final Logger log = LoggerFactory.getLogger(DisclosureScheduler.class);
 
 	private static final String GROUP = "disclosure";
 
@@ -62,7 +66,11 @@ public class DisclosureScheduler {
 		if (!stockCodes.isEmpty()) {
 			LocalDate today = LocalDate.now(clock);
 			LocalDate from = today.minusMonths(collectProperties.collectMonths()).plusDays(1);
-			jobs.run(GROUP, "공시 수집(회사 지정, 시작)", () -> collector.collectByStockCodes(stockCodes, from, today));
+			boolean ran = jobs.run(GROUP, "공시 수집(회사 지정, 시작)",
+				() -> collector.collectByStockCodes(stockCodes, from, today));
+			if (!ran) {
+				log.warn("다른 공시 작업이 실행 중이라 회사 지정 공시 수집({})을 하지 못했습니다. 앱을 다시 띄우면 실행됩니다", stockCodes);
+			}
 		}
 	}
 
