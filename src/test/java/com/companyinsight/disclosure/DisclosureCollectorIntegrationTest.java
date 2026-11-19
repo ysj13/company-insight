@@ -3,10 +3,12 @@ package com.companyinsight.disclosure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.companyinsight.TestcontainersConfiguration;
@@ -32,6 +34,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class DisclosureCollectorIntegrationTest {
 
 	private static final LocalDate DAY = LocalDate.of(2026, 11, 13);
+
+	/** 회사 지정 수집의 기간 (1년). */
+	private static final LocalDate FROM = LocalDate.of(2025, 11, 21);
+	private static final LocalDate TO = LocalDate.of(2026, 11, 20);
 
 	@Autowired
 	DisclosureCollector collector;
@@ -368,6 +374,132 @@ class DisclosureCollectorIntegrationTest {
 		assertThat(jdbc.sql("SELECT count(*) FROM collection_run").query(Long.class).single()).isZero();
 	}
 
+	@Test
+	void 종목코드로_지정한_회사의_공시를_고유번호로_조회해_모든_페이지를_저장한다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 3,
+			itemOn("00126380", "005930", "Y", "20261030000101", "연결재무제표기준영업(잠정)실적(공정공시)", "20261030"),
+			itemOn("00126380", "005930", "Y", "20260716000123", "임원ㆍ주요주주특정증권등소유상황보고서", "20260716")));
+		given(dart.listDisclosures("00126380", FROM, TO, 2)).willReturn(page(2, 3,
+			itemOn("00126380", "005930", "Y", "20260310000456", "사업보고서 (2025.12)", "20260310")));
+		given(dart.listDisclosures("00126380", FROM, TO, 3)).willReturn(page(3, 3,
+			itemOn("00126380", "005930", "Y", "20251121000789", "주식등의대량보유상황보고서(일반)", "20251121")));
+
+		DisclosureCollector.CompanyCollectResult result = collector.collectByStockCodes(List.of("005930"), FROM, TO);
+
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(1, 1, 4, 4));
+		assertThat(jdbc.sql("SELECT source_key FROM disclosure ORDER BY source_key").query(String.class).list())
+			.containsExactly("20251121000789", "20260310000456", "20260716000123", "20261030000101");
+		// 기간이 여러 날이어도 공시마다 자기 접수일로 저장된다
+		assertThat(jdbc.sql("SELECT rcept_date::text FROM disclosure WHERE source_key = '20260310000456'")
+			.query(String.class).single()).isEqualTo("2026-03-10");
+		// 회사 지정 수집은 폴링·보정과 다른 작업 이름으로 남는다
+		Map<String, Object> run = jdbc
+			.sql("SELECT source, status, fetched::int AS fetched, saved::int AS saved, pages::int AS pages FROM collection_run")
+			.query().singleRow();
+		assertThat(run).containsEntry("source", "DART_DISCLOSURE_COMPANY").containsEntry("status", "SUCCESS")
+			.containsEntry("fetched", 4).containsEntry("saved", 4).containsEntry("pages", 3);
+		// 회사를 지정하지 않는 조회는 부르지 않는다
+		verify(dart, never()).listDisclosures(any(), any(), anyInt());
+	}
+
+	@Test
+	void 회사_지정_수집을_두_번_돌려도_이미_있던_공시와_겹쳐도_한_번만_저장된다() {
+		insertCompany("00164779", "000660", "SK하이닉스");
+		// 정기 수집이 먼저 받아 둔 공시
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("00164779", "000660", "Y", "20261113000001", "기업설명회(IR)개최")));
+		collector.reconcile(DAY, DAY);
+		given(dart.listDisclosures("00164779", FROM, TO, 1)).willReturn(page(1, 1,
+			item("00164779", "000660", "Y", "20261113000001", "기업설명회(IR)개최"),
+			itemOn("00164779", "000660", "Y", "20260123000002", "현금ㆍ현물배당결정", "20260123")));
+
+		DisclosureCollector.CompanyCollectResult first = collector.collectByStockCodes(List.of("000660"), FROM, TO);
+		DisclosureCollector.CompanyCollectResult second = collector.collectByStockCodes(List.of("000660"), FROM, TO);
+
+		assertThat(first.fetched()).isEqualTo(2);
+		assertThat(first.saved()).isEqualTo(1);
+		assertThat(second.fetched()).isEqualTo(2);
+		assertThat(second.saved()).isZero();
+		assertThat(jdbc.sql("SELECT count(*) FROM disclosure").query(Long.class).single()).isEqualTo(2);
+		assertThat(jdbc.sql("SELECT count(*) FROM company").query(Long.class).single()).isEqualTo(1);
+	}
+
+	@Test
+	void 없는_종목코드와_회사가_여럿인_종목코드는_건너뛰고_나머지_회사를_받는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		insertCompany("00000001", "111111", "옛 회사");
+		insertCompany("00000002", "111111", "새 회사");
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 1,
+			itemOn("00126380", "005930", "Y", "20260129000001", "현금ㆍ현물배당결정", "20260129")));
+
+		DisclosureCollector.CompanyCollectResult result = collector
+			.collectByStockCodes(List.of("999999", "111111", "005930"), FROM, TO);
+
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(3, 1, 1, 1));
+		verify(dart, never()).listDisclosures(eq("00000001"), any(), any(), anyInt());
+		verify(dart, never()).listDisclosures(eq("00000002"), any(), any(), anyInt());
+		assertThat(jdbc.sql("SELECT count(*) FROM collection_run").query(Long.class).single()).isEqualTo(1);
+	}
+
+	@Test
+	void 한_회사가_실패해도_다음_회사는_받고_실패는_기록에_남는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		insertCompany("00164742", "005380", "현대자동차");
+		given(dart.listDisclosures("00126380", FROM, TO, 1))
+			.willThrow(ExternalApiException.of(DartClient.SOURCE, ErrorKind.TRANSIENT, "IO", "연결 실패"));
+		given(dart.listDisclosures("00164742", FROM, TO, 1)).willReturn(page(1, 1,
+			itemOn("00164742", "005380", "Y", "20260423000003", "연결재무제표기준영업(잠정)실적(공정공시)", "20260423")));
+
+		DisclosureCollector.CompanyCollectResult result = collector.collectByStockCodes(List.of("005930", "005380"), FROM,
+			TO);
+
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(2, 1, 1, 1));
+		assertThat(jdbc.sql("SELECT status FROM collection_run WHERE source = 'DART_DISCLOSURE_COMPANY' ORDER BY id")
+			.query(String.class).list()).containsExactly("FAILED", "SUCCESS");
+	}
+
+	@Test
+	void 기간에_공시가_없는_회사는_0건으로_끝난다() {
+		insertCompany("00164742", "005380", "현대자동차");
+		given(dart.listDisclosures("00164742", FROM, TO, 1))
+			.willReturn(new DisclosureListResponse("013", "조회된 데이타가 없습니다.", 1, 0, 0, List.of()));
+
+		DisclosureCollector.CompanyCollectResult result = collector.collectByStockCodes(List.of("005380"), FROM, TO);
+
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(1, 1, 0, 0));
+		assertThat(jdbc.sql("SELECT status FROM collection_run").query(String.class).single()).isEqualTo("SUCCESS");
+	}
+
+	@Test
+	void 종목코드_목록이_비어_있으면_아무것도_부르지_않고_같은_종목코드는_한_번만_받는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		given(dart.listDisclosures("00126380", FROM, TO, 1)).willReturn(page(1, 1));
+
+		DisclosureCollector.CompanyCollectResult empty = collector.collectByStockCodes(List.of(), FROM, TO);
+
+		assertThat(empty).isEqualTo(new DisclosureCollector.CompanyCollectResult(0, 0, 0, 0));
+		assertThat(jdbc.sql("SELECT count(*) FROM collection_run").query(Long.class).single()).isZero();
+
+		DisclosureCollector.CompanyCollectResult twice = collector.collectByStockCodes(List.of("005930", "005930"), FROM,
+			TO);
+
+		assertThat(twice.requested()).isEqualTo(1);
+		verify(dart, times(1)).listDisclosures("00126380", FROM, TO, 1);
+	}
+
+	@Test
+	void 소스가_정지_중이면_회사_지정_수집도_호출하지_않는다() {
+		insertCompany("00126380", "005930", "삼성전자");
+		given(pauses.pausedNow(DartClient.SOURCE)).willReturn(java.util.Optional.of(
+			new SourcePauseRegistry.Pause(java.time.Instant.MAX, ErrorKind.QUOTA_EXCEEDED, "020")));
+
+		DisclosureCollector.CompanyCollectResult result = collector.collectByStockCodes(List.of("005930"), FROM, TO);
+
+		assertThat(result).isEqualTo(new DisclosureCollector.CompanyCollectResult(1, 0, 0, 0));
+		verify(dart, never()).listDisclosures(any(), any(), any(), anyInt());
+	}
+
 	/** poll()은 Clock 기준 "오늘"을 쓰므로, 테스트 날짜로 reconcile과 같은 경로를 태우기 위해 폴링 모드를 직접 호출한다. */
 	private DisclosureCollector.CollectResult pollAt(LocalDate day) {
 		return collector.pollDay(day);
@@ -379,6 +511,18 @@ class DisclosureCollectorIntegrationTest {
 
 	private static Item item(String corpCode, String stockCode, String cls, String rceptNo, String name) {
 		return itemWithRemark(corpCode, stockCode, cls, rceptNo, name, "");
+	}
+
+	/** 접수일을 지정한 공시. */
+	private static Item itemOn(String corpCode, String stockCode, String cls, String rceptNo, String name, String day) {
+		return new Item(corpCode, "회사" + corpCode, stockCode, cls, name, rceptNo, "제출인", day, "");
+	}
+
+	private void insertCompany(String corpCode, String stockCode, String name) {
+		jdbc.sql("""
+			INSERT INTO company (country, source, source_key, stock_code, name)
+			VALUES ('KR', 'DART', :corpCode, :stockCode, :name)
+			""").param("corpCode", corpCode).param("stockCode", stockCode).param("name", name).update();
 	}
 
 	private static Item itemWithRemark(String corpCode, String stockCode, String cls, String rceptNo, String name,
