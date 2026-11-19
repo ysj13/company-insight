@@ -59,6 +59,18 @@ class DartClientRetryTest {
 	}
 
 	@Test
+	void 회사를_지정한_공시목록도_일시_오류는_두_번까지_다시_시도한다() {
+		server.expect(times(2), requestTo(startsWith(LIST_URL))).andRespond(withServerError());
+		server.expect(once(), requestTo(startsWith(LIST_URL)))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
+
+		DisclosureListResponse response = client.listDisclosures("00126380", DAY.minusYears(1).plusDays(1), DAY, 1);
+
+		assertThat(response.items()).isEmpty();
+		server.verify();
+	}
+
+	@Test
 	void 세_번_모두_실패하면_예외를_던진다() {
 		server.expect(times(3), requestTo(startsWith(LIST_URL))).andRespond(withServerError());
 

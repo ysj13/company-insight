@@ -41,15 +41,20 @@ public class DisclosureRepository {
 	/**
 	 * 공시에 나온 회사를 먼저 맞춘다. 고유번호 동기화 전에 새로 상장한 회사의 공시가 올 수 있어
 	 * 없으면 넣고, 있으면 시장 구분과 마지막 공시일만 갱신한다.
+	 *
+	 * <p>시장 구분은 이미 아는 마지막 공시일보다 앞선 공시로는 바꾸지 않는다. 긴 기간을 최신부터 읽으면 오래된 페이지가
+	 * 나중에 오는데, 공시에 실린 시장 구분이 접수 당시 값이라면 그 사이 시장을 옮긴 회사가 옛 시장으로 되돌아가기 때문이다.
 	 */
 	private static final String UPSERT_COMPANY = """
 		INSERT INTO company (country, source, source_key, stock_code, name, market, last_disclosed_on)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (source, source_key) DO UPDATE
-		   SET market = EXCLUDED.market,
+		   SET market = CASE WHEN EXCLUDED.last_disclosed_on < company.last_disclosed_on
+		                     THEN company.market ELSE EXCLUDED.market END,
 		       last_disclosed_on = GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on),
 		       updated_at = now()
-		 WHERE company.market IS DISTINCT FROM EXCLUDED.market
+		 WHERE (company.market IS DISTINCT FROM EXCLUDED.market
+		        AND EXCLUDED.last_disclosed_on IS NOT DISTINCT FROM GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on))
 		    OR company.last_disclosed_on IS DISTINCT FROM GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on)
 		""";
 

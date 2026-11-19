@@ -105,6 +105,55 @@ class DartClientTest {
 	}
 
 	@Test
+	void 회사를_지정하지_않은_공시목록_요청에는_고유번호가_없다() {
+		server.expect(requestTo(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("corp_code"))))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
+
+		client.listDisclosures(java.time.LocalDate.of(2026, 11, 13), java.time.LocalDate.of(2026, 11, 13), 1);
+
+		server.verify();
+	}
+
+	@Test
+	void 회사를_지정한_공시목록은_고유번호와_기간과_페이지를_보낸다() {
+		String body = """
+			{"status":"000","message":"정상","page_no":2,"page_count":100,"total_count":2916,"total_page":30,
+			 "list":[{"corp_code":"00126380","corp_name":"삼성전자","stock_code":"005930","corp_cls":"Y",
+			          "report_nm":"임원ㆍ주요주주특정증권등소유상황보고서","rcept_no":"20260716000123","flr_nm":"홍길동",
+			          "rcept_dt":"20260716","rm":""}]}
+			""";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andExpect(queryParam("crtfc_key", SECRET))
+			.andExpect(queryParam("corp_code", "00126380"))
+			.andExpect(queryParam("bgn_de", "20251121"))
+			.andExpect(queryParam("end_de", "20261120"))
+			.andExpect(queryParam("page_no", "2"))
+			.andExpect(queryParam("page_count", "100"))
+			.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+		DisclosureListResponse response = client.listDisclosures("00126380", java.time.LocalDate.of(2025, 11, 21),
+			java.time.LocalDate.of(2026, 11, 20), 2);
+
+		assertThat(response.totalPage()).isEqualTo(30);
+		assertThat(response.totalCount()).isEqualTo(2916);
+		assertThat(response.items()).singleElement()
+			.satisfies(item -> assertThat(item.receiptNo()).isEqualTo("20260716000123"));
+	}
+
+	@Test
+	void 회사를_지정했는데_기간에_공시가_없으면_빈_목록() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
+			.andExpect(queryParam("corp_code", "00164742"))
+			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));
+
+		DisclosureListResponse response = client.listDisclosures("00164742", java.time.LocalDate.of(2026, 11, 15),
+			java.time.LocalDate.of(2026, 11, 15), 1);
+
+		assertThat(response.items()).isEmpty();
+		assertThat(response.totalPage()).isZero();
+	}
+
+	@Test
 	void 공시가_없으면_빈_목록() {
 		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/list.json")))
 			.andRespond(withSuccess("{\"status\":\"013\",\"message\":\"조회된 데이타가 없습니다.\"}", MediaType.APPLICATION_JSON));

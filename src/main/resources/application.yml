@@ -52,6 +52,10 @@ app:
     retry-jitter: 500ms
   gemini:
     api-key: ${GEMINI_API_KEY:}
+  disclosure:
+    # 앱이 뜬 직후 공시 목록을 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
+    collect-on-startup: ${DISCLOSURE_COLLECT_ON_STARTUP:}
+    collect-months: 12   # 오늘까지 거슬러 올라가는 기간(개월)
   financial:
     # 앱이 뜬 직후 재무를 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
     collect-on-startup: ${FINANCIAL_COLLECT_ON_STARTUP:}
