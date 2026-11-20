@@ -19,8 +19,11 @@ public final class BodyArchive {
 	/** 파일 수 상한. 본 것 가운데 가장 많은 것이 3개다 */
 	static final int MAX_FILES = 50;
 
-	/** 푼 크기의 합 상한. 본 것 가운데 가장 큰 것(분기보고서)이 약 5MB다. 푼 글과 읽은 문서가 함께 메모리에 올라가므로 넉넉히 잡지 않는다 */
-	static final long MAX_TOTAL_BYTES = 16L * 1024 * 1024;
+	/**
+	 * 푼 크기의 합 상한. 받는 본문 가운데 본 것으로 가장 큰 것은 연 1회 내는 대규모기업집단현황공시(대표회사용)로 약 8MB다.
+	 * 푼 글과 읽은 문서가 함께 메모리에 올라가므로 그 몇 배까지만 받는다
+	 */
+	static final long MAX_TOTAL_BYTES = 32L * 1024 * 1024;
 
 	/** 파일 이름의 글자 집합. 이름이 UTF-8이 아니어도 예외 없이 읽는다 (본 이름은 모두 접수번호.xml) */
 	private static final Charset NAME_CHARSET = Charset.forName("MS949");
