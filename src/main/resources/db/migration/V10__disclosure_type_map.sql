@@ -50,7 +50,7 @@ CREATE INDEX title_rule_type_code_idx ON title_rule (type_code);
 COMMENT ON TABLE title_rule IS '공시 제목 → 유형 대응표. 머리말·공백·기간 표기·속성 꼬리를 뗀 제목으로 찾는다. 제목 전체가 같은 줄(EXACT)이 먼저이고, 없으면 서식 이름 줄(FORM) 가운데 가장 긴 것이다';
 COMMENT ON COLUMN title_rule.id IS '규칙 ID. 공시가 어느 줄에 걸렸는지 disclosure.title_rule_id에 남긴다';
 COMMENT ON COLUMN title_rule.source IS '이 규칙을 적용하는 공시의 출처. DART 금융감독원 전자공시시스템. 출처마다 제목의 글자가 달라 줄을 따로 둔다';
-COMMENT ON COLUMN title_rule.match_kind IS '대응 방식. EXACT 제목 전체가 pattern과 같다, FORM 제목이 pattern과 같거나 pattern 바로 뒤에 괄호 꼬리가 온다';
+COMMENT ON COLUMN title_rule.match_kind IS '대응 방식. EXACT 제목 전체가 pattern과 같다, FORM 제목이 pattern과 같거나 pattern 바로 뒤가 여는 괄호다(괄호 뒤의 글자는 보지 않는다)';
 COMMENT ON COLUMN title_rule.pattern IS '맞춰 볼 글자. 다듬은 제목(공백 없음, 가운뎃점은 ㆍ)과 같은 모양으로 적는다';
 COMMENT ON COLUMN title_rule.type_code IS '이 줄에 걸린 공시의 유형 (disclosure_type.code)';
 COMMENT ON COLUMN title_rule.tone IS '이 줄이 정하는 방향. 비우면 유형의 default_tone. 한 유형 안에서 서식이나 꼬리에 따라 방향이 다를 때 적는다';
@@ -118,7 +118,7 @@ COMMENT ON COLUMN disclosure.title_rule_id IS '걸린 제목 규칙 (title_rule.
 COMMENT ON COLUMN disclosure.title_rule_version IS '분류에 쓴 대응표 버전 (title_rule_version.version). 0이면 아직 분류하지 않은 행';
 COMMENT ON COLUMN disclosure.case_code IS '제목이 정한 경우 (title_rule.case_code). 없으면 NULL';
 COMMENT ON COLUMN disclosure.normalized_title IS '대응표를 찾을 때 쓴 제목. 보고서명에서 머리말, 공백, 기간 표기, 속성 꼬리를 뗀 것';
-COMMENT ON COLUMN disclosure.title_attributes IS '제목에서 뗀 속성. SUBSIDIARY 자회사의 공시, VOLUNTARY 자율공시, FAIR 공정공시, GUIDE 안내공시, WITHDRAWAL 꼬리에 철회가 든 공시. 없으면 빈 배열';
+COMMENT ON COLUMN disclosure.title_attributes IS '제목에서 뗀 속성. SUBSIDIARY 자회사의 공시, VOLUNTARY 자율공시, FAIR 공정공시, GUIDE 안내공시, WITHDRAWAL 꼬리에 철회·취하가 든 공시. 없으면 빈 배열';
 COMMENT ON COLUMN disclosure.tone IS '판정. POSITIVE 호재, NEGATIVE 악재, NEUTRAL 중립. 아직 판정하지 않았으면 NULL (본문을 읽어 정할 공시)';
 COMMENT ON COLUMN disclosure.impact IS '영향도. 1 이상이고 클수록 영향이 크다. 호재·악재일 때만 값이 있다. 제목 단계는 채우지 않는다';
 COMMENT ON COLUMN disclosure.classified_by IS '판정 주체. RULE 제목 규칙(대응표), LLM. 아직 판정하지 않았으면 NULL';

@@ -298,6 +298,22 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
+	void 다시_분류해도_방향이_그대로면_영향도를_두고_방향이_바뀌면_비운다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("1", "000001", "Y", "20261113000002", "주식소각결정"),
+			item("2", "000002", "K", "20261113000001", "단일판매ㆍ공급계약해지")));
+		collector.reconcile(DAY, DAY);
+		// 뒤 단계가 영향도를 매긴 뒤라고 가정한다. 한 건은 옛 대응표에서 방향이 달랐다
+		jdbc.sql("UPDATE disclosure SET impact = 2, title_rule_version = 0").update();
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE' WHERE source_key = '20261113000001'").update();
+
+		classification.reclassifyOutdated();
+
+		assertThat(classificationOf("20261113000002")).containsEntry("tone", "POSITIVE").containsEntry("impact", 2);
+		assertThat(classificationOf("20261113000001")).containsEntry("tone", "NEGATIVE").containsEntry("impact", null);
+	}
+
+	@Test
 	void 비고에_정정_표시만_붙으면_비고만_바꾸고_판정은_그대로_둔다() {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			itemWithRemark("1", "000001", "Y", "20261113000001", "연결재무제표기준영업(잠정)실적(공정공시)", "유")));
@@ -314,7 +330,7 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
-	void 옛_대응표_버전의_공시를_다시_분류하고_LLM이_판정한_공시는_그대로_둔다() {
+	void 옛_대응표_버전의_공시를_다시_분류하고_LLM이_판정한_공시는_유형만_맞춘다() {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			item("1", "000001", "Y", "20261113000003", "주식소각결정"),
 			item("2", "000002", "K", "20261113000002", "단일판매ㆍ공급계약체결"),
@@ -332,13 +348,14 @@ class DisclosureCollectorIntegrationTest {
 
 		int reclassified = classification.reclassifyOutdated();
 
-		assertThat(reclassified).isEqualTo(2);
+		assertThat(reclassified).isEqualTo(3);
 		assertThat(classificationOf("20261113000003")).containsEntry("type_code", "E1").containsEntry("tone", "POSITIVE")
 			.containsEntry("title_rule_version", 1);
 		assertThat(classificationOf("20261113000001")).containsEntry("type_code", "I4").containsEntry("tone", "NEGATIVE")
 			.containsEntry("is_correction", true);
+		// 공급계약 체결은 제목으로 호재지만 LLM이 한 판정(호재, 영향도 3)을 덮어쓰지 않는다. 유형과 버전은 맞춘다
 		assertThat(classificationOf("20261113000002")).containsEntry("classified_by", "LLM").containsEntry("impact", 3)
-			.containsEntry("type_code", null).containsEntry("title_rule_version", 0);
+			.containsEntry("tone", "POSITIVE").containsEntry("type_code", "C1").containsEntry("title_rule_version", 1);
 		assertThat(classification.reclassifyOutdated()).isZero();
 	}
 

@@ -25,10 +25,13 @@ public class DisclosureClassifier {
 	/** 비고의 철회 표시 */
 	private static final String WITHDRAWN_MARK = "철";
 
-	/** 제목 꼬리의 철회 표시. "신규시설투자등(철회)"처럼 이미 낸 결정을 거둔다는 공시다 */
-	private static final String WITHDRAWAL_WORD = "철회";
+	/**
+	 * 제목 꼬리의 거둠 표시. "신규시설투자등(철회)", "소송등의제기ㆍ신청(경영권분쟁소송)(…가처분신청취하)"처럼
+	 * 이미 낸 결정이나 신청을 거둔다는 공시다
+	 */
+	private static final List<String> WITHDRAWAL_WORDS = List.of("철회", "취하");
 
-	/** 꼬리에 철회가 든 공시의 속성 이름. 대응표의 속성 꼬리와 달리 꼬리 안의 글자로 찾는다 */
+	/** 꼬리에 철회·취하가 든 공시의 속성 이름. 대응표의 속성 꼬리와 달리 꼬리 안의 글자로 찾는다 */
 	static final String WITHDRAWAL = "WITHDRAWAL";
 
 	private final TitleRuleBook book;
@@ -67,7 +70,8 @@ public class DisclosureClassifier {
 			}
 		}
 		int tail = title.indexOf('(');
-		boolean withdrawal = tail >= 0 && title.indexOf(WITHDRAWAL_WORD, tail) >= 0;
+		String normalizedTitle = title;
+		boolean withdrawal = tail >= 0 && WITHDRAWAL_WORDS.stream().anyMatch(word -> normalizedTitle.indexOf(word, tail) >= 0);
 		if (withdrawal) {
 			attributes.add(WITHDRAWAL);
 		}
@@ -75,7 +79,7 @@ public class DisclosureClassifier {
 		TitleRuleBook.Rule rule = book.find(title).orElse(null);
 		Tone tone = book.titleToneOf(rule);
 		if (withdrawal && (tone == Tone.POSITIVE || tone == Tone.NEGATIVE)) {
-			// 서식의 방향은 결정을 냈을 때의 것이다. 결정을 거둔다는 공시에 같은 방향을 붙이지 않고 판정을 미룬다
+			// 서식의 방향은 결정을 내거나 신청을 냈을 때의 것이다. 그것을 거둔다는 공시에 같은 방향을 붙이지 않고 판정을 미룬다
 			tone = null;
 		}
 		boolean withdrawn = isWithdrawn(remark);

@@ -93,7 +93,6 @@ public class DisclosureRepository {
 		  FROM disclosure
 		 WHERE title_rule_version < ?
 		   AND id > ?
-		   AND classified_by IS DISTINCT FROM 'LLM'
 		 ORDER BY id
 		 LIMIT ?
 		""";
@@ -101,13 +100,15 @@ public class DisclosureRepository {
 	private static final String UPDATE_CLASSIFICATION = """
 		UPDATE disclosure
 		   SET type_code = ?, title_rule_id = ?, case_code = ?, normalized_title = ?,
-		       title_attributes = string_to_array(?, ','), tone = ?, classified_by = ?, title_rule_version = ?,
-		       is_correction = ?, is_withdrawn = ?,
+		       title_attributes = string_to_array(?, ','),
+		       -- LLM이 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다
+		       tone = CASE WHEN classified_by = 'LLM' THEN tone ELSE ? END,
+		       classified_by = CASE WHEN classified_by = 'LLM' THEN classified_by ELSE ? END,
+		       title_rule_version = ?, is_correction = ?, is_withdrawn = ?,
 		       -- 영향도는 뒤 단계가 매긴다. 방향이 바뀌면 옛 영향도가 맞지 않으므로 비운다
-		       impact = CASE WHEN tone IS NOT DISTINCT FROM ? THEN impact ELSE NULL END,
+		       impact = CASE WHEN classified_by = 'LLM' OR tone IS NOT DISTINCT FROM ? THEN impact ELSE NULL END,
 		       updated_at = now()
 		 WHERE id = ?
-		   AND classified_by IS DISTINCT FROM 'LLM'
 		""";
 
 	private final JdbcTemplate jdbc;
@@ -176,7 +177,7 @@ public class DisclosureRepository {
 	}
 
 	/**
-	 * 지금 대응표보다 옛 버전으로 분류된 공시를 id 순서로 가져온다. LLM이 판정한 공시는 대상이 아니다.
+	 * 지금 대응표보다 옛 버전으로 분류된 공시를 id 순서로 가져온다.
 	 *
 	 * @param ruleVersion 지금 대응표 버전
 	 * @param afterId     이 id보다 큰 행부터 (처음이면 0)
@@ -191,7 +192,7 @@ public class DisclosureRepository {
 	}
 
 	/**
-	 * 분류 결과를 저장한다. 그 사이 LLM이 판정한 공시는 건드리지 않는다.
+	 * 분류 결과를 저장한다. LLM이 판정한 공시는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
 	 *
 	 * @param ruleVersion 적용한 대응표 버전
 	 */

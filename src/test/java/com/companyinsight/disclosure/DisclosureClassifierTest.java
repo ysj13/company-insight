@@ -24,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * 마이그레이션으로 들어간 대응표를 그대로 읽어 분류한다. 규칙이 코드가 아니라 DB에 있으므로 DB 없이 시험하지 않는다.
  *
  * <p>기대값은 코드에서 뽑지 않았다. 유형은 상장사 공시 1년치의 제목 2,229가지에 사람이 확정한 대응표
- * ({@code disclosure/title-type-expected.tsv})이고, 방향은 유형별 기준표에서 옮겼다.
+ * ({@code disclosure/title-type-expected.tsv})이고, 방향은 유형별로 확정한 판정 기준(docs/PLAN.md 6절)에서 옮겼다.
  * 표의 보고서명은 실제로 접수된 공시 제목이다. 실제 데이터에 없어 지어낸 입력은 "가정한 제목"이라고 적었다.
  */
 @Import(TestcontainersConfiguration.class)
@@ -168,6 +168,7 @@ class DisclosureClassifierTest {
 		최대주주변경                                                        | G1
 		소송등의판결ㆍ결정                                                  | G5
 		소송등의판결ㆍ결정(일정금액이상의청구)                              | I1
+		주요사항보고서(소송등의제기)                                        | I1
 		횡령ㆍ배임혐의진행사항                                              | I2
 		해산사유발생(자회사의 주요경영사항)                                 | I3
 		회생절차폐지결정                                                    | I3
@@ -241,12 +242,18 @@ class DisclosureClassifierTest {
 	}
 
 	@Test
-	void 꼬리에_철회가_든_공시는_서식의_방향을_붙이지_않는다() {
+	void 꼬리에_철회나_취하가_든_공시는_서식의_방향을_붙이지_않는다() {
 		// 실제 제목. 시설 투자(호재) 결정을 거둔다는 공시다
 		Classification c = classifier.classify("신규시설투자등(철회)", null);
 		assertThat(c.typeCode()).isEqualTo("F8");
 		assertThat(c.tone()).isNull();
 		assertThat(c.attributes()).containsExactly("WITHDRAWAL");
+
+		// 실제 제목. 경영권 분쟁 소송의 제기(악재) 서식이지만 신청을 거뒀다는 공시다
+		Classification dropped = classifier.classify("소송등의제기ㆍ신청(경영권분쟁소송)(주주명부열람및등사가처분신청취하)", null);
+		assertThat(dropped.typeCode()).isEqualTo("G5");
+		assertThat(dropped.tone()).isNull();
+		assertThat(dropped.attributes()).containsExactly("WITHDRAWAL");
 
 		// 중립인 서식은 그대로 중립이다
 		Classification neutral = classifier.classify("주식병합결정(철회)", null);
