@@ -29,7 +29,7 @@ public record DisclosureListLinks(DisclosureSearchCondition condition) {
 	/** 고른 회사를 풀고 나머지 조건은 유지한 주소. */
 	public String allCompanies() {
 		return new DisclosureListLinks(
-			new DisclosureSearchCondition(condition.tone(), condition.kind(), condition.keyword(), null)).page(1);
+			new DisclosureSearchCondition(condition.tone(), condition.bundle(), condition.keyword(), null)).page(1);
 	}
 
 	private String build(ToneFilter tone, int page) {
@@ -37,8 +37,8 @@ public record DisclosureListLinks(DisclosureSearchCondition condition) {
 		if (tone != null) {
 			uri.queryParam("tone", tone.name());
 		}
-		if (condition.kind() != null) {
-			uri.queryParam("kind", condition.kind().name());
+		if (condition.bundle() != null) {
+			uri.queryParam("bundle", condition.bundle().name());
 		}
 		if (condition.keyword() != null) {
 			uri.queryParam("q", "{q}");

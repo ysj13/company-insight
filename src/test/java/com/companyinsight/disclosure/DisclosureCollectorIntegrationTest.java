@@ -240,15 +240,18 @@ class DisclosureCollectorIntegrationTest {
 
 		collector.reconcile(DAY, DAY);
 
-		assertThat(classificationOf("20261113000004")).containsEntry("kind", "MAJOR").containsEntry("tone", "POSITIVE")
-			.containsEntry("impact", 2).containsEntry("classified_by", "RULE")
-			.containsEntry("rule_version", DisclosureClassifier.RULE_VERSION)
+		assertThat(classificationOf("20261113000004")).containsEntry("type_code", "E2").containsEntry("tone", "POSITIVE")
+			.containsEntry("impact", null).containsEntry("classified_by", "RULE")
+			.containsEntry("title_rule_version", 1).containsEntry("normalized_title", "주요사항보고서(자기주식취득결정)")
+			.containsEntry("attributes", "")
 			.containsEntry("is_correction", false).containsEntry("is_withdrawn", false);
-		assertThat(classificationOf("20261113000003")).containsEntry("kind", "PERIODIC").containsEntry("tone", "NEUTRAL")
-			.containsEntry("impact", null).containsEntry("is_correction", true);
-		assertThat(classificationOf("20261113000002")).containsEntry("kind", "EARNINGS").containsEntry("tone", null)
-			.containsEntry("classified_by", null);
-		assertThat(classificationOf("20261113000001")).containsEntry("tone", "NEUTRAL").containsEntry("is_withdrawn", true);
+		assertThat(classificationOf("20261113000004").get("title_rule_id")).isNotNull();
+		assertThat(classificationOf("20261113000003")).containsEntry("type_code", "A1").containsEntry("tone", "NEUTRAL")
+			.containsEntry("normalized_title", "분기보고서").containsEntry("is_correction", true);
+		assertThat(classificationOf("20261113000002")).containsEntry("type_code", "B1").containsEntry("tone", null)
+			.containsEntry("classified_by", null).containsEntry("attributes", "FAIR");
+		assertThat(classificationOf("20261113000001")).containsEntry("type_code", "A3").containsEntry("tone", "NEUTRAL")
+			.containsEntry("is_withdrawn", true);
 	}
 
 	@Test
@@ -256,7 +259,7 @@ class DisclosureCollectorIntegrationTest {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			itemWithRemark("1", "000001", "Y", "20261113000001", "주식소각결정", "유")));
 		collector.reconcile(DAY, DAY);
-		assertThat(classificationOf("20261113000001")).containsEntry("tone", "POSITIVE").containsEntry("impact", 3);
+		assertThat(classificationOf("20261113000001")).containsEntry("tone", "POSITIVE");
 
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			itemWithRemark("1", "000001", "Y", "20261113000001", "주식소각결정", "유철")));
@@ -285,13 +288,29 @@ class DisclosureCollectorIntegrationTest {
 	@Test
 	void 판정이_없는_공시에는_영향도를_넣을_수_없다() {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
-			item("1", "000001", "Y", "20261113000001", "단일판매ㆍ공급계약체결")));
+			item("1", "000001", "Y", "20261113000001", "연결재무제표기준영업(잠정)실적(공정공시)")));
 		collector.reconcile(DAY, DAY);
 
 		assertThatThrownBy(() -> jdbc.sql("UPDATE disclosure SET impact = 2").update())
 			.isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
 		assertThatThrownBy(() -> jdbc.sql("UPDATE disclosure SET tone = 'NEUTRAL', classified_by = 'RULE', impact = 1").update())
 			.isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+	}
+
+	@Test
+	void 다시_분류해도_방향이_그대로면_영향도를_두고_방향이_바뀌면_비운다() {
+		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
+			item("1", "000001", "Y", "20261113000002", "주식소각결정"),
+			item("2", "000002", "K", "20261113000001", "단일판매ㆍ공급계약해지")));
+		collector.reconcile(DAY, DAY);
+		// 뒤 단계가 영향도를 매긴 뒤라고 가정한다. 한 건은 옛 대응표에서 방향이 달랐다
+		jdbc.sql("UPDATE disclosure SET impact = 2, title_rule_version = 0").update();
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE' WHERE source_key = '20261113000001'").update();
+
+		classification.reclassifyOutdated();
+
+		assertThat(classificationOf("20261113000002")).containsEntry("tone", "POSITIVE").containsEntry("impact", 2);
+		assertThat(classificationOf("20261113000001")).containsEntry("tone", "NEGATIVE").containsEntry("impact", null);
 	}
 
 	@Test
@@ -311,16 +330,16 @@ class DisclosureCollectorIntegrationTest {
 	}
 
 	@Test
-	void 옛_규칙_버전의_공시를_다시_분류하고_LLM이_판정한_공시는_그대로_둔다() {
+	void 옛_대응표_버전의_공시를_다시_분류하고_LLM이_판정한_공시는_유형만_맞춘다() {
 		given(dart.listDisclosures(DAY, DAY, 1)).willReturn(page(1, 1,
 			item("1", "000001", "Y", "20261113000003", "주식소각결정"),
 			item("2", "000002", "K", "20261113000002", "단일판매ㆍ공급계약체결"),
 			item("3", "000003", "Y", "20261113000001", "[기재정정]생산중단")));
 		collector.reconcile(DAY, DAY);
-		// 규칙이 생기기 전에 저장된 행처럼 되돌린다. 한 건은 그 사이 LLM이 판정했다.
+		// 대응표가 생기기 전에 저장된 행처럼 되돌린다. 한 건은 그 사이 LLM이 판정했다.
 		jdbc.sql("""
-			UPDATE disclosure SET kind = 'ETC', tone = NULL, impact = NULL, classified_by = NULL,
-			       rule_version = 0, is_correction = false
+			UPDATE disclosure SET type_code = NULL, title_rule_id = NULL, normalized_title = NULL, tone = NULL, impact = NULL,
+			       classified_by = NULL, title_rule_version = 0, is_correction = false
 			""").update();
 		jdbc.sql("""
 			UPDATE disclosure SET tone = 'POSITIVE', impact = 3, classified_by = 'LLM'
@@ -329,13 +348,14 @@ class DisclosureCollectorIntegrationTest {
 
 		int reclassified = classification.reclassifyOutdated();
 
-		assertThat(reclassified).isEqualTo(2);
-		assertThat(classificationOf("20261113000003")).containsEntry("tone", "POSITIVE").containsEntry("impact", 3)
-			.containsEntry("rule_version", DisclosureClassifier.RULE_VERSION);
-		assertThat(classificationOf("20261113000001")).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2)
+		assertThat(reclassified).isEqualTo(3);
+		assertThat(classificationOf("20261113000003")).containsEntry("type_code", "E1").containsEntry("tone", "POSITIVE")
+			.containsEntry("title_rule_version", 1);
+		assertThat(classificationOf("20261113000001")).containsEntry("type_code", "I4").containsEntry("tone", "NEGATIVE")
 			.containsEntry("is_correction", true);
+		// 공급계약 체결은 제목으로 호재지만 LLM이 한 판정(호재, 영향도 3)을 덮어쓰지 않는다. 유형과 버전은 맞춘다
 		assertThat(classificationOf("20261113000002")).containsEntry("classified_by", "LLM").containsEntry("impact", 3)
-			.containsEntry("rule_version", 0);
+			.containsEntry("tone", "POSITIVE").containsEntry("type_code", "C1").containsEntry("title_rule_version", 1);
 		assertThat(classification.reclassifyOutdated()).isZero();
 	}
 
@@ -594,7 +614,8 @@ class DisclosureCollectorIntegrationTest {
 
 	private Map<String, Object> classificationOf(String rceptNo) {
 		return jdbc.sql("""
-			SELECT kind, tone, impact::int AS impact, classified_by, rule_version::int AS rule_version, is_correction, is_withdrawn, remark
+			SELECT type_code, title_rule_id, normalized_title, array_to_string(title_attributes, ',') AS attributes,
+			       tone, impact::int AS impact, classified_by, title_rule_version, is_correction, is_withdrawn, remark
 			  FROM disclosure WHERE source = 'DART' AND source_key = :no
 			""").param("no", rceptNo).query().singleRow();
 	}

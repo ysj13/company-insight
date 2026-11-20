@@ -33,11 +33,11 @@
 				</div>
 			</div>
 			<label class="field">
-				<span>종류</span>
-				<select name="kind">
+				<span>유형</span>
+				<select name="bundle">
 					<option value="">전체</option>
-					<option th:each="k : ${kinds}" th:value="${k.name()}" th:text="${k.label()}"
-							th:selected="${k == condition.kind}">종류</option>
+					<option th:each="b : ${bundles}" th:value="${b.name()}" th:text="${b.label()}"
+							th:selected="${b == condition.bundle}">유형</option>
 				</select>
 			</label>
 			<button type="submit" class="btn">찾기</button>
@@ -69,7 +69,7 @@
 		<details class="help">
 			<summary>판정은 어떻게 정하나요?</summary>
 			<ul>
-				<li><b>호재·악재</b>는 공시 제목만으로 방향이 정해지는 것을 규칙으로 판정한 결과입니다. 옆의 <b>영향</b>은 작음·보통·큼 세 단계입니다.</li>
+				<li><b>호재·악재</b>는 공시 제목만으로 방향이 정해지는 것을 규칙으로 판정한 결과입니다.</li>
 				<li><b>중립</b>은 정기보고서나 절차 안내처럼 방향이 없는 공시입니다.</li>
 				<li><b>미판정</b>은 제목만으로는 정하지 못해 아직 판정하지 않은 공시입니다.</li>
 				<li><b>후속 공시</b>는 제목 앞에 [기재정정], [첨부추가] 같은 머리말이 붙은 공시입니다. 이미 낸 공시를 고치거나 보탠 것이라 판정은 앞선 공시와 같게 표시하고, 종목 판단을 계산할 때는 같은 소식을 두 번 세지 않도록 뺍니다.</li>
@@ -97,7 +97,7 @@
 					<p class="sub">
 						<span class="company" th:text="${d.companyName}">회사명</span>
 						<span class="num" th:text="${d.stockCode}">000000</span>
-						<span th:text="${d.kind.label()}">종류</span>
+						<span th:if="${d.typeName != null}" th:text="${d.typeName}">유형</span>
 						<span class="tag" th:if="${d.correction}">후속 공시</span>
 						<span class="tag" th:if="${d.withdrawn}">철회</span>
 					</p>

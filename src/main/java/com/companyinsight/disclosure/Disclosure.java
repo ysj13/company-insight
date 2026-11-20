@@ -57,9 +57,10 @@ public class Disclosure {
 	@Column(name = "rcept_date")
 	private LocalDate receiptDate;
 
-	/** 공시 종류 */
-	@Enumerated(EnumType.STRING)
-	private DisclosureKind kind;
+	/** 공시 유형. 아직 분류하지 않은 행은 null */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "type_code")
+	private DisclosureType type;
 
 	/** 판정. 아직 판정하지 않았으면 null */
 	@Enumerated(EnumType.STRING)
