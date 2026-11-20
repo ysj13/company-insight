@@ -19,7 +19,7 @@ COMMENT ON COLUMN title_rule.match_kind IS '대응 방식. EXACT 제목 전체�
 COMMENT ON COLUMN title_rule.tail_word IS 'FORM_WORD 줄에서 서식 이름 뒤의 꼬리에 들어 있어야 하는 낱말. 다듬은 제목과 같은 모양(공백 없음)으로 적는다. 다른 대응 방식에서는 NULL';
 
 INSERT INTO title_rule_version (version, note) VALUES
-    (3, '대응 방식 FORM_WORD(서식 이름 + 꼬리에 든 낱말) 추가. 기업가치 제고 계획의 이행현황·재공시 꼬리와 소송 제기의 항소·상고 꼬리를 낱말로 건다. 종류주식의 보통주 전환은 악재로. 제목 규칙 622줄(EXACT 284, FORM 332, FORM_WORD 8)');
+    (3, '대응 방식 FORM_WORD(서식 이름 + 꼬리에 든 낱말) 추가. 기업가치 제고 계획의 이행현황·재공시 꼬리와 소송 제기의 항소·상고 꼬리를 낱말로 건다. 종류주식의 보통주 전환은 악재로. 제목 규칙 624줄(EXACT 284, FORM 332, FORM_WORD 8)');
 
 -- 종류주식(우선주)이 보통주로 바뀌면 보통주 수가 늘어난다. 같은 유형(L2)의 전환청구권 행사, 전환주식의 전환청구권 행사와 같은 방향(유형의 기본 방향, 악재)으로 둔다.
 UPDATE title_rule

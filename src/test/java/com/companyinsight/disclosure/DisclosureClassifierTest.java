@@ -260,31 +260,36 @@ class DisclosureClassifierTest {
 
 	/**
 	 * 꼬리에 든 낱말로 거는 줄(FORM_WORD). "실제"는 실제 공시의 제목이고 "가정"은 아직 나오지 않은 꼬리를 가정한 제목이다.
-	 * 방향이 비어 있으면 본문을 읽는 줄이다.
+	 * 방향이 비어 있으면 본문을 읽는 줄이다. 마지막 칸은 걸려야 하는 줄의 대응 방식이다.
+	 * 실제 제목 가운데 낱말 줄에 걸리는 것은 하나뿐이다(나머지 실제 제목은 버전 2에서 제목 전체 줄로 적었다).
 	 */
-	@ParameterizedTest(name = "{0} → {1} {2} ({3})")
+	@ParameterizedTest(name = "{0} → {1} {2} ({3}, {4})")
 	@CsvSource(delimiter = '|', textBlock = """
-		기업가치제고계획(자율공시)(2025년재공시)                                       | E7 | NEUTRAL  | 실제
-		기업가치제고계획(자율공시)(고배당기업)                                         | E7 | NEUTRAL  | 실제
-		기업가치제고계획(자율공시)(2025금호석유화학기업가치제고계획이행현황)           | E7 | NEUTRAL  | 실제
-		기업가치제고계획(자율공시) (2026년 4분기 이행현황)                             | E7 | NEUTRAL  | 가정
-		기업가치제고계획(자율공시)(2027년이행현황)                                     | E7 | NEUTRAL  | 가정
-		[기재정정]기업가치제고계획(자율공시)((주)가나다 2027년 이행 현황)              | E7 | NEUTRAL  | 가정
-		기업가치제고계획(자율공시)((2025년이행현황및2026년기업가치제고계획))           | E7 | POSITIVE | 실제
-		기업가치제고계획(자율공시)(2027년(주)가나다기업가치제고계획)                   | E7 | POSITIVE | 가정
-		기업가치제고계획예고(안내공시)                                                 | A6 | NEUTRAL  | 실제
-		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의무효확인등의소(항소))           | G5 |          | 실제
-		소송등의제기ㆍ신청(경영권분쟁소송)(이사해임의소(항소))                         | G5 |          | 가정
-		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(상고))                     | I1 |          | 가정
-		소송등의제기ㆍ신청(자율공시:일정금액미만의청구)(물품대금청구(항소))            | I1 |          | 가정
-		소송등의제기ㆍ신청(일정금액이상의청구)                                         | I1 | NEGATIVE | 실제
-		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의취소의소)                       | G5 | NEGATIVE | 가정
+		기업가치제고계획(자율공시)(2025년재공시)                                       | E7 | NEUTRAL  | 실제 | FORM_WORD
+		기업가치제고계획(자율공시)(고배당기업)                                         | E7 | NEUTRAL  | 실제 | EXACT
+		기업가치제고계획(자율공시)(2025금호석유화학기업가치제고계획이행현황)           | E7 | NEUTRAL  | 실제 | EXACT
+		기업가치제고계획(자율공시) (2026년 4분기 이행현황)                             | E7 | NEUTRAL  | 가정 | FORM_WORD
+		기업가치제고계획(자율공시)(2027년이행현황)                                     | E7 | NEUTRAL  | 가정 | FORM_WORD
+		[기재정정]기업가치제고계획(자율공시)((주)가나다 2027년 이행 현황)              | E7 | NEUTRAL  | 가정 | FORM_WORD
+		기업가치제고계획(자율공시)((2025년이행현황및2026년기업가치제고계획))           | E7 | POSITIVE | 실제 | EXACT
+		기업가치제고계획(자율공시)(2027년(주)가나다기업가치제고계획)                   | E7 | POSITIVE | 가정 | FORM
+		기업가치제고계획예고(안내공시)                                                 | A6 | NEUTRAL  | 실제 | FORM
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의무효확인등의소(항소))           | G5 |          | 실제 | EXACT
+		소송등의제기ㆍ신청(경영권분쟁소송)(이사해임의소(항소))                         | G5 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(이사해임의소(상고))                         | G5 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(상고))                     | I1 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(자율공시:일정금액미만의청구)(물품대금청구(항소))            | I1 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(항소취하))                 | I1 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(일정금액이상의청구)                                         | I1 | NEGATIVE | 실제 | FORM
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의취소의소)                       | G5 | NEGATIVE | 가정 | FORM
 		""")
-	void 꼬리에_든_낱말로_방향을_가른다(String reportName, String typeCode, Tone tone, String kind) {
+	void 꼬리에_든_낱말로_방향을_가른다(String reportName, String typeCode, Tone tone, String kind, String matchKind) {
 		Classification c = classifier.classify(reportName, null);
 
 		assertThat(c.typeCode()).isEqualTo(typeCode);
 		assertThat(c.tone()).isEqualTo(tone);
+		assertThat(jdbc.sql("SELECT match_kind FROM title_rule WHERE id = ?").param(c.titleRuleId()).query(String.class).single())
+			.isEqualTo(matchKind);
 	}
 
 	@Test
