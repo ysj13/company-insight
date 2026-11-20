@@ -41,6 +41,33 @@ class AuditReportReaderTest {
 	}
 
 	@Test
+	void 실제_공시에서_적정_의견이어도_계속기업_불확실성이_기재돼_있으면_악재_2다() {
+		// 코람코더원리츠. 별도 재무제표만 있고 내부회계관리제도 칸은 "-"다
+		TableReading reading = reader.read(TARGET, TableFixtures.tables(TableFixtures.AUDIT_GOING_CONCERN_NOTED));
+
+		assertThat(reading.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(reading.impact()).isEqualTo(2);
+		assertThat(reading.caseCode()).isEqualTo("GOING_CONCERN");
+		assertThat(reading.items()).containsEntry("감사의견", "적정")
+			.containsEntry("계속기업 존속불확실성 사유 해당여부", "미해당")
+			.containsEntry("감사의견과 관련 없는 계속기업 존속 불확실성 기재여부", "기재")
+			.doesNotContainKey("내부회계관리제도 감사(검토)의견 비적정 등 여부");
+	}
+
+	@Test
+	void 실제_정정_공시에서_정정_전의_의견거절이_아니라_고친_본문의_적정을_읽는다() {
+		// 제일엠앤에스. 정정 표에 "감사의견 | 의견거절 | 적정"이 있다. 본문은 적정이고 계속기업 기재, 별도 내부회계 비적정이다
+		TableReading reading = reader.read(TARGET, TableFixtures.tables(TableFixtures.AUDIT_CORRECTED_TO_CLEAN));
+
+		assertThat(reading.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(reading.impact()).isEqualTo(2);
+		assertThat(reading.caseCode()).isEqualTo("GOING_CONCERN+INTERNAL_CONTROL");
+		assertThat(reading.items()).containsEntry("감사의견", "적정 / 적정")
+			.containsEntry("감사의견과 관련 없는 계속기업 존속 불확실성 기재여부", "기재 / 기재")
+			.containsEntry("내부회계관리제도 감사(검토)의견 비적정 등 여부", "해당");
+	}
+
+	@Test
 	void 연결_감사의견이_적정이_아니면_악재_3이다() {
 		for (String opinion : new String[] { "한정", "부적정", "의견거절" }) {
 			TableReading reading = reader.read(TARGET,

@@ -51,6 +51,9 @@ public class TableReadRepository {
 	/**
 	 * 표로 정한 판정을 공시에 적는다. 같은 값을 다시 적어도 결과가 같다.
 	 *
+	 * <p>앞선 판정이 누구의 것이든 덮어쓴다. 코드가 방향을 정하는 유형에서는 표를 읽은 결과가 기준이다
+	 * (AI가 판정해 둔 공시는 그때 표를 읽지 못했던 것이고, 읽는 규칙을 고쳐 다시 돌렸더니 읽힌 경우다).
+	 *
 	 * @param tone   방향
 	 * @param impact 크기. 중립이면 null
 	 * @param ratio  크기를 정할 때 본 원래 비율(%). 없으면 null
@@ -72,12 +75,13 @@ public class TableReadRepository {
 	 * 코드가 방향을 정하지 못한 공시의 비율만 적는다. 앞선 실행이 표로 정해 둔 판정이 있으면 지운다
 	 * (읽는 규칙을 고친 뒤 다시 돌렸을 때 옛 판정이 남지 않게). 다른 주체의 판정은 건드리지 않는다.
 	 *
-	 * @param ratio 크기를 정할 때 쓸 원래 비율(%). 없으면 null
+	 * @param ratio 크기를 정할 때 쓸 원래 비율(%). 없으면 null (이때 AI가 판정해 둔 공시의 비율은 그대로 둔다)
 	 */
 	public void saveRatioOnly(long disclosureId, BigDecimal ratio) {
 		jdbc.sql("""
 				UPDATE disclosure
-				   SET impact_ratio = :ratio,
+				   SET impact_ratio = CASE WHEN CAST(:ratio AS numeric) IS NULL AND classified_by = 'LLM' THEN impact_ratio
+				                           ELSE CAST(:ratio AS numeric) END,
 				       tone = CASE WHEN classified_by = 'TABLE' THEN NULL ELSE tone END,
 				       impact = CASE WHEN classified_by = 'TABLE' THEN NULL ELSE impact END,
 				       classified_by = CASE WHEN classified_by = 'TABLE' THEN NULL ELSE classified_by END,
@@ -85,6 +89,20 @@ public class TableReadRepository {
 				 WHERE id = :id
 				""")
 			.param("ratio", ratio)
+			.param("id", disclosureId)
+			.update();
+	}
+
+	/**
+	 * 앞선 실행이 표로 정해 둔 판정이 있으면 지운다. 표 읽기가 이 공시를 더는 판정하지 않게 됐을 때 쓴다
+	 * (철회됨, AI가 방향을 정하는 쪽으로 바뀜). 다른 주체의 판정은 건드리지 않는다.
+	 */
+	public void clearTableJudgment(long disclosureId) {
+		jdbc.sql("""
+				UPDATE disclosure
+				   SET tone = NULL, impact = NULL, classified_by = NULL, updated_at = now()
+				 WHERE id = :id AND classified_by = 'TABLE'
+				""")
 			.param("id", disclosureId)
 			.update();
 	}

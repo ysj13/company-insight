@@ -21,7 +21,8 @@ import org.springframework.stereotype.Component;
  * <li>두 기간 모두 흑자: 늘면 호재, 줄면 악재. 증감율의 절댓값이 하한보다 작으면 중립
  * <li>적자에서 흑자로: 호재. 흑자에서 적자로: 악재
  * <li>두 기간 모두 적자: 적자 폭이 늘면 악재, 줄거나 그대로면 중립
- * <li>잠정실적인데 영업이익 칸이 비어 있음(월별 판매·매출만 알리는 공시): 중립
+ * <li>잠정실적인데 영업이익 줄이 당해·누계 모두 비어 있음(월별 판매·매출만 알리는 공시): 중립.
+ *   당해 칸만 비고 누계에 값이 있으면(누계로만 알린 실적) 코드가 정하지 않는다
  * </ul>
  *
  * <p>흑자·적자는 표의 "흑자적자전환여부" 칸이 아니라 두 기간의 영업이익 숫자로 가른다. 그 칸에 전환·지속이 적혀 있는데
@@ -84,14 +85,24 @@ class EarningsReader implements TableReader {
 		List<String> row = profitRow.get().row();
 		String turnCell = at.turn() < 0 ? "" : TableGrid.at(row, at.turn());
 		put(items, "영업이익 흑자적자전환여부", turnCell);
-		return judge(preliminary, TableGrid.at(row, at.current()), TableGrid.at(row, at.previous()),
+		boolean blankMeansNeutral = preliminary && cumulativeIsBlank(table, at);
+		return judge(blankMeansNeutral, TableGrid.at(row, at.current()), TableGrid.at(row, at.previous()),
 			TableGrid.at(row, at.rate()), turnCell, items, unread);
+	}
+
+	/** 잠정실적 표에서 영업이익의 누계실적 줄도 비어 있는지. 그 줄이 없으면 빈 것으로 본다. */
+	private static boolean cumulativeIsBlank(TableGrid table, Columns at) {
+		return table.rows().stream()
+			.filter(row -> row.size() >= 2 && Cells.label(row.getFirst()).equals(OPERATING_PROFIT)
+					&& Cells.compact(row.get(1)).equals("누계실적"))
+			.allMatch(row -> Cells.isBlank(TableGrid.at(row, at.current())) && Cells.isBlank(TableGrid.at(row, at.previous())));
 	}
 
 	/**
 	 * 영업이익 한 줄의 칸으로 방향과 크기를 정한다.
 	 *
-	 * @param blankMeansNeutral 영업이익 칸이 비었을 때 중립으로 볼지 (잠정실적만. 손익구조 변동은 읽지 못한 것으로 본다)
+	 * @param blankMeansNeutral 영업이익 칸이 비었을 때 중립으로 볼지 (영업이익을 아예 알리지 않은 잠정실적만.
+	 *                          그 밖에는 읽지 못한 것으로 본다)
 	 */
 	TableReading judge(boolean blankMeansNeutral, String currentCell, String previousCell, String rateCell, String turnCell,
 			Map<String, String> items, List<String> unread) {

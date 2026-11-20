@@ -2,9 +2,12 @@ package com.companyinsight.analysis.table;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.companyinsight.analysis.body.BodyDocument;
+import com.companyinsight.analysis.body.BodyFormat;
 import com.companyinsight.analysis.table.TableReader.ReadTarget;
 import com.companyinsight.analysis.table.TableReading.Verdict;
 import com.companyinsight.disclosure.Tone;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -72,6 +75,25 @@ class PaidInCapitalReaderTest {
 	}
 
 	@Test
+	void 실제_공시의_주주우선공모와_일반공모는_악재이고_크기는_신주_비율로_정한다() {
+		TableReading priority = reader.read(OWN, TableFixtures.tables(TableFixtures.RIGHTS_PRIORITY_PUBLIC));
+		TableReading open = reader.read(OWN, TableFixtures.tables(TableFixtures.RIGHTS_PUBLIC));
+
+		// 2,200,000 ÷ 6,828,712 = 32.2169% → 20% 이상이라 3
+		assertThat(priority.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(priority.impact()).isEqualTo(3);
+		assertThat(priority.ratio()).isEqualByComparingTo("32.2169");
+		assertThat(priority.items()).containsEntry("증자방식", "주주우선공모증자");
+		// 2,702,158 ÷ 23,607,980 = 11.4460% → 5% 이상 20% 미만이라 2. 정정 표의 "신주의 종류와 수" 줄은 읽지 않는다
+		assertThat(open.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(open.impact()).isEqualTo(2);
+		assertThat(open.ratio()).isEqualByComparingTo("11.4460");
+		assertThat(open.items()).containsEntry("증자방식", "일반공모증자")
+			.containsEntry("신주의 종류와 수: 보통주식 (주)", "2,702,158")
+			.containsEntry("증자전 발행주식총수: 보통주식 (주)", "23,607,980");
+	}
+
+	@Test
 	void 자회사의_유상증자는_증자방식과_관계없이_AI가_읽고_비율을_남기지_않는다() {
 		TableReading reading = reader.read(SUBSIDIARY, TableFixtures.tables(TableFixtures.RIGHTS_SUBSIDIARY));
 
@@ -79,6 +101,32 @@ class PaidInCapitalReaderTest {
 		assertThat(reading.caseCode()).isEqualTo("SUBSIDIARY");
 		assertThat(reading.ratio()).isNull();
 		assertThat(reading.items()).containsEntry("증자방식", "주주배정증자");
+	}
+
+	@Test
+	void 신주_수가_본문에_두_군데_있으면_어느_것인지_가리지_않고_AI가_읽는다() {
+		// 실제 공시가 아니다. 유상증자와 무상증자를 함께 정한 공시를 흉내 낸 표다 (세 회사의 1년치에 없다)
+		BodyDocument document = new BodyDocument("a.html", BodyFormat.HTML, """
+			<html><body>
+			<table>
+			<tr><td rowspan="2">1. 신주의 종류와 수</td><td>보통주식(주)</td><td>500,000</td></tr>
+			<tr><td>종류주식(주)</td><td>-</td></tr>
+			<tr><td rowspan="2">3. 증자전 발행주식총수(주)</td><td>보통주식(주)</td><td>10,000,000</td></tr>
+			<tr><td>종류주식(주)</td><td>-</td></tr>
+			<tr><td colspan="2">5. 증자방식</td><td>주주배정증자</td></tr>
+			</table>
+			<table>
+			<tr><td rowspan="2">1. 신주의 종류와 수</td><td>보통주식(주)</td><td>10,500,000</td></tr>
+			<tr><td>종류주식(주)</td><td>-</td></tr>
+			</table>
+			</body></html>
+			""", "");
+
+		TableReading reading = reader.read(OWN, BodyTables.of(List.of(document)));
+
+		assertThat(reading.verdict()).isEqualTo(Verdict.NEEDS_AI);
+		assertThat(reading.caseCode()).isEqualTo("SEVERAL_SHARE_TABLES");
+		assertThat(reading.ratio()).isNull();
 	}
 
 	@Test

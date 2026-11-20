@@ -89,6 +89,37 @@ class TableGridTest {
 		assertThat(tables.allRows(row -> row.stream().anyMatch(cell -> Cells.compact(cell).equals("정정전")))).isEmpty();
 	}
 
+	@Test
+	void 줄이_짧아_닿지_못한_자리의_걸친_칸도_제때_끝난다() {
+		// 셋째 열의 칸이 두 줄에 걸쳐 있는데 둘째 줄은 첫 열에서 끝난다. 셋째 줄에는 내려오지 않아야 한다
+		BodyDocument document = html("""
+			<table>
+			  <tr><td>가</td><td>나</td><td rowspan="2">다</td></tr>
+			  <tr><td>라</td></tr>
+			  <tr><td>마</td><td>바</td><td>사</td></tr>
+			</table>
+			""");
+
+		assertThat(TableGrid.parse(document).getFirst().rows()).containsExactly(List.of("가", "나", "다"), List.of("라"),
+			List.of("마", "바", "사"));
+	}
+
+	@Test
+	void 정정_표에_철회가_적혀_있는지_본다() {
+		BodyDocument withdrawn = html("""
+			<table><tr><td>정정항목</td><td>정정전</td><td>정정후</td></tr>
+			<tr><td>1. 신주의 종류와 수</td><td>1,000,000</td><td>유상증자 결정 철회</td></tr></table>
+			<table><tr><td>5. 증자방식</td><td>주주배정증자</td></tr></table>
+			""");
+
+		assertThat(BodyTables.of(List.of(withdrawn)).correctionMayWithdraw()).isTrue();
+		// 삼성전자 [기재정정] 감사보고서제출: 정정사유 "기재사항 추가"
+		assertThat(TableFixtures.tables(TableFixtures.AUDIT_CORRECTION).correctionMayWithdraw()).isFalse();
+		assertThat(TableFixtures.tables(TableFixtures.AUDIT_CLEAN).correctionMayWithdraw()).isFalse();
+		// 삼성전자 [기재정정] 잠정실적: 정정 표에 "투자자들의 편의를 위해 제공되는 정보"가 있다. "해제"로 걸리면 안 된다
+		assertThat(TableFixtures.tables(TableFixtures.PRELIM_CORRECTION).correctionMayWithdraw()).isFalse();
+	}
+
 	private static BodyDocument html(String markup) {
 		return new BodyDocument("a.html", BodyFormat.HTML, "<html><body>" + markup + "</body></html>", "");
 	}

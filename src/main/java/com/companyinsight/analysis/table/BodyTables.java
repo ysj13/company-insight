@@ -13,25 +13,44 @@ import java.util.function.Predicate;
  * <p>금융위원회 서식의 정정 공시는 정정 표 뒤에 "정정 전" 표의 사본을 따로 싣기도 한다. 사본은 본문보다 앞에 오므로,
  * 한 번만 나와야 하는 항목은 마지막에 나온 것을 읽는다({@link #lastRow}).
  *
- * @param tables 정정 표를 뺀 표. 문서에 나온 순서대로
+ * @param tables          정정 표를 뺀 표. 문서에 나온 순서대로
+ * @param correctionCells 정정 표의 칸에 적힌 글. 정정 공시가 아니면 비어 있다
  */
-record BodyTables(List<TableGrid> tables) {
+record BodyTables(List<TableGrid> tables, List<String> correctionCells) {
+
+	/** 정정 표에 이 낱말이 있으면 원래 결정을 거둔 정정일 수 있다 */
+	private static final List<String> WITHDRAWAL_WORDS = List.of("철회", "취소", "해제", "취하", "미발생", "미체결");
 
 	BodyTables {
 		tables = List.copyOf(tables);
+		correctionCells = List.copyOf(correctionCells);
+	}
+
+	/**
+	 * 정정 표에 원래 결정을 거뒀다는 뜻의 낱말(철회, 취소, 해제, 취하, 미발생, 미체결)이 있는지.
+	 * 있으면 본문 표를 새 공시처럼 읽어 방향을 정해서는 안 된다.
+	 *
+	 * <p>띄어쓰기를 그대로 두고 찾는다. 공백을 없애고 찾으면 "위해 제공"이 "해제"로 걸린다 (실제 정정 공시에서 봤다).
+	 */
+	boolean correctionMayWithdraw() {
+		return correctionCells.stream().anyMatch(cell -> WITHDRAWAL_WORDS.stream().anyMatch(cell::contains));
 	}
 
 	/** 본문 문서들의 표를 읽는다. */
 	static BodyTables of(List<BodyDocument> documents) {
 		List<TableGrid> tables = new ArrayList<>();
+		List<String> correctionCells = new ArrayList<>();
 		for (BodyDocument document : documents) {
 			for (TableGrid table : TableGrid.parse(document)) {
-				if (!isCorrectionTable(table)) {
+				if (isCorrectionTable(table)) {
+					table.rows().forEach(row -> row.forEach(correctionCells::add));
+				}
+				else {
 					tables.add(table);
 				}
 			}
 		}
-		return new BodyTables(tables);
+		return new BodyTables(tables, correctionCells);
 	}
 
 	/** 정정 표인지: 한 줄에 "정정전"과 "정정후" 칸이 함께 있다. */

@@ -78,10 +78,12 @@ record TableGrid(List<List<String>> rows) {
 					column++;
 				}
 			}
-			// 줄 끝에 남은, 위에서 내려오는 칸
-			while (carries.containsKey(column)) {
-				column = fillCarried(row, carries, column);
-			}
+			// 줄 끝에 이어 붙은, 위에서 내려오는 칸
+			column = fillCarried(row, carries, column);
+			// 이 줄이 짧아 닿지 못한 자리의 칸도 한 줄 내려온 것으로 센다. 세지 않으면 아래 줄로 더 길게 샌다
+			int reached = column;
+			carries.replaceAll((at, carry) -> at >= reached ? new Carry(carry.rowsLeft() - 1, carry.text()) : carry);
+			carries.values().removeIf(carry -> carry.rowsLeft() <= 0);
 			grid.add(row);
 		}
 		return new TableGrid(grid);

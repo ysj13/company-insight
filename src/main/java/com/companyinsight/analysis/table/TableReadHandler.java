@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
  * </ul>
  *
  * <p>읽은 항목과 읽지 못한 항목은 실행 기록의 결과에 남긴다. 뒤 단계(AI 판정, 요약)가 그 값을 받아 쓴다.
- * 본문을 고친 정정 공시는 새 공시처럼 읽는다(본문에 고친 내용 전체가 들어 있다).
+ * 본문을 고친 정정 공시는 새 공시처럼 읽는다(본문에 고친 내용 전체가 들어 있다). 다만 정정 표에 철회·취소·해제·취하·
+ * 미발생·미체결이 적혀 있으면 원래 결정을 거둔 정정일 수 있어, 코드가 방향을 정하지 않고 AI 판정으로 넘긴다.
  */
 @Component
 public class TableReadHandler implements StageHandler {
@@ -96,17 +97,19 @@ public class TableReadHandler implements StageHandler {
 		long disclosureId = job.disclosureId();
 		TableTarget target = repository.findTarget(disclosureId)
 			.orElseThrow(() -> new IllegalStateException("공시가 없습니다: " + disclosureId));
+		// 표 읽기가 판정하지 않는 갈래로 가면, 앞선 실행이 표로 정해 둔 판정을 함께 지운다
+		Runnable clear = () -> repository.clearTableJudgment(disclosureId);
 		if (target.withdrawn()) {
-			return StageResult.ended().withResult(skipped("WITHDRAWN"));
+			return StageResult.ended().withResult(skipped("WITHDRAWN")).withWrites(clear);
 		}
 		if (target.typeCode() == null || target.judgeMethod() == null) {
 			throw new IllegalStateException("유형이 붙지 않은 공시입니다: " + disclosureId);
 		}
 		if (target.attributes().contains(WITHDRAWAL)) {
-			return StageResult.passed(WITHDRAWAL_TAIL, StageResult.Next.of(AnalysisStage.AI_JUDGE));
+			return StageResult.passed(WITHDRAWAL_TAIL, StageResult.Next.of(AnalysisStage.AI_JUDGE)).withWrites(clear);
 		}
 		return switch (target.judgeMethod()) {
-			case AI -> StageResult.passed(TONE_BY_AI, StageResult.Next.of(AnalysisStage.AI_JUDGE));
+			case AI -> StageResult.passed(TONE_BY_AI, StageResult.Next.of(AnalysisStage.AI_JUDGE)).withWrites(clear);
 			case TITLE -> byTitle(target);
 			case CODE -> byCode(disclosureId, target);
 		};
@@ -132,7 +135,12 @@ public class TableReadHandler implements StageHandler {
 		List<BodyDocument> documents = bodies.read(disclosureId)
 			.orElseThrow(() -> new IllegalStateException("저장한 본문이 없습니다: " + disclosureId));
 		boolean subsidiary = target.attributes().contains(SUBSIDIARY);
-		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary), BodyTables.of(documents));
+		BodyTables tables = BodyTables.of(documents);
+		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary), tables);
+		if (read.verdict() == TableReading.Verdict.JUDGED && tables.correctionMayWithdraw()) {
+			// 정정 표에 철회·취소가 적혀 있다. 원래 결정을 거둔 정정이면 본문 표의 방향이 뜻을 잃는다
+			read = TableReading.needsAi("CORRECTION_MAY_WITHDRAW", read.ratio(), read.items(), read.unread());
+		}
 		if (read.impact() != null && subsidiary) {
 			read = read.withImpact(impactProperties.stepDownForSubsidiary(read.impact()));
 		}

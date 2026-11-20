@@ -178,6 +178,17 @@ class TableReadIntegrationTest {
 	}
 
 	@Test
+	void 지주회사가_알린_자회사의_잠정실적은_크기를_한_단계_낮춘다() {
+		// HD현대: 영업이익 371.2% 증가는 3인데 자회사의 공시라 2
+		long id = save(TableFixtures.PRELIM_OF_SUBSIDIARY, "연결재무제표기준영업(잠정)실적(공정공시)(자회사의주요경영사항)");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("impact", 2);
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("371.2");
+	}
+
+	@Test
 	void 읽는_규칙이_아직_없는_유형은_판정_없이_끝난다() {
 		long id = save("20261119000001", "임원ㆍ주요주주특정증권등소유상황보고서", null);
 
@@ -320,6 +331,92 @@ class TableReadIntegrationTest {
 		assertThat(disclosure(id)).containsEntry("type_code", "B1").containsEntry("tone", null)
 			.containsEntry("impact", null).containsEntry("classified_by", null).containsEntry("impact_ratio", null);
 		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 정정_표에_철회가_적힌_정정_공시는_코드가_방향을_정하지_않는다() {
+		// 실제 공시가 아니다. 감사의견을 한정으로 고쳤다가 "취소"가 적힌 정정 표를 붙여 만들었다
+		byte[] zip = zip("""
+			<html><body>
+			<table><tr><td>정정항목</td><td>정정전</td><td>정정후</td></tr>
+			<tr><td>가. 감사의견</td><td>적정</td><td>제출 취소</td></tr></table>
+			<table>
+			<tr><td>구분</td><td>당해 사업연도</td><td>직전사업연도</td></tr>
+			<tr><td>가. 감사의견</td><td>한정</td><td>적정</td></tr>
+			</table></body></html>
+			""");
+		long id = save("20261119800008", "[기재정정]감사보고서제출", zip);
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", null).containsEntry("classified_by", null);
+		assertThat(job(id, "AI_JUDGE")).containsEntry("status", "PENDING");
+		assertThat(lastRun(id).get("result").toString()).contains("\"case\": \"CORRECTION_MAY_WITHDRAW\"");
+	}
+
+	@Test
+	void 표로_판정한_뒤_철회된_공시를_다시_돌리면_표_판정을_지운다() {
+		long id = save(TableFixtures.PRELIM_DOWN_39, "연결재무제표기준영업(잠정)실적(공정공시)");
+		drain();
+		assertThat(disclosure(id)).containsEntry("classified_by", "TABLE");
+
+		jdbc.sql("UPDATE disclosure SET is_withdrawn = true WHERE id = :id").param("id", id).update();
+		queue().rerun(List.of(id), AnalysisStage.READ_TABLE);
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", null).containsEntry("impact", null).containsEntry("classified_by", null);
+	}
+
+	@Test
+	void AI가_판정해_둔_공시를_다시_읽어_못_읽으면_AI의_판정과_비율을_그대로_둔다() {
+		long id = save("20261119800009", "감사보고서제출", TableFixtures.zip(TableFixtures.CHANGE_UP_101));
+		jdbc.sql("UPDATE disclosure SET tone = 'NEGATIVE', impact = 2, impact_ratio = 12.5, classified_by = 'LLM' WHERE id = :id")
+			.param("id", id).update();
+
+		drain();
+
+		assertThat(lastRun(id)).containsEntry("pass_reason", "UNREADABLE");
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2).containsEntry("classified_by", "LLM");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("12.5");
+	}
+
+	@Test
+	void 표를_읽어_방향이_정해지면_AI가_판정해_둔_것을_덮어쓴다() {
+		long id = save(TableFixtures.PRELIM_DOWN_39, "연결재무제표기준영업(잠정)실적(공정공시)");
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 1, classified_by = 'LLM' WHERE id = :id").param("id", id).update();
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2).containsEntry("classified_by", "TABLE");
+	}
+
+	@Test
+	void 재분류로_제목_속성이_바뀌면_표_읽기를_다시_지난다() {
+		long id = save(TableFixtures.RIGHTS_SUBSIDIARY, "유상증자결정(종속회사의주요경영사항)");
+		queue().rerun(List.of(id), AnalysisStage.FETCH_BODY);
+		jdbc.sql("UPDATE analysis_job SET status = 'DONE', outcome = 'PASSED' WHERE stage = 'FETCH_BODY'").update();
+		drain();
+		// 옛 대응표가 자회사 꼬리를 속성으로 떼지 못했던 것을 흉내 낸다
+		jdbc.sql("UPDATE disclosure SET title_rule_version = 0, title_attributes = '{}' WHERE id = :id").param("id", id).update();
+
+		classification.reclassifyOutdated();
+
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 재분류로_같은_유형이_제목으로_방향을_정하게_되면_표_판정을_버리고_제목의_방향을_쓴다() {
+		// 실제 대응표에는 없는 경우다. 저장한 SQL의 조건을 직접 본다: 유형은 그대로이고 제목이 방향을 정한 분류를 넣는다
+		long id = save(TableFixtures.PRELIM_DOWN_39, "연결재무제표기준영업(잠정)실적(공정공시)");
+		drain();
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2);
+
+		disclosures.updateClassifications(java.util.Map.of(id, new com.companyinsight.disclosure.Classification("B1", null, null,
+			"연결재무제표기준영업(잠정)실적", List.of(), com.companyinsight.disclosure.Tone.NEGATIVE,
+			com.companyinsight.disclosure.ClassifiedBy.RULE, false, false)), 99);
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", null)
+			.containsEntry("classified_by", "RULE");
 	}
 
 	// ── 도우미 ──────────────────────────────────────────────────────

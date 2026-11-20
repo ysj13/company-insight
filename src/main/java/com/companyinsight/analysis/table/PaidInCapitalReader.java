@@ -23,6 +23,9 @@ import org.springframework.stereotype.Component;
  * <p>자회사(종속회사)의 유상증자를 모회사가 알리는 공시는 증자방식과 관계없이 AI가 읽는다. 모회사의 주식 수는 늘지 않고,
  * 모회사가 자회사에 돈을 넣는 일인지 자회사가 남에게 주식을 내주는 일인지에 따라 뜻이 달라진다.
  *
+ * <p>본문에 "신주의 종류와 수"나 "증자전 발행주식총수"가 두 군데 이상 있으면(유상증자와 무상증자를 함께 정한 공시,
+ * 정정 전 표의 사본이 붙은 정정 공시) 어느 것이 유상증자의 것인지 가리지 않고 AI가 읽게 한다.
+ *
  * <p>크기는 신주 수가 증자 전 발행주식총수의 몇 %인지로 정한다(보통주식과 그 밖의 주식을 더한다).
  * 비율을 낼 수 없으면(총수가 비었거나 0) 크기 1이다. 제3자배정도 비율은 읽어 둔다.
  */
@@ -74,6 +77,10 @@ class PaidInCapitalReader implements TableReader {
 			}
 		}
 
+		if (groups(tables, label -> label.startsWith("신주의종류와수")) > 1
+				|| groups(tables, label -> label.startsWith("증자전발행주식총수")) > 1) {
+			return TableReading.needsAi("SEVERAL_SHARE_TABLES", null, items, unread);
+		}
 		if (target.subsidiary()) {
 			// 자회사 주식 수의 비율은 모회사에게 크기의 기준이 되지 못한다. 비율을 남기지 않는다
 			return TableReading.needsAi("SUBSIDIARY", null, items, unread);
@@ -118,6 +125,22 @@ class PaidInCapitalReader implements TableReader {
 			}
 		}
 		return Optional.ofNullable(total);
+	}
+
+	/** 항목이 본문에 몇 군데 나오는지. 이어진 줄은 한 군데로 센다. */
+	private static int groups(BodyTables tables, Predicate<String> labelMatches) {
+		int groups = 0;
+		for (TableGrid table : tables.tables()) {
+			boolean inside = false;
+			for (List<String> row : table.rows()) {
+				boolean matches = row.size() >= 2 && labelMatches.test(Cells.label(row.getFirst()));
+				if (matches && !inside) {
+					groups++;
+				}
+				inside = matches;
+			}
+		}
+		return groups;
 	}
 
 	private static void put(Map<String, String> items, String name, String value) {

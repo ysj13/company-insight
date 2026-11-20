@@ -85,6 +85,46 @@ class EarningsReaderTest {
 		assertThat(reading.items()).containsEntry("영업이익", "20.07").containsEntry("영업이익 (견주는 기간)", "6.49");
 	}
 
+	@Test
+	void 당해_칸만_비고_누계에_값이_있는_잠정실적은_중립으로_굳히지_않는다() {
+		// 실제 공시의 영업이익 당해실적 칸만 "-"로 바꿨다. 누계실적(181,486,709)은 그대로다
+		BodyTables tables = TableFixtures.tablesWith(TableFixtures.PRELIM_UP, ">83,333,818<", ">-<", 1);
+
+		TableReading reading = reader.read(PRELIMINARY, tables);
+
+		assertThat(reading.verdict()).isEqualTo(Verdict.UNREADABLE);
+		assertThat(reading.unread()).contains("영업이익 (이번 기간)");
+	}
+
+	@Test
+	void 실제_공시의_흑자_전환과_적자_전환은_크기_3이다() {
+		TableReading toProfit = reader.read(PRELIMINARY, TableFixtures.tables(TableFixtures.PRELIM_TURN_TO_PROFIT));
+		TableReading toLoss = reader.read(PRELIMINARY, TableFixtures.tables(TableFixtures.PRELIM_TURN_TO_LOSS));
+
+		assertThat(toProfit.tone()).isEqualTo(Tone.POSITIVE);
+		assertThat(toProfit.impact()).isEqualTo(3);
+		assertThat(toProfit.ratio()).isNull();
+		assertThat(toProfit.items()).containsEntry("영업이익", "5,148").containsEntry("영업이익 (견주는 기간)", "-4,259")
+			.containsEntry("영업이익 흑자적자전환여부", "흑자전환");
+		assertThat(toLoss.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(toLoss.impact()).isEqualTo(3);
+		assertThat(toLoss.items()).containsEntry("영업이익", "-1,899").containsEntry("영업이익 (견주는 기간)", "6,726")
+			.containsEntry("영업이익 흑자적자전환여부", "적자전환");
+	}
+
+	@Test
+	void 실제_공시의_적자_지속은_폭이_늘면_악재_1이고_줄면_중립이다() {
+		TableReading widened = reader.read(PRELIMINARY, TableFixtures.tables(TableFixtures.PRELIM_DEFICIT_WIDENED));
+		TableReading narrowed = reader.read(PRELIMINARY, TableFixtures.tables(TableFixtures.PRELIM_DEFICIT_NARROWED));
+
+		assertJudged(widened, Tone.NEGATIVE, 1, "-63.6");
+		assertThat(widened.items()).containsEntry("영업이익", "-12,486").containsEntry("영업이익 (견주는 기간)", "-7,633");
+		assertThat(narrowed.tone()).isEqualTo(Tone.NEUTRAL);
+		assertThat(narrowed.impact()).isNull();
+		assertThat(narrowed.ratio()).isEqualByComparingTo("9.7");
+		assertThat(narrowed.items()).containsEntry("영업이익", "-496").containsEntry("영업이익 (견주는 기간)", "-549");
+	}
+
 	// ── 손익구조 변동: 실제 공시 ────────────────────────────────────
 
 	@Test
@@ -115,7 +155,7 @@ class EarningsReaderTest {
 
 	@Test
 	void 영업이익_줄이_없는_본문은_읽지_못한_것이다() {
-		// 감사보고서 제출의 본문에는 손익구조 변동의 머리 줄이 없다
+		// 유상증자 결정의 본문에는 손익구조 변동의 머리 줄이 없다
 		TableReading reading = reader.read(STRUCTURE_CHANGE, TableFixtures.tables(TableFixtures.RIGHTS_SUBSIDIARY));
 
 		assertThat(reading.verdict()).isEqualTo(Verdict.UNREADABLE);

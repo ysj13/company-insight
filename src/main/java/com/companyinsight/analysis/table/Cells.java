@@ -12,7 +12,7 @@ final class Cells {
 	private static final Pattern SPACES = Pattern.compile("[\\s\\u00A0\\u3000]+");
 
 	/** 항목 이름 앞의 차례 표시: "1.", "7-1.", "가.", "-", "ㆍ", "※" 등 */
-	private static final Pattern LEADING_MARK = Pattern.compile("^(?:\\d+(?:-\\d+)?\\.|[가-하]\\.|[-ㆍ·※○●▶*])+");
+	private static final Pattern LEADING_MARK = Pattern.compile("^(?:\\d+(?:-\\d+)?\\.|[가나다라마바사아자차카타파하]\\.|[-ㆍ·※○●▶*])+");
 
 	/** 숫자 한 개. 천 단위 쉼표와 소수점을 받는다 */
 	private static final Pattern NUMBER = Pattern.compile("\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+(?:\\.\\d+)?");
@@ -38,7 +38,7 @@ final class Cells {
 	/** 값이 비어 있는지. 빈 칸과 "-"만 있는 칸은 값이 없는 것이다. */
 	static boolean isBlank(String text) {
 		String compact = compact(text);
-		return compact.isEmpty() || compact.chars().allMatch(c -> c == '-' || c == '－' || c == '‐' || c == '–' || c == '—');
+		return compact.isEmpty() || compact.chars().allMatch(c -> c == '-' || c == '－' || c == '\u2212' || c == '‐' || c == '–' || c == '—');
 	}
 
 	/**
@@ -60,7 +60,7 @@ final class Cells {
 		if (value.endsWith("%")) {
 			value = value.substring(0, value.length() - 1).strip();
 		}
-		if (!value.isEmpty() && "-－△▲+".indexOf(value.charAt(0)) >= 0) {
+		if (!value.isEmpty() && "-－\u2212△▲+".indexOf(value.charAt(0)) >= 0) {
 			negative = negative || value.charAt(0) != '+';
 			value = value.substring(1).strip();
 		}
