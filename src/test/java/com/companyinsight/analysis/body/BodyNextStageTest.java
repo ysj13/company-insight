@@ -26,7 +26,7 @@ class BodyNextStageTest {
 
 	@Test
 	void 제목으로_호재나_악재가_정해진_공시는_크기와_요약_항목을_읽으러_표_읽기로_간다() {
-		StageResult.Done done = BodyNextStage.decide(target("주식소각결정", "E2", JudgeMethod.TITLE, Tone.POSITIVE));
+		StageResult.Done done = BodyNextStage.decide(target("주식소각결정", "E1", JudgeMethod.TITLE, Tone.POSITIVE));
 
 		assertPassed(done, BodyNextStage.TONE_BY_TITLE, AnalysisStage.READ_TABLE);
 	}
