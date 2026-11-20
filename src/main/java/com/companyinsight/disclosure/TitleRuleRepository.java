@@ -32,14 +32,14 @@ public class TitleRuleRepository {
 			(rs, n) -> new TitleRuleBook.Type(rs.getString("code"), JudgeMethod.valueOf(rs.getString("judge_method")),
 				toneOf(rs.getString("default_tone"))));
 		List<TitleRuleBook.Rule> rules = jdbc.query("""
-			SELECT id, match_kind, pattern, type_code, tone, judge_method, case_code
+			SELECT id, match_kind, pattern, type_code, tone, judge_method, case_code, tail_word
 			  FROM title_rule
 			 WHERE source = ?
 			""",
 			(rs, n) -> new TitleRuleBook.Rule(rs.getLong("id"), TitleRuleBook.MatchKind.valueOf(rs.getString("match_kind")),
 				rs.getString("pattern"), rs.getString("type_code"), toneOf(rs.getString("tone")),
 				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method")),
-				rs.getString("case_code")),
+				rs.getString("case_code"), rs.getString("tail_word")),
 			source.name());
 		List<TitleRuleBook.Attribute> attributes = jdbc.query(
 			"SELECT token, attribute FROM title_attribute WHERE source = ?",

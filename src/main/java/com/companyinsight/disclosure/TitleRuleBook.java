@@ -1,5 +1,6 @@
 package com.companyinsight.disclosure;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -13,7 +14,9 @@ import java.util.Optional;
  * 그래서 만료되는 캐시를 쓰지 않고 뜰 때 한 번만 읽는다.
  *
  * <p>찾는 순서: 제목 전체가 같은 줄(EXACT)이 먼저다. 없으면 제목을 괄호가 열리는 자리마다 잘라 뒤에서부터
- * 서식 이름 줄(FORM)을 찾는다. 뒤에서부터 찾으므로 가장 긴 서식 이름이 이긴다.
+ * 서식 이름 줄을 찾는다. 뒤에서부터 찾으므로 가장 긴 서식 이름이 이긴다. 서식 이름 줄은 두 가지이고,
+ * 꼬리에 든 낱말까지 보는 줄(FORM_WORD)을 모두 본 뒤에 서식 이름만 보는 줄(FORM)을 본다.
+ * 꼬리를 회사가 자유롭게 적는 서식에서 "이행현황", "항소" 같은 낱말로 방향을 가르기 위한 것이다.
  * 서식 이름 바로 뒤가 여는 괄호이기만 하면 걸린다. 괄호 꼬리 뒤에 글자가 더 이어져도 같다
  * ("조회공시요구(풍문또는보도)에대한답변(미확정)"은 서식 "조회공시요구"에 걸린다).
  */
@@ -23,6 +26,8 @@ public final class TitleRuleBook {
 	private final Map<String, Type> types;
 	private final Map<String, Rule> exact = new HashMap<>();
 	private final Map<String, Rule> form = new HashMap<>();
+	/** 서식 이름 → 그 서식의 낱말 줄. 규칙 ID 순서 */
+	private final Map<String, List<Rule>> formWord = new HashMap<>();
 	private final List<Attribute> attributes;
 
 	/**
@@ -54,11 +59,25 @@ public final class TitleRuleBook {
 			if (rule.tone() != null && method != JudgeMethod.TITLE) {
 				throw new IllegalStateException("제목 규칙 " + rule.id() + "에 방향이 있는데 판정 방법이 제목이 아닙니다");
 			}
+			boolean wordRule = rule.matchKind() == MatchKind.FORM_WORD;
+			if (wordRule != (rule.tailWord() != null)) {
+				throw new IllegalStateException("제목 규칙 " + rule.id() + "의 대응 방식과 꼬리 낱말이 맞지 않습니다");
+			}
+			if (wordRule) {
+				if (rule.tailWord().isEmpty() || !rule.tailWord().equals(TitleNormalizer.squeeze(rule.tailWord()))) {
+					throw new IllegalStateException(
+						"제목 규칙 " + rule.id() + "의 꼬리 낱말이 비었거나 다듬은 제목과 모양이 다릅니다: " + rule.tailWord());
+				}
+				formWord.computeIfAbsent(rule.pattern(), k -> new ArrayList<>()).add(rule);
+				continue;
+			}
 			Map<String, Rule> target = rule.matchKind() == MatchKind.EXACT ? exact : form;
 			if (target.put(rule.pattern(), rule) != null) {
 				throw new IllegalStateException("같은 제목 규칙이 두 줄입니다: " + rule.pattern());
 			}
 		}
+		// 한 제목에 같은 서식의 낱말 줄이 둘 걸리면 먼저 적은 줄(ID가 작은 줄)이 이긴다
+		formWord.values().forEach(list -> list.sort(Comparator.comparingLong(Rule::id)));
 		// 긴 꼬리부터 뗀다. "(자회사의주요경영사항)"을 "(자회사)"보다 먼저 봐야 한다
 		this.attributes = attributes.stream()
 			.sorted(Comparator.comparingInt((Attribute a) -> a.token().length()).reversed().thenComparing(Attribute::token))
@@ -83,6 +102,9 @@ public final class TitleRuleBook {
 	 */
 	public Optional<Rule> find(String title) {
 		Rule rule = exact.get(title);
+		for (int i = title.lastIndexOf('('); rule == null && i >= 0; i = title.lastIndexOf('(', i - 1)) {
+			rule = findByTailWord(title.substring(0, i), title.substring(i));
+		}
 		if (rule == null) {
 			rule = form.get(title);
 		}
@@ -90,6 +112,16 @@ public final class TitleRuleBook {
 			rule = form.get(title.substring(0, i));
 		}
 		return Optional.ofNullable(rule);
+	}
+
+	/** 서식 이름의 낱말 줄 가운데 꼬리에 그 낱말이 든 첫 줄. 없으면 null. */
+	private Rule findByTailWord(String formName, String tail) {
+		for (Rule rule : formWord.getOrDefault(formName, List.of())) {
+			if (tail.contains(rule.tailWord())) {
+				return rule;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -122,7 +154,9 @@ public final class TitleRuleBook {
 		/** 제목 전체가 같다 */
 		EXACT,
 		/** 제목이 서식 이름과 같거나 서식 이름 바로 뒤가 여는 괄호다 */
-		FORM
+		FORM,
+		/** 서식 이름 바로 뒤가 여는 괄호이고 그 뒤의 글자에 꼬리 낱말이 들어 있다 */
+		FORM_WORD
 	}
 
 	/**
@@ -145,9 +179,10 @@ public final class TitleRuleBook {
 	 * @param tone        이 줄이 정하는 방향. 유형의 값을 따르면 null
 	 * @param judgeMethod 이 줄의 판정 방법. 유형의 값을 따르면 null
 	 * @param caseCode    제목이 정하는 경우. 없으면 null
+	 * @param tailWord    FORM_WORD 줄에서 꼬리에 들어 있어야 하는 낱말. 다른 대응 방식이면 null
 	 */
 	public record Rule(long id, MatchKind matchKind, String pattern, String typeCode, Tone tone, JudgeMethod judgeMethod,
-			String caseCode) {
+			String caseCode, String tailWord) {
 	}
 
 	/**

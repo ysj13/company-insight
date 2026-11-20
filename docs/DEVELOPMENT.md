@@ -60,7 +60,7 @@ com.companyinsight
 | `company` | id(PK), country, source, source_key(source와 묶어 **unique**. DART는 고유번호), stock_code, name, market |
 | `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, classified_by(RULE/LLM), is_correction, is_withdrawn |
 | `disclosure_type` | code(PK. 예: A1), bundle, name, judge_method(TITLE/CODE/AI), default_tone, fetch_body, sort_order |
-| `title_rule` | id, source, match_kind(EXACT/FORM), pattern(source, match_kind와 묶어 **unique**), type_code, tone, judge_method, case_code, memo, added_version |
+| `title_rule` | id, source, match_kind(EXACT/FORM/FORM_WORD), pattern, tail_word(FORM_WORD 줄의 꼬리 낱말. source, match_kind, pattern과 묶어 **unique**), type_code, tone, judge_method, case_code, memo, added_version |
 | `title_attribute` | source, token(제목에서 떼는 속성 꼬리), attribute |
 | `title_rule_version` | version(PK), applied_at, note. 대응표를 고치는 마이그레이션마다 한 줄 |
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
@@ -159,7 +159,7 @@ com.companyinsight
 | 5-3 | 11/17 | 재무 수집 | OpenDART 주요계정으로 보고서별 매출액·영업이익·당기순이익 수집(회사 한 곳을 지정해 받기, 설정한 종목코드는 앱 시작 때 수집), 분기·연간 실적과 전년 동기 대비 증감·영업이익률 계산, 실적 조회 API(`/api/companies/{id}/financials`) | 테스트 회사 세 곳의 재무가 저장되고 증감이 보고서의 수치로 계산한 값과 맞음 |
 | 5-4 | 11/17 | 재무 응답 그대로 저장 | `financial`을 주요계정 응답을 보고서 단위로 그대로 저장하는 테이블로 변경(Flyway V9), 계정의 금액은 조회할 때 응답에서 읽음 | 테스트 회사 세 곳의 응답 33건이 저장되고 실적 조회 결과가 이전과 같음 |
 | 5-5 | 11/20 | 회사 지정 공시 수집 | 종목코드로 지정한 회사의 공시 목록을 기간(기본 12개월)으로 받기(공시검색에 고유번호 지정), 설정한 종목코드는 앱 시작 때 수집. 본문은 받지 않는다 | 테스트 회사 세 곳의 1년치 공시 목록이 저장되고 다시 받아도 건수가 같음 |
-| 5-6 | 11/20 | 유형 대응표 | 공시 유형 75가지와 "제목 → 유형" 대응표를 DB 테이블로(Flyway V10 구조, V11 처음 값, V12 대응표 버전 2: 꼬리별 방향 고침과 금융감독원 조치 서식 셋), 분류기가 앱이 뜰 때 대응표를 읽어 유형·걸린 규칙·대응표 버전·속성을 저장, 제목으로 방향이 정해지는 공시만 판정(관리종목·상장폐지 관련 안내는 꼬리별로 방향과 경우), 종류 9가지(`kind`)와 자바 규칙 걷어냄, 공시 목록 화면은 유형 묶음으로 거름 | 로컬 DB 15,594건에 적용해 대응표를 만들 때 본 제목이 모두 확정한 유형과 같음 (`PLAN.md` 6절) |
+| 5-6 | 11/20 | 유형 대응표 | 공시 유형 75가지와 "제목 → 유형" 대응표를 DB 테이블로(Flyway V10 구조, V11 처음 값, V12 대응표 버전 2: 꼬리별 방향 고침과 금융감독원 조치 서식 셋, V13 버전 3: 서식 이름 + 꼬리에 든 낱말로 거는 대응 방식), 분류기가 앱이 뜰 때 대응표를 읽어 유형·걸린 규칙·대응표 버전·속성을 저장, 제목으로 방향이 정해지는 공시만 판정(관리종목·상장폐지 관련 안내는 꼬리별로 방향과 경우), 종류 9가지(`kind`)와 자바 규칙 걷어냄, 공시 목록 화면은 유형 묶음으로 거름 | 로컬 DB 15,594건에 적용해 대응표를 만들 때 본 제목이 모두 확정한 유형과 같음 (`PLAN.md` 6절) |
 
 **MVP (~ 11/22)**
 
