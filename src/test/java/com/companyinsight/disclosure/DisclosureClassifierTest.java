@@ -222,6 +222,41 @@ class DisclosureClassifierTest {
 		assertThat(c.caseCode()).isEqualTo(caseCode);
 	}
 
+	/** 대응표 버전 2에서 고친 줄. 제목은 모두 실제 공시의 제목이다. 방향이 비어 있으면 본문을 읽는 줄이다. */
+	@ParameterizedTest(name = "{0} → {1} {2}")
+	@CsvSource(delimiter = '|', textBlock = """
+		기업가치제고계획(자율공시) (2025년 이행현황)                                   | E7 | NEUTRAL
+		기업가치제고계획(자율공시) (2026년 3분기 이행현황)                             | E7 | NEUTRAL
+		기업가치제고계획(자율공시) (이행현황)                                          | E7 | NEUTRAL
+		기업가치제고계획(자율공시)((2025년이행현황))                                   | E7 | NEUTRAL
+		기업가치제고계획(자율공시)(효성티앤씨㈜기업가치제고계획이행현황(2025년))       | E7 | NEUTRAL
+		기업가치제고계획(자율공시)(이행현황재공시(고배당기업에해당))                   | E7 | NEUTRAL
+		기업가치제고계획(자율공시)(고배당기업표시를위한재공시)                         | E7 | NEUTRAL
+		기업가치제고계획(자율공시)                                                     | E7 | POSITIVE
+		기업가치제고계획(자율공시)(2026년)                                             | E7 | POSITIVE
+		기업가치제고계획(자율공시)((2025년이행현황및2026년기업가치제고계획))           | E7 | POSITIVE
+		교환청구권행사                                                                 | L2 | NEUTRAL
+		교환청구권행사(제1회차)                                                        | L2 | NEUTRAL
+		전환청구권ㆍ신주인수권ㆍ교환청구권행사                                         | L2 | NEGATIVE
+		종류주식의보통주식으로전환(안내공시)                                           | L2 | NEUTRAL
+		주식소각결정(상환전환우선주)                                                   | E1 | NEUTRAL
+		주식소각결정                                                                   | E1 | POSITIVE
+		조회공시요구(외부감사의견)                                                     | J7 | NEGATIVE
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의취소의소(항소))                 | G5 |
+		소송등의제기ㆍ신청(일정금액이상의청구)(해고무효확인(항소))                     | I1 |
+		주권매매거래정지해제(회생절차개시결정)                                         | J4 |
+		효력발생안내( 2026.10.23. 제출 증권신고서(지분증권) )                          | A4 | NEUTRAL
+		정정신고서제출요구( 2026.10.28. 제출 증권신고서(합병) )                        | A4 | NEGATIVE
+		정정명령부과( 2026.10.30. 제출 주요사항보고서(회사합병 결정) )                 | A4 | NEGATIVE
+		""")
+	void 꼬리에_따라_방향을_고친_줄과_금융감독원_조치_서식(String reportName, String typeCode, Tone tone) {
+		Classification c = classifier.classify(reportName, null);
+
+		assertThat(c.typeCode()).isEqualTo(typeCode);
+		assertThat(c.tone()).isEqualTo(tone);
+		assertThat(c.classifiedBy()).isEqualTo(tone == null ? null : ClassifiedBy.RULE);
+	}
+
 	@Test
 	void 꼬리가_유형을_정하는_서식에_처음_보는_꼬리가_붙으면_꼬리_미상이다() {
 		// 가정한 제목: 대응표에 없는 꼬리
@@ -316,12 +351,12 @@ class DisclosureClassifierTest {
 
 	@Test
 	void 대응표의_줄_수와_버전이_마이그레이션과_같다() {
-		assertThat(classifier.version()).isEqualTo(1);
+		assertThat(classifier.version()).isEqualTo(2);
 		assertThat(jdbc.sql("SELECT count(*) FROM disclosure_type").query(Integer.class).single()).isEqualTo(75);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'EXACT'").query(Integer.class).single())
-			.isEqualTo(261);
+			.isEqualTo(282);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM'").query(Integer.class).single())
-			.isEqualTo(329);
+			.isEqualTo(332);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_attribute").query(Integer.class).single()).isEqualTo(6);
 		// 관리종목·상장폐지 관련 안내는 줄마다 방향이 있거나 본문을 읽는 줄이다. 방향 없이 제목 판정으로 남은 줄이 없다
 		assertThat(jdbc.sql("""
