@@ -9,6 +9,7 @@ import com.companyinsight.analysis.AnalysisQueueService;
 import com.companyinsight.analysis.AnalysisStage;
 import com.companyinsight.analysis.AnalysisWorker;
 import com.companyinsight.analysis.WorkerGroup;
+import com.companyinsight.analysis.body.DisclosureBodyReader;
 import com.companyinsight.analysis.body.DisclosureBodyRepository;
 import com.companyinsight.common.dart.DisclosureListResponse.Item;
 import com.companyinsight.disclosure.DisclosureClassificationService;
@@ -59,6 +60,18 @@ class TableReadIntegrationTest {
 
 	@Autowired
 	TableReadHandler handler;
+
+	@Autowired
+	TableReadRepository tableReads;
+
+	@Autowired
+	DisclosureBodyReader bodyReader;
+
+	@Autowired
+	ImpactProperties impactProperties;
+
+	@Autowired
+	TableReadRequeue requeue;
 
 	@Autowired
 	JdbcClient jdbc;
@@ -190,14 +203,92 @@ class TableReadIntegrationTest {
 
 	@Test
 	void 읽는_규칙이_아직_없는_유형은_판정_없이_끝난다() {
-		long id = save("20261119000001", "임원ㆍ주요주주특정증권등소유상황보고서", null);
+		long id = save("20261119000001", "전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정", null);
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "L1").containsEntry("tone", null);
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
+		assertThat(lastRun(id).get("result").toString()).contains("NO_READER");
+		assertThat(count("SELECT count(*) FROM analysis_job")).isEqualTo(1);
+	}
+
+	// ── 지분 보고 ───────────────────────────────────────────────────
+
+	@Test
+	void 지분_보고의_매수는_호재로_적고_AI_요약으로_넘기지_않는다() {
+		long id = save(TableFixtures.INSIDER_BUY, "임원ㆍ주요주주특정증권등소유상황보고서");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "A2")
+			.containsEntry("tone", "POSITIVE")
+			.containsEntry("impact", 1)
+			.containsEntry("classified_by", "TABLE");
+		// (9,514 + 4,986) ÷ 22,184,124 × 100. 칸은 소수 넷째 자리까지다
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("0.0654");
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
+		assertThat(lastRun(id).get("result").toString()).contains("\"case\": \"NET_BUY\"").contains("장내매수(+) 2건");
+		assertThat(count("SELECT count(*) FROM analysis_job")).isEqualTo(1);
+	}
+
+	@Test
+	void 지분_보고는_제목의_서식에_따라_읽는다() {
+		long largest = save(TableFixtures.LARGEST_SELL, "최대주주등소유주식변동신고서");
+		long block = save(TableFixtures.BLOCK_UP, "주식등의대량보유상황보고서(약식)");
+		long corrected = save(TableFixtures.INSIDER_CORRECTION, "[기재정정]임원ㆍ주요주주특정증권등소유상황보고서");
+
+		drain();
+
+		assertThat(disclosure(largest)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 1);
+		assertThat(disclosure(block)).containsEntry("tone", "POSITIVE").containsEntry("impact", 2);
+		assertThat((BigDecimal) disclosure(block).get("impact_ratio")).isEqualByComparingTo("1.06");
+		assertThat(disclosure(corrected)).containsEntry("tone", "NEUTRAL").containsEntry("impact", null);
+	}
+
+	@Test
+	void 정해_두지_않은_사유가_든_지분_보고는_AI_판정으로_넘긴다() {
+		long id = save(TableFixtures.BLOCK_UNKNOWN_REASON, "주식등의대량보유상황보고서(약식)");
 
 		drain();
 
 		assertThat(disclosure(id)).containsEntry("tone", null);
-		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
-		assertThat(lastRun(id).get("result").toString()).contains("NO_READER");
-		assertThat(count("SELECT count(*) FROM analysis_job")).isEqualTo(1);
+		assertThat(lastRun(id)).containsEntry("pass_reason", "UNREADABLE");
+		assertThat(job(id, "AI_JUDGE")).containsEntry("status", "PENDING");
+	}
+
+	// ── 읽는 규칙이 생긴 뒤 다시 줄 세우기 ──────────────────────────────
+
+	@Test
+	void 읽는_규칙이_없어_끝났던_작업은_규칙이_생긴_유형만_다시_줄_선다() {
+		// 규칙이 없던 때를 흉내 낸다: 규칙을 하나도 주지 않은 처리 구현으로 돌린다
+		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		long ownership = save(TableFixtures.INSIDER_BUY, "임원ㆍ주요주주특정증권등소유상황보고서");
+		long conversion = save("20261119000001", "전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정", null);
+		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
+		assertThat(lastRun(ownership).get("result").toString()).contains("NO_READER");
+		assertThat(disclosure(ownership)).containsEntry("tone", null);
+
+		int requeued = queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, handler.readableTypeCodes());
+
+		assertThat(requeued).isEqualTo(1);
+		assertThat(job(ownership, "READ_TABLE")).containsEntry("status", "PENDING");
+		assertThat(job(conversion, "READ_TABLE")).containsEntry("status", "DONE");
+		drain();
+		assertThat(disclosure(ownership)).containsEntry("tone", "POSITIVE").containsEntry("impact", 1);
+		// 다시 읽은 뒤에는 마지막 실행이 "규칙 없음"이 아니라 또 줄 서지 않는다
+		assertThat(queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, handler.readableTypeCodes())).isZero();
+	}
+
+	@Test
+	void 앱이_뜰_때_건너뛴_작업을_다시_줄_세운다() {
+		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		long id = save(TableFixtures.INSIDER_SELL, "임원ㆍ주요주주특정증권등소유상황보고서");
+		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
+
+		requeue.onStartup();
+
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
 	}
 
 	// ── 코드가 방향을 정하지 않는 유형 ─────────────────────────────────

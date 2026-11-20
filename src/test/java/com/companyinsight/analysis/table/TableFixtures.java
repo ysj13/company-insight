@@ -115,6 +115,66 @@ final class TableFixtures {
 	 */
 	static final String RIGHTS_PUBLIC = "20261105000386";
 
+	// ── 지분 보고 (A2) ─────────────────────────────────────────────
+	// 개인을 알아볼 수 있는 칸(이름, 생년월일·등록번호, 주소, 연락처)은 가렸다. 숫자, 날짜, 변동 사유는 원문 그대로다.
+
+	/** 2026-11-12 임원ㆍ주요주주 보고서(보고구분 신규). 장내매수(+) 9,514주와 4,986주, 발행주식 총수 22,184,124 → 0.065362% */
+	static final String INSIDER_BUY = "20261112000174";
+
+	/** 2026-10-29 임원ㆍ주요주주 보고서. 장내매수(+) 다섯 줄 합 63,199주, 발행주식 총수 22,055,785 → 0.286542% */
+	static final String INSIDER_BUY_LARGE = "20261029000083";
+
+	/** 2026-10-22 임원ㆍ주요주주 보고서. 장내매도(-) 1,215주와 1,285주, 발행주식 총수 10,957,422 → -0.022816% */
+	static final String INSIDER_SELL = "20261022000277";
+
+	/** 삼성전자 2026-02-02 임원ㆍ주요주주 보고서. 자사주상여금(+) 260주 한 줄 */
+	static final String INSIDER_BONUS = "20260202000499";
+
+	/** 삼성전자 2026-02-04 임원ㆍ주요주주 보고서. 장내매수(+) 2,566주와 장내매도(-) 2,566주 */
+	static final String INSIDER_BUY_AND_SELL = "20260204000511";
+
+	/** 삼성전자 2025-12-01 임원ㆍ주요주주 보고서. 신규선임(+) 603주와, 증감을 0으로 적은 장내매수(+) 한 줄 */
+	static final String INSIDER_ZERO_TRADE = "20251201000265";
+
+	/**
+	 * SK하이닉스 2026-08-21 [기재정정]임원ㆍ주요주주 보고서. 맨 위 정정 표는 단가만 고쳤다.
+	 * 장내매수(+) 5주, 장내매도(-) 600주, 발행주식 총수 730,492,365 → -0.000081%
+	 */
+	static final String INSIDER_CORRECTION = "20260821000615";
+
+	/** 2026-11-13 최대주주등소유주식변동신고서. 친인척 한 사람의 장내매도(-) 2,000주, 발행주식총수 17,072,000 → -0.011715% */
+	static final String LARGEST_SELL = "20261113801264";
+
+	/** 2026-11-03 최대주주등소유주식변동신고서. 최대주주등 안에서 시간외매매(-) 3,400,000주와 시간외매매(+) 3,400,000주 */
+	static final String LARGEST_WITHIN_GROUP = "20261103800642";
+
+	/** 2026-10-26 최대주주등소유주식변동신고서. 기타(-) 39,523주 한 줄 */
+	static final String LARGEST_OTHER = "20261026800368";
+
+	/** 2026-10-29 주식등의대량보유상황보고서(약식). 주식등의 비율 9.62 → 10.68, 세부변동내역은 장내매수(+) */
+	static final String BLOCK_UP = "20261029000259";
+
+	/** 2026-10-21 주식등의대량보유상황보고서(약식). 주식등의 비율 5.00 → 4.08, 세부변동내역에 시간외매매(-)와 장내매도(-) */
+	static final String BLOCK_DOWN = "20261021000162";
+
+	/** 2026-11-10 주식등의대량보유상황보고서(약식). 주식등의 비율 8.75 → 3.67, 세부변동내역은 CB인수(+), 전환등(-), 전환사채의권리행사(+)뿐 */
+	static final String BLOCK_NO_TRADE = "20261110000361";
+
+	/** 2026-10-28 주식등의대량보유상황보고서(약식). 신규 보고. 직전 보고서 줄이 "-", 이번 보고서 15.73 */
+	static final String BLOCK_NEW = "20261028000491";
+
+	/** 2026-11-03 주식등의대량보유상황보고서(약식). 5.00 → 2.58, 세부변동내역에 "풋옵션권리행사에따른주식처분(-)" */
+	static final String BLOCK_UNKNOWN_REASON = "20261103000254";
+
+	/**
+	 * 2026-11-16 주식등의대량보유상황보고서(일반). 주식등의 비율 73.92 → 73.73. 주식 수는 그대로이고
+	 * 주식매수선택권 행사로 발행주식총수가 늘어 비율만 줄었다. 보유목적 "경영권 영향"은 항목 이름 없는 한 칸짜리 표에 있다
+	 */
+	static final String BLOCK_GENERAL_DILUTED = "20261116001399";
+
+	/** 2026-10-23 [기재정정]주식등의대량보유상황보고서(일반). 31.97 → 31.97. 정정 표에 원래 결정을 거뒀다는 뜻의 낱말이 있다 */
+	static final String BLOCK_GENERAL_CORRECTION = "20261023000450";
+
 	private TableFixtures() {
 	}
 
@@ -167,6 +227,7 @@ final class TableFixtures {
 		return new ImpactProperties(
 			new ImpactProperties.Earnings(new BigDecimal("10"), new BigDecimal("30"), new BigDecimal("100"), 3, 1),
 			new ImpactProperties.ShareIncrease(new BigDecimal("5"), new BigDecimal("20")),
-			new ImpactProperties.Audit(3, 2, 2), 1);
+			new ImpactProperties.Audit(3, 2, 2),
+			new ImpactProperties.Ownership(new BigDecimal("0.01"), new BigDecimal("0.1"), new BigDecimal("1")), 1);
 	}
 }

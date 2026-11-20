@@ -12,15 +12,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param earnings           실적(잠정실적, 손익구조 변동)
  * @param shareIncrease      주식 수가 늘어나는 일(유상증자)
  * @param audit              감사보고서 제출
+ * @param ownership          지분 보고
  * @param subsidiaryStepDown 자회사의 공시일 때 크기를 몇 단계 낮출지. 낮춰도 1보다 작아지지 않는다
  */
 @ConfigurationProperties("app.judgment.impact")
-public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, Audit audit, Integer subsidiaryStepDown) {
+public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, Audit audit, Ownership ownership,
+		Integer subsidiaryStepDown) {
 
 	public ImpactProperties {
 		require(earnings != null, "earnings");
 		require(shareIncrease != null, "share-increase");
 		require(audit != null, "audit");
+		require(ownership != null, "ownership");
 		require(subsidiaryStepDown != null && subsidiaryStepDown >= 0, "subsidiary-step-down");
 	}
 
@@ -96,6 +99,38 @@ public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, A
 			require(opinionNotClean != null && opinionNotClean >= 1, "audit.opinion-not-clean");
 			require(goingConcern != null && goingConcern >= 1, "audit.going-concern");
 			require(internalControl != null && internalControl >= 1, "audit.internal-control");
+		}
+	}
+
+	/**
+	 * 지분 보고의 크기. 회사가 한 일이 아니라 주주가 한 일이어서 가장 큰 크기는 2다.
+	 *
+	 * @param tradeNeutralBelow 매매 순증감이 발행주식총수의 몇 %인지. 이보다 작으면 중립
+	 * @param tradeMediumFrom   이 이상이면 크기 2
+	 * @param holdingMediumFrom 대량보유상황보고서의 보유비율 증감(%p)의 절댓값. 이 이상이면 크기 2
+	 */
+	public record Ownership(BigDecimal tradeNeutralBelow, BigDecimal tradeMediumFrom, BigDecimal holdingMediumFrom) {
+
+		public Ownership {
+			require(tradeNeutralBelow != null && tradeNeutralBelow.signum() >= 0, "ownership.trade-neutral-below");
+			require(tradeMediumFrom != null && tradeMediumFrom.compareTo(tradeNeutralBelow) >= 0, "ownership.trade-medium-from");
+			require(holdingMediumFrom != null && holdingMediumFrom.signum() > 0, "ownership.holding-medium-from");
+		}
+
+		/** 매매 순증감 비율의 절댓값(%)으로 크기를 정한다. 중립이면 0. */
+		int sizeOfTrade(BigDecimal absoluteRatio) {
+			if (absoluteRatio.compareTo(tradeNeutralBelow) < 0) {
+				return 0;
+			}
+			return absoluteRatio.compareTo(tradeMediumFrom) < 0 ? 1 : 2;
+		}
+
+		/** 보유비율 증감의 절댓값(%p)으로 크기를 정한다. 증감이 없으면 0. */
+		int sizeOfHolding(BigDecimal absoluteChange) {
+			if (absoluteChange.signum() == 0) {
+				return 0;
+			}
+			return absoluteChange.compareTo(holdingMediumFrom) < 0 ? 1 : 2;
 		}
 	}
 
