@@ -89,7 +89,7 @@ public class DisclosureRepository {
 		""";
 
 	private static final String SELECT_OUTDATED = """
-		SELECT id, report_name, remark, type_code, case_code, tone
+		SELECT id, report_name, remark, type_code, case_code, tone, classified_by
 		  FROM disclosure
 		 WHERE title_rule_version < ?
 		   AND id > ?
@@ -187,7 +187,8 @@ public class DisclosureRepository {
 		return jdbc.query(SELECT_OUTDATED,
 			(rs, rowNum) -> new Outdated(rs.getLong("id"), rs.getString("report_name"), rs.getString("remark"),
 				rs.getString("type_code"), rs.getString("case_code"),
-				rs.getString("tone") == null ? null : Tone.valueOf(rs.getString("tone"))),
+				rs.getString("tone") == null ? null : Tone.valueOf(rs.getString("tone")),
+				rs.getString("classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("classified_by"))),
 			ruleVersion, afterId, limit);
 	}
 
@@ -241,14 +242,23 @@ public class DisclosureRepository {
 	 * @param remark     비고
 	 * @param typeCode   지금 저장된 유형. 아직 분류하지 않았으면 null
 	 * @param caseCode   지금 저장된 경우
-	 * @param tone       지금 저장된 판정
+	 * @param tone         지금 저장된 판정
+	 * @param classifiedBy 지금 저장된 판정의 주체. 판정하지 않았으면 null
 	 */
-	public record Outdated(long id, String reportName, String remark, String typeCode, String caseCode, Tone tone) {
+	public record Outdated(long id, String reportName, String remark, String typeCode, String caseCode, Tone tone,
+			ClassifiedBy classifiedBy) {
 
-		/** 다시 분류한 결과가 지금 저장된 것과 유형·방향·경우 중 하나라도 다른지. 다르면 뒤 단계를 다시 지나야 한다. */
+		/**
+		 * 다시 분류한 결과가 지금 저장된 것과 유형·경우·제목이 정한 방향 중 하나라도 다른지. 다르면 뒤 단계를 다시 지나야 한다.
+		 *
+		 * <p>방향은 제목 규칙이 정한 것끼리만 견준다. 뒤 단계(본문)가 정한 방향은 제목 규칙의 결과가 아니므로,
+		 * 제목이 방향을 정하지 않는 공시가 본문으로 판정을 받았다는 것만으로는 바뀐 것이 아니다.
+		 * 그렇게 보지 않으면 대응표를 고칠 때마다 이미 판정한 공시가 모두 뒤 단계를 다시 지난다.
+		 */
 		public boolean differsFrom(Classification c) {
+			Tone titleTone = classifiedBy == ClassifiedBy.RULE ? tone : null;
 			return !java.util.Objects.equals(typeCode, c.typeCode()) || !java.util.Objects.equals(caseCode, c.caseCode())
-					|| tone != c.tone();
+					|| titleTone != c.tone();
 		}
 	}
 

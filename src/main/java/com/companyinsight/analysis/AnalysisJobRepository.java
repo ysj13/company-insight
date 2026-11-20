@@ -25,6 +25,9 @@ public class AnalysisJobRepository {
 	/** pass_reason 컬럼 길이 */
 	private static final int PASS_REASON_MAX = 40;
 
+	/** error_kind 컬럼 길이 */
+	private static final int ERROR_KIND_MAX = 20;
+
 	/** error_code 컬럼 길이 */
 	private static final int ERROR_CODE_MAX = 20;
 
@@ -102,8 +105,11 @@ public class AnalysisJobRepository {
 
 	/**
 	 * 다시 분류해 유형·방향·경우가 바뀐 공시 가운데 본문을 이미 받아 둔 것의 표 읽기 작업을 대기로 되돌린다(없으면 넣는다).
-	 * 저장된 본문으로 표 읽기부터 다시 지난다. 본문을 아직 받지 않은 공시는 본문 받기가 끝날 때 새 분류로 이어지므로
+	 * 저장된 본문으로 표 읽기부터 다시 지난다. 본문 받기를 기다리는 공시는 본문 받기가 끝날 때 새 분류로 이어지므로
 	 * 건드리지 않는다. 본문이 없는 공시도 읽을 것이 없어 건드리지 않는다.
+	 *
+	 * <p>마침 본문 받기가 실행 중인 공시는 그 작업을 대기로 되돌린다. 실행 중인 쪽은 옛 분류를 보고 다음 단계를
+	 * 정했을 수 있다. 되돌리면 그 실행의 결과는 버려지고 새 분류로 다시 실행된다.
 	 *
 	 * @param disclosureIds 분류가 바뀐 공시
 	 * @return 대기로 되돌리거나 새로 넣은 건수
@@ -113,6 +119,15 @@ public class AnalysisJobRepository {
 		if (disclosureIds.isEmpty()) {
 			return 0;
 		}
+		jdbc.sql("""
+				UPDATE analysis_job
+				   SET status = 'PENDING', locked_at = NULL, run_after = :now, updated_at = :now
+				 WHERE disclosure_id IN (:ids) AND stage = :fetchStage AND status = 'RUNNING'
+				""")
+			.param("now", at(now))
+			.param("ids", disclosureIds)
+			.param("fetchStage", AnalysisStage.FETCH_BODY.name())
+			.update();
 		return jdbc.sql("""
 				INSERT INTO analysis_job (disclosure_id, stage, status, priority, run_after, enqueue_reason, created_at, updated_at)
 				SELECT f.disclosure_id, :stage, 'PENDING', :priority, :now, :reason, :now, :now
@@ -372,7 +387,7 @@ public class AnalysisJobRepository {
 			.param("outcome", outcome.name())
 			.param("reason", job.enqueueReason().name())
 			.param("passReason", passReason)
-			.param("errorKind", errorKind)
+			.param("errorKind", cut(errorKind, ERROR_KIND_MAX))
 			.param("errorCode", cut(errorCode, ERROR_CODE_MAX))
 			.param("error", cut(error, ERROR_MAX))
 			.param("result", resultJson)
@@ -381,7 +396,12 @@ public class AnalysisJobRepository {
 	}
 
 	private static String cut(String text, int max) {
-		return text == null ? null : text.substring(0, Math.min(text.length(), max));
+		if (text == null) {
+			return null;
+		}
+		// PostgreSQL은 글자 0x00을 받지 않는다. 오류 메시지에 섞여 오면 기록 자체가 실패한다
+		String clean = text.indexOf(' ') < 0 ? text : text.replace(" ", "");
+		return clean.substring(0, Math.min(clean.length(), max));
 	}
 
 	private static OffsetDateTime at(Instant instant) {

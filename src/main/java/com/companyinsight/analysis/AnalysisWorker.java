@@ -95,8 +95,14 @@ public class AnalysisWorker {
 		try {
 			switch (result) {
 				case StageResult.Done done -> jobs.complete(job, done, clock.instant());
-				case StageResult.Deferred deferred -> {
+				case StageResult.Deferred asked -> {
+					StageResult.Deferred deferred = asked;
 					Instant now = clock.instant();
+					if (!deferred.until().isAfter(now)) {
+						// 지금이나 과거로 미루면 같은 작업을 곧바로 다시 집어 끝나지 않는다
+						deferred = new StageResult.Deferred(now.plus(properties.retryDelay()), deferred.wholeGroup(),
+							deferred.kind(), deferred.code(), deferred.message());
+					}
 					jobs.defer(job, deferred, now);
 					if (deferred.wholeGroup()) {
 						int postponed = jobs.postponePending(group.stages(), deferred.until(), now);
@@ -126,6 +132,10 @@ public class AnalysisWorker {
 		}
 		catch (LockLostException e) {
 			log.warn("{}. 이 실행의 결과는 버립니다", e.getMessage());
+		}
+		catch (RuntimeException e) {
+			// 실패조차 적지 못했다. 작업은 실행 중으로 남아 끝을 보지 못한 실행으로 되돌려진다. 다음 작업은 이어서 처리한다
+			log.error("분석 작업의 실패를 기록하지 못했습니다: job={}, stage={}", job.id(), job.stage(), e);
 		}
 	}
 }

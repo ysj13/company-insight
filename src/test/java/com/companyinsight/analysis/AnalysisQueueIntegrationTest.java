@@ -154,6 +154,21 @@ class AnalysisQueueIntegrationTest {
 		assertThat(claimed).extracting(AnalysisJob::priority).containsExactly(100, 100);
 	}
 
+	@Test
+	void 정정_공시도_줄_서고_유형이_아직_붙지_않은_공시는_줄_서지_않는다() {
+		saveSamsung(item("20261119000001", "[기재정정]주요사항보고서(자기주식처분결정)", "20261119", ""));
+		long untyped = newDisclosure(); // 재분류 전이라 유형이 없다
+
+		assertThat(queue().enqueueMissing()).isEqualTo(1);
+
+		assertThat(jdbc.sql("""
+			SELECT d.source_key || ' ' || d.is_correction FROM analysis_job j JOIN disclosure d ON d.id = j.disclosure_id
+			""").query(String.class).list()).containsExactly("20261119000001 true");
+		// 유형이 붙으면 다음에 줄 선다
+		jdbc.sql("UPDATE disclosure SET type_code = 'E4' WHERE id = :id").param("id", untyped).update();
+		assertThat(queue().enqueueMissing()).isEqualTo(1);
+	}
+
 	// ── 꺼내기 ──────────────────────────────────────────────────────
 
 	@Test
@@ -405,6 +420,35 @@ class AnalysisQueueIntegrationTest {
 	}
 
 	@Test
+	void 지금이나_과거로_미루겠다고_해도_같은_작업을_되풀이해_집지_않는다() {
+		long disclosure = newDisclosure();
+		jobs.putPending(disclosure, AnalysisStage.AI_JUDGE, AnalysisPriority.NEW, EnqueueReason.NEW, NOW);
+		AnalysisWorker worker = worker(handler(AnalysisStage.AI_JUDGE,
+			job -> StageResult.deferred(clock.instant().minusSeconds(1), ErrorKind.TRANSIENT, "503", "과부하")));
+
+		assertThat(worker.drain(WorkerGroup.AI)).isEqualTo(1);
+
+		assertThat(count("SELECT count(*) FROM analysis_run")).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT EXTRACT(EPOCH FROM run_after - updated_at)::int FROM analysis_job").query(Integer.class)
+			.single()).isEqualTo(300);
+	}
+
+	@Test
+	void 오류_메시지에_저장할_수_없는_글자가_있어도_실패를_기록한다() {
+		long disclosure = newDisclosure();
+		jobs.putPending(disclosure, AnalysisStage.READ_TABLE, AnalysisPriority.NEW, EnqueueReason.NEW, NOW);
+		AnalysisWorker worker = worker(handler(AnalysisStage.READ_TABLE, job -> {
+			throw new IllegalStateException("읽지 못한 칸: 금액 원");
+		}));
+
+		worker.drain(WorkerGroup.CODE);
+
+		assertThat(job(disclosure, AnalysisStage.READ_TABLE)).containsEntry("status", "PENDING").containsEntry("attempts", 1);
+		assertThat(jdbc.sql("SELECT error FROM analysis_run").query(String.class).single())
+			.isEqualTo("java.lang.IllegalStateException: 읽지 못한 칸: 금액원");
+	}
+
+	@Test
 	void 하루_한도에_걸리면_같은_쪽의_대기_작업을_모두_미루고_다른_쪽은_그대로_둔다() {
 		long first = newDisclosure();
 		long second = newDisclosure();
@@ -513,7 +557,9 @@ class AnalysisQueueIntegrationTest {
 			item("20261119000002", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문 받기를 아직 기다린다
 			item("20261119000003", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문이 없는 공시였다
 			item("20261119000004", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았지만 분류가 바뀌지 않는다
-			item("20261119000005", "주요사항보고서(자기주식처분결정)", "20261119", "")); // 본문을 받았고 표 읽기 줄이 없다
+			item("20261119000005", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았고 표 읽기 줄이 없다
+			item("20261119000006", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았고 AI가 악재로 판정했다. 분류는 그대로다
+			item("20261119000007", "주요사항보고서(자기주식처분결정)", "20261119", "")); // 본문 받기가 마침 실행 중이다
 		queue().enqueueMissing();
 		finishFetch("20261119000001", StageResult.passed("TONE_BY_AI", StageResult.Next.of(AnalysisStage.READ_TABLE)));
 		AnalysisJob read = claimOne(AnalysisStage.READ_TABLE);
@@ -521,11 +567,25 @@ class AnalysisQueueIntegrationTest {
 		finishFetch("20261119000003", StageResult.noBody());
 		finishFetch("20261119000004", StageResult.ended());
 		finishFetch("20261119000005", StageResult.ended());
+		finishFetch("20261119000006", StageResult.ended());
+		jdbc.sql("UPDATE disclosure SET tone = 'NEGATIVE', classified_by = 'LLM' WHERE source_key = '20261119000006'").update();
 		// 옛 대응표가 다른 유형을 붙여 둔 것처럼 만든다. 넷째는 버전만 옛것이고 분류는 지금과 같다
 		jdbc.sql("UPDATE disclosure SET title_rule_version = 0").update();
-		jdbc.sql("UPDATE disclosure SET type_code = 'Z9' WHERE source_key <> '20261119000004'").update();
+		jdbc.sql("UPDATE disclosure SET type_code = 'Z9' WHERE source_key NOT IN ('20261119000004', '20261119000006')").update();
+		long runningId = jdbc.sql("SELECT id FROM disclosure WHERE source_key = '20261119000007'").query(Long.class).single();
+		AnalysisJob running = jobs.claim(Set.of(AnalysisStage.FETCH_BODY), 100, clock.instant()).stream()
+			.filter(job -> job.disclosureId() == runningId).findFirst().orElseThrow();
+		jdbc.sql("UPDATE analysis_job SET status = 'PENDING', locked_at = NULL WHERE status = 'RUNNING' AND id <> :id")
+			.param("id", running.id()).update();
 
 		classification.reclassifyOutdated();
+
+		// AI가 정한 방향은 그대로 남고, 그것만으로는 분류가 바뀐 것이 아니다
+		assertThat(jdbc.sql("SELECT tone || ' ' || classified_by FROM disclosure WHERE source_key = '20261119000006'")
+			.query(String.class).single()).isEqualTo("NEGATIVE LLM");
+		// 실행 중이던 본문 받기는 옛 분류를 봤을 수 있어 대기로 되돌린다. 그 실행은 끝을 기록하지 못한다
+		assertThatThrownBy(() -> jobs.complete(running, StageResult.ended(), clock.instant()))
+			.isInstanceOf(LockLostException.class);
 
 		assertThat(jdbc.sql("SELECT DISTINCT type_code FROM disclosure").query(String.class).list()).containsExactly("E4");
 		assertThat(jdbc.sql("""
@@ -541,7 +601,7 @@ class AnalysisQueueIntegrationTest {
 			 WHERE j.stage = 'FETCH_BODY' ORDER BY d.source_key
 			""").query(String.class).list())
 			.containsExactly("20261119000001 DONE", "20261119000002 PENDING", "20261119000003 DONE", "20261119000004 DONE",
-				"20261119000005 DONE");
+				"20261119000005 DONE", "20261119000006 DONE", "20261119000007 PENDING");
 	}
 
 	// ── 도우미 ──────────────────────────────────────────────────────
