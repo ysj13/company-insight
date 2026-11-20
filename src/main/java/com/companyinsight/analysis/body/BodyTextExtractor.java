@@ -22,12 +22,12 @@ import org.jsoup.select.NodeTraversor;
  * 공시 본문 문서 파일에서 글자를 뽑는다. 형식은 둘이다: 거래소 공시의 HTML, 금융위·공정위 문서의 DART 전용 XML.
  *
  * <p>뽑은 글의 모양: 문단과 표의 한 줄이 글의 한 줄이다. 표의 칸은 {@value #CELL_SEPARATOR}로 나누고 빈 칸은 뺀다.
- * 칸 안의 줄바꿈은 공백으로 잇는다. 줄 안의 이어진 공백은 하나로 줄이고 빈 줄은 없앤다.
+ * 칸 안의 줄바꿈과 문단은 공백으로 잇는다(칸 안에 든 표는 줄을 바꾼다). 줄 안의 이어진 공백은 하나로 줄이고 빈 줄은 없앤다.
  * 스타일과 문서 머리(HTML의 head)는 버린다. 여러 줄에 걸친 칸(rowspan)은 첫 줄에만 나오고,
  * 빈 칸을 빼므로 칸의 자리는 남지 않는다. 표를 자리로 읽으려면 {@link BodyDocument#markup()}을 쓴다.
  *
  * <p>글자 집합은 파일 안의 표시를 믿지 않는다. 거래소 공시는 UTF-8인데 meta 태그에는 euc-kr이라고 적혀 있다.
- * UTF-8로 읽어 보고, 맞지 않는 바이트가 있을 때만 MS949로 읽는다.
+ * UTF-8로 읽어 보고, 맞지 않는 바이트가 많을 때만 MS949로 읽는다.
  */
 public final class BodyTextExtractor {
 
@@ -35,6 +35,12 @@ public final class BodyTextExtractor {
 	public static final String CELL_SEPARATOR = " | ";
 
 	private static final Charset MS949 = Charset.forName("MS949");
+
+	/** 글자로 바꾸지 못한 바이트 자리에 들어가는 글자 (U+FFFD) */
+	private static final char REPLACEMENT = (char) 0xFFFD;
+
+	/** 파일 맨 앞에 붙을 수 있는 바이트 순서 표시 (U+FEFF) */
+	private static final char BOM = (char) 0xFEFF;
 
 	/** 뽑는 동안 칸의 끝을 표시하는 글자. 본문에 나오지 않는 제어 문자다 */
 	private static final char CELL_END = '\u0001';
@@ -45,8 +51,8 @@ public final class BodyTextExtractor {
 	/** 표의 칸 (HTML의 td·th, DART 전용 XML의 td·th·tu·te) */
 	private static final Set<String> CELLS = Set.of("td", "th", "tu", "te");
 
-	/** 칸 밖에서는 줄을 바꾸고, 칸 안에서는 공백으로 잇는 요소. 칸 안의 줄바꿈으로 표의 한 줄이 여러 줄로 갈라지지 않게 한다 */
-	private static final Set<String> SOFT_BREAKS = Set.of("br", "p", "div");
+	/** 칸 안에서도 줄을 바꾸는 요소. 칸 안의 나머지 요소(br, p, div, li 등)는 공백으로 이어 표의 한 줄이 여러 줄로 갈라지지 않게 한다 */
+	private static final Set<String> HARD_BREAKS = Set.of("table", "tr");
 
 	/** 줄을 바꾸지 않는 요소. 여기에 없는 요소는 모두 앞뒤로 줄을 바꾼다 (처음 보는 요소가 글을 붙여 버리지 않게) */
 	private static final Set<String> INLINE = Set.of("span", "a", "b", "i", "u", "font", "strong", "em", "sub", "sup",
@@ -76,7 +82,10 @@ public final class BodyTextExtractor {
 		return new BodyDocument(file.name(), format, markup, toText(document));
 	}
 
-	/** 바이트를 글자로 바꾼다. UTF-8이 맞으면 UTF-8, 아니면 MS949. 맨 앞의 BOM은 뗀다. */
+	/**
+	 * 바이트를 글자로 바꾼다. UTF-8이 맞으면 UTF-8. 맞지 않는 바이트가 드물면(천 글자에 하나 이하) 그 자리만 바꾼 UTF-8,
+	 * 많으면 MS949로 읽는다. 맨 앞의 BOM은 뗀다.
+	 */
 	static String decode(byte[] bytes) {
 		String text;
 		try {
@@ -87,9 +96,12 @@ public final class BodyTextExtractor {
 				.toString();
 		}
 		catch (CharacterCodingException e) {
-			text = new String(bytes, MS949);
+			String lenient = new String(bytes, StandardCharsets.UTF_8);
+			long broken = lenient.chars().filter(c -> c == REPLACEMENT).count();
+			// UTF-8 파일에 깨진 바이트가 몇 개 섞인 것을 MS949로 읽으면 글 전체가 깨진다
+			text = broken * 1000 <= lenient.length() ? lenient : new String(bytes, MS949);
 		}
-		return text.startsWith("﻿") ? text.substring(1) : text;
+		return !text.isEmpty() && text.charAt(0) == BOM ? text.substring(1) : text;
 	}
 
 	private static String toText(Document document) {
@@ -135,7 +147,7 @@ public final class BodyTextExtractor {
 			}
 
 			private char lineBreak(String name) {
-				return cellDepth > 0 && SOFT_BREAKS.contains(name) ? ' ' : '\n';
+				return cellDepth > 0 && !HARD_BREAKS.contains(name) ? ' ' : '\n';
 			}
 		}, document);
 

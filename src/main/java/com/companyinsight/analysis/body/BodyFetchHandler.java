@@ -6,6 +6,7 @@ import com.companyinsight.analysis.StageHandler;
 import com.companyinsight.analysis.StageResult;
 import com.companyinsight.analysis.body.DisclosureBodyRepository.BodyTarget;
 import com.companyinsight.analysis.body.DisclosureBodyRepository.StoredBody;
+import com.companyinsight.common.config.ClockConfig;
 import com.companyinsight.common.dart.DartClient;
 import com.companyinsight.common.external.ErrorKind;
 import com.companyinsight.common.external.ExternalApiException;
@@ -15,6 +16,7 @@ import com.companyinsight.common.source.Source;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -22,8 +24,12 @@ import org.springframework.stereotype.Component;
 /**
  * 본문 받기 단계. 공시 한 건의 본문 원문을 출처에서 받아 그대로 저장하고 다음 단계를 정한다.
  *
- * <p>받은 파일은 저장하기 전에 풀어서 글자가 뽑히는지 확인한다. 풀리지 않는 파일을 저장해 두면 뒤 단계가
- * 모두 같은 자리에서 실패한다. 뽑은 글은 저장하지 않는다(쓸 때마다 {@link DisclosureBodyReader}가 뽑는다).
+ * <p>받은 파일은 저장하기 전에 풀어서 읽어 본다. 풀리지 않는 파일을 저장해 두면 뒤 단계가
+ * 모두 같은 자리에서 실패한다. 뽑은 글은 저장하지 않고 글자 수만 실행 기록에 남긴다(쓸 때마다 {@link DisclosureBodyReader}가 뽑는다).
+ * 글자가 하나도 없는 문서도 저장한다(그림만 든 문서일 수 있다. 실행 기록의 글자 수 0으로 찾는다).
+ *
+ * <p>본문이 없다는 답은 실패가 아니다. 다만 접수한 날에는 출처가 파일을 아직 올리지 않았을 수 있어,
+ * 접수일이 지날 때까지 한 시간마다 다시 확인한 뒤에 "본문 없음"으로 끝낸다.
  *
  * <p>출처를 부르지 않고 끝나는 경우: 대기하는 동안 공시가 철회됐거나 본문을 받지 않는 유형으로 바뀐 경우,
  * 본문을 이미 받아 둔 경우(같은 접수번호의 본문은 바뀌지 않는다. 고치면 새 접수번호의 정정 공시가 나온다).
@@ -36,6 +42,9 @@ public class BodyFetchHandler implements StageHandler {
 
 	/** 인증키가 없을 때 다시 확인하기까지의 간격 */
 	static final Duration NO_KEY_DELAY = Duration.ofHours(1);
+
+	/** 접수한 날의 공시에 본문이 없다는 답이 오면 다시 확인하기까지의 간격. 접수일이 지나면 본문 없음으로 끝낸다 */
+	static final Duration SAME_DAY_RECHECK = Duration.ofHours(1);
 
 	private final DartClient dart;
 	private final DisclosureBodyRepository bodies;
@@ -108,6 +117,11 @@ public class BodyFetchHandler implements StageHandler {
 			throw e;
 		}
 		if (downloaded.isEmpty()) {
+			Instant now = clock.instant();
+			if (target.receiptDate() != null && !target.receiptDate().isBefore(LocalDate.ofInstant(now, ClockConfig.KST))) {
+				// 접수한 날에는 출처가 본문 파일을 아직 올리지 않았을 수 있다. 본문 없음으로 굳히지 않고 다시 확인한다
+				return StageResult.deferred(now.plus(SAME_DAY_RECHECK), null, "014", "접수한 날이라 본문이 아직 없을 수 있습니다");
+			}
 			return StageResult.noBody();
 		}
 

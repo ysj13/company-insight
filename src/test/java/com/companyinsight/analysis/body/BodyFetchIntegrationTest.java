@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,12 +74,18 @@ class BodyFetchIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		clean();
+		dart = dartClient("test-key");
+	}
+
+	/** 다른 테스트가 공시를 지울 때 본문이 남아 있으면 참조 제약에 걸린다. */
+	@AfterEach
+	void clean() {
 		jdbc.sql("DELETE FROM disclosure_body").update();
 		jdbc.sql("DELETE FROM analysis_run").update();
 		jdbc.sql("DELETE FROM analysis_job").update();
 		jdbc.sql("DELETE FROM disclosure").update();
 		jdbc.sql("DELETE FROM company").update();
-		dart = dartClient("test-key");
 	}
 
 	// ── 받아서 저장 ─────────────────────────────────────────────────
@@ -298,6 +305,95 @@ class BodyFetchIntegrationTest {
 		dartServer.verify();
 		assertThat(job(id, "FETCH_BODY")).containsEntry("status", "PENDING").containsEntry("attempts", 0);
 		assertThat(lastRun(id)).containsEntry("outcome", "DEFERRED").containsEntry("error_kind", "AUTH");
+	}
+
+	@Test
+	void 제목으로_호재가_정해진_공시는_표_읽기로_넘긴다() {
+		long id = save("20261119800002", "주식소각결정", "20261119");
+		respond("20261119800002", BodyFixtures.zip(BodyFixtures.VOLUNTARY));
+
+		drain();
+
+		assertThat(jdbc.sql("SELECT tone FROM disclosure WHERE id = :id").param("id", id).query(String.class).single())
+			.isEqualTo("POSITIVE");
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
+		assertThat(lastRun(id)).containsEntry("pass_reason", "TONE_BY_TITLE");
+	}
+
+	@Test
+	void 첨부만_더한_공시는_본문을_저장하고_판정_없이_끝난다() {
+		long id = save("20261119000003", "[첨부추가]주요사항보고서(자기주식처분결정)", "20261119");
+		respond("20261119000003", BodyFixtures.zip(BodyFixtures.TREASURY_DISPOSAL));
+
+		drain();
+
+		assertThat(job(id, "FETCH_BODY")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
+		assertThat(count("SELECT count(*) FROM disclosure_body")).isEqualTo(1);
+		assertThat(count("SELECT count(*) FROM analysis_job")).isEqualTo(1);
+	}
+
+	@Test
+	void 파일이_여럿인_zip은_파일_수와_함께_그대로_저장한다() throws Exception {
+		long id = save("20261119000004", "주요사항보고서(자기주식처분결정)", "20261119");
+		byte[] zip = BodyArchiveTest.zip("20261119000004.xml", "<html><body><p>첫 문서</p></body></html>",
+			"20261119000004_00760.xml", "<html><body><p>둘째 문서</p></body></html>");
+		respond("20261119000004", zip);
+
+		drain();
+
+		assertThat(jdbc.sql("SELECT file_count::int FROM disclosure_body WHERE disclosure_id = :id").param("id", id)
+			.query(Integer.class).single()).isEqualTo(2);
+		assertThat(reader.read(id).orElseThrow()).extracting(BodyDocument::text).containsExactly("첫 문서", "둘째 문서");
+		assertThat(lastRun(id).get("result").toString()).contains("\"files\": 2");
+	}
+
+	@Test
+	void 접수한_날에_본문이_없다는_답이_오면_본문_없음으로_굳히지_않고_한_시간_뒤에_다시_확인한다() {
+		// 오늘은 2026-11-20 (한국 시간)
+		long id = save("20261120000001", "주요사항보고서(자기주식처분결정)", "20261120");
+		respond("20261120000001", NO_FILE.getBytes(StandardCharsets.UTF_8));
+
+		drain();
+
+		assertThat(job(id, "FETCH_BODY")).containsEntry("status", "PENDING").containsEntry("attempts", 0)
+			.containsEntry("deferrals", 1);
+		assertThat(instant(job(id, "FETCH_BODY").get("run_after"))).isEqualTo(NOW.plusSeconds(3600));
+		assertThat(lastRun(id)).containsEntry("outcome", "DEFERRED").containsEntry("error_code", "014");
+	}
+
+	@Test
+	void 인증_오류가_나면_실패로_세지_않고_본문_받기_전체를_미룬다() {
+		long first = save("20261119000001", "주요사항보고서(자기주식처분결정)", "20261119");
+		long second = save("20261119000002", "주요사항보고서(자기주식처분결정)", "20261119");
+		respond("20261119000001", "<result><status>010</status><message>등록되지 않은 키입니다.</message></result>"
+			.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(drain()).isEqualTo(1);
+
+		dartServer.verify();
+		assertThat(job(first, "FETCH_BODY")).containsEntry("status", "PENDING").containsEntry("attempts", 0);
+		assertThat(lastRun(first)).containsEntry("outcome", "DEFERRED").containsEntry("error_kind", "AUTH")
+			.containsEntry("error_code", "010");
+		assertThat(instant(job(second, "FETCH_BODY").get("run_after"))).isEqualTo(NOW.plusSeconds(3600));
+	}
+
+	@Test
+	void 출처를_부르지_않고_끝났던_공시가_다시_분류되면_본문을_받으러_간다() {
+		long id = save("20261119000001", "주요사항보고서(자기주식처분결정)", "20261119");
+		jdbc.sql("UPDATE disclosure SET type_code = 'A1', title_rule_id = NULL WHERE id = :id").param("id", id).update();
+		drain();
+		assertThat(job(id, "FETCH_BODY")).containsEntry("outcome", "ENDED");
+		// 대응표를 고쳐 다시 본문을 받는 유형이 됐다
+		jdbc.sql("UPDATE disclosure SET type_code = 'E4' WHERE id = :id").param("id", id).update();
+
+		new AnalysisQueueService(jobs, properties, CLOCK).requeueReclassified(List.of(id));
+
+		assertThat(job(id, "FETCH_BODY")).containsEntry("status", "PENDING");
+		assertThat(count("SELECT count(*) FROM analysis_job WHERE stage = 'READ_TABLE'")).isZero();
+		respond("20261119000001", BodyFixtures.zip(BodyFixtures.TREASURY_DISPOSAL));
+		drain();
+		assertThat(count("SELECT count(*) FROM disclosure_body")).isEqualTo(1);
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
 	}
 
 	// ── 도우미 ──────────────────────────────────────────────────────

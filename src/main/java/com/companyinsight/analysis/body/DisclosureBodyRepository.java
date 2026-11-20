@@ -4,6 +4,7 @@ import com.companyinsight.common.source.Source;
 import com.companyinsight.disclosure.JudgeMethod;
 import com.companyinsight.disclosure.Tone;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -30,7 +31,7 @@ public class DisclosureBodyRepository {
 	 */
 	public Optional<BodyTarget> findTarget(long disclosureId) {
 		return jdbc.sql("""
-				SELECT d.source, d.source_key, d.report_name, d.is_withdrawn, d.tone, d.type_code, t.fetch_body,
+				SELECT d.source, d.source_key, d.report_name, d.rcept_date, d.is_withdrawn, d.tone, d.type_code, t.fetch_body,
 				       COALESCE(r.judge_method, t.judge_method) AS judge_method
 				  FROM disclosure d
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
@@ -42,6 +43,7 @@ public class DisclosureBodyRepository {
 				Source.valueOf(rs.getString("source")),
 				rs.getString("source_key"),
 				rs.getString("report_name"),
+				rs.getObject("rcept_date", LocalDate.class),
 				rs.getBoolean("is_withdrawn"),
 				rs.getString("tone") == null ? null : Tone.valueOf(rs.getString("tone")),
 				rs.getString("type_code"),
@@ -103,14 +105,15 @@ public class DisclosureBodyRepository {
 	 * @param source      공시를 받은 출처
 	 * @param sourceKey   출처의 공시 번호 (DART는 접수번호)
 	 * @param reportName  보고서명 (머리말이 붙은 그대로)
+	 * @param receiptDate 접수일
 	 * @param withdrawn   철회된 공시인지
 	 * @param tone        지금 방향. 아직 정해지지 않았으면 null
 	 * @param typeCode    유형 번호. 아직 분류하지 않았으면 null
 	 * @param fetchBody   그 유형이 본문을 받는 유형인지. 유형이 없으면 false
 	 * @param judgeMethod 방향을 정하는 방법 (규칙 줄의 값이 먼저, 없으면 유형의 값). 유형이 없으면 null
 	 */
-	public record BodyTarget(Source source, String sourceKey, String reportName, boolean withdrawn, Tone tone,
-			String typeCode, boolean fetchBody, JudgeMethod judgeMethod) {
+	public record BodyTarget(Source source, String sourceKey, String reportName, LocalDate receiptDate, boolean withdrawn,
+			Tone tone, String typeCode, boolean fetchBody, JudgeMethod judgeMethod) {
 	}
 
 	/**

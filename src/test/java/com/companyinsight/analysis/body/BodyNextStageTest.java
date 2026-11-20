@@ -94,6 +94,7 @@ class BodyNextStageTest {
 	}
 
 	private static BodyTarget target(String reportName, String typeCode, JudgeMethod judgeMethod, Tone tone) {
-		return new BodyTarget(Source.DART, "20261119000001", reportName, false, tone, typeCode, true, judgeMethod);
+		return new BodyTarget(Source.DART, "20261119000001", reportName, java.time.LocalDate.of(2026, 11, 19), false, tone,
+			typeCode, true, judgeMethod);
 	}
 }

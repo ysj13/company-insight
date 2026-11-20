@@ -173,6 +173,31 @@ class BodyTextExtractorTest {
 	}
 
 	@Test
+	void 칸_안의_목록과_문단은_공백으로_잇고_칸_안에_든_표는_줄을_바꾼다() {
+		String html = """
+			<html><body><table>
+			<tr><td>정정전</td><td><ul><li>첫째</li><li>둘째</li></ul><p>셋째</p></td></tr>
+			<tr><td>겉 칸<table><tr><td>속 하나</td><td>속 둘</td></tr></table></td></tr>
+			</table></body></html>
+			""";
+
+		assertThat(lines(extract(html.getBytes(StandardCharsets.UTF_8)))).containsExactly(
+			"정정전 | 첫째 둘째 셋째",
+			"겉 칸",
+			"속 하나 | 속 둘");
+	}
+
+	@Test
+	void UTF_8_파일에_깨진_바이트가_하나_섞여도_글_전체를_MS949로_읽지_않는다() {
+		byte[] good = ("<html><body><p>" + "유상증자 결정에 관한 사항입니다. ".repeat(100) + "</p></body></html>")
+			.getBytes(StandardCharsets.UTF_8);
+		byte[] damaged = java.util.Arrays.copyOf(good, good.length + 1);
+		damaged[good.length] = (byte) 0xFF;
+
+		assertThat(extract(damaged).text()).startsWith("유상증자 결정에 관한 사항입니다.");
+	}
+
+	@Test
 	void 빈_파일은_읽지_못한다() {
 		assertThatThrownBy(() -> extract(" \r\n ".getBytes(StandardCharsets.UTF_8)))
 			.isInstanceOf(BodyFormatException.class);

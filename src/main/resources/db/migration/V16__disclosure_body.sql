@@ -22,5 +22,5 @@ COMMENT ON COLUMN disclosure_body.disclosure_id IS '공시 (disclosure.id)';
 COMMENT ON COLUMN disclosure_body.content IS '출처가 준 본문 파일 그대로. DART는 zip이고 안에 문서 파일이 하나 이상 있다';
 COMMENT ON COLUMN disclosure_body.byte_size IS 'content의 크기(바이트)';
 COMMENT ON COLUMN disclosure_body.file_count IS '압축 파일 안의 문서 파일 수';
-COMMENT ON COLUMN disclosure_body.fetched_at IS '출처에서 받은 시각';
+COMMENT ON COLUMN disclosure_body.fetched_at IS '출처에서 받은 시각. 다시 받아 덮어쓰면 이 값이 바뀐다 (수정 시각을 따로 두지 않는다)';
 COMMENT ON COLUMN disclosure_body.created_at IS '행 생성 시각';
