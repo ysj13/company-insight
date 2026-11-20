@@ -58,8 +58,15 @@ class AnalysisQueueIntegrationTest {
 
 	private final MovableClock clock = new MovableClock(NOW);
 
+	/** 다른 테스트가 공시를 지울 때 본문이 남아 있으면 참조 제약에 걸린다. */
+	@org.junit.jupiter.api.AfterEach
+	void cleanBodies() {
+		jdbc.sql("DELETE FROM disclosure_body").update();
+	}
+
 	@BeforeEach
 	void clean() {
+		jdbc.sql("DELETE FROM disclosure_body").update();
 		jdbc.sql("DELETE FROM analysis_run").update();
 		jdbc.sql("DELETE FROM analysis_job").update();
 		jdbc.sql("DELETE FROM disclosure").update();
@@ -559,7 +566,8 @@ class AnalysisQueueIntegrationTest {
 			item("20261119000004", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았지만 분류가 바뀌지 않는다
 			item("20261119000005", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았고 표 읽기 줄이 없다
 			item("20261119000006", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문을 받았고 AI가 악재로 판정했다. 분류는 그대로다
-			item("20261119000007", "주요사항보고서(자기주식처분결정)", "20261119", "")); // 본문 받기가 마침 실행 중이다
+			item("20261119000007", "주요사항보고서(자기주식처분결정)", "20261119", ""), // 본문 받기가 마침 실행 중이다
+			item("20261119000008", "주요사항보고서(자기주식처분결정)", "20261119", "")); // 본문 받기가 출처를 부르지 않고 끝났다 (그때는 받지 않는 유형이었다)
 		queue().enqueueMissing();
 		finishFetch("20261119000001", StageResult.passed("TONE_BY_AI", StageResult.Next.of(AnalysisStage.READ_TABLE)));
 		AnalysisJob read = claimOne(AnalysisStage.READ_TABLE);
@@ -568,6 +576,7 @@ class AnalysisQueueIntegrationTest {
 		finishFetch("20261119000004", StageResult.ended());
 		finishFetch("20261119000005", StageResult.ended());
 		finishFetch("20261119000006", StageResult.ended());
+		skipFetch("20261119000008");
 		jdbc.sql("UPDATE disclosure SET tone = 'NEGATIVE', classified_by = 'LLM' WHERE source_key = '20261119000006'").update();
 		// 옛 대응표가 다른 유형을 붙여 둔 것처럼 만든다. 넷째는 버전만 옛것이고 분류는 지금과 같다
 		jdbc.sql("UPDATE disclosure SET title_rule_version = 0").update();
@@ -595,13 +604,18 @@ class AnalysisQueueIntegrationTest {
 			 ORDER BY d.source_key
 			""").query(String.class).list())
 			.containsExactly("20261119000001 PENDING 500 RERUN", "20261119000005 PENDING 500 RERUN");
-		// 본문 받기 줄은 건드리지 않는다
+		// 본문을 받아 둔 공시의 본문 받기 줄은 건드리지 않는다. 본문 없이 끝났던 여덟째만 다시 받으러 간다
 		assertThat(jdbc.sql("""
 			SELECT d.source_key || ' ' || j.status FROM analysis_job j JOIN disclosure d ON d.id = j.disclosure_id
 			 WHERE j.stage = 'FETCH_BODY' ORDER BY d.source_key
 			""").query(String.class).list())
 			.containsExactly("20261119000001 DONE", "20261119000002 PENDING", "20261119000003 DONE", "20261119000004 DONE",
-				"20261119000005 DONE", "20261119000006 DONE", "20261119000007 PENDING");
+				"20261119000005 DONE", "20261119000006 DONE", "20261119000007 PENDING", "20261119000008 PENDING");
+		assertThat(jdbc.sql("""
+			SELECT j.priority || ' ' || j.enqueue_reason || ' ' || j.attempts FROM analysis_job j
+			  JOIN disclosure d ON d.id = j.disclosure_id
+			 WHERE j.stage = 'FETCH_BODY' AND d.source_key = '20261119000008'
+			""").query(String.class).single()).isEqualTo("500 RERUN 0");
 	}
 
 	// ── 도우미 ──────────────────────────────────────────────────────
@@ -635,10 +649,15 @@ class AnalysisQueueIntegrationTest {
 		return claimed.getFirst();
 	}
 
-	/** 그 공시의 본문 받기 작업을 꺼내 주어진 결과로 끝낸다. */
-	private void finishFetch(String receiptNo, StageResult.Done done) {
+	/** 그 공시의 본문 받기 작업을 꺼내 주어진 결과로 끝낸다. 본문이 있는 결과면 본문도 저장해 둔다. */
+	private void finishFetch(String receiptNo, StageResult.Done result) {
 		long disclosureId = jdbc.sql("SELECT id FROM disclosure WHERE source_key = :key").param("key", receiptNo)
 			.query(Long.class).single();
+		StageResult.Done done = result.outcome() == RunOutcome.NO_BODY ? result
+				: result.withWrites(() -> jdbc.sql("""
+					INSERT INTO disclosure_body (disclosure_id, content, byte_size, file_count, fetched_at)
+					VALUES (:id, :content, 4, 1, now())
+					""").param("id", disclosureId).param("content", new byte[] { 'P', 'K', 3, 4 }).update());
 		List<AnalysisJob> claimed = jobs.claim(Set.of(AnalysisStage.FETCH_BODY), 100, clock.instant());
 		for (AnalysisJob job : claimed) {
 			if (job.disclosureId() == disclosureId) {
@@ -646,6 +665,20 @@ class AnalysisQueueIntegrationTest {
 			}
 			else {
 				// 다른 공시의 작업은 도로 대기로 둔다
+				jobs.putPending(job.disclosureId(), AnalysisStage.FETCH_BODY, job.priority(), EnqueueReason.NEW, clock.instant());
+			}
+		}
+	}
+
+	/** 그 공시의 본문 받기 작업을 본문 없이 "여기서 끝"으로 끝낸다 (출처를 부르지 않고 끝난 경우). */
+	private void skipFetch(String receiptNo) {
+		long disclosureId = jdbc.sql("SELECT id FROM disclosure WHERE source_key = :key").param("key", receiptNo)
+			.query(Long.class).single();
+		for (AnalysisJob job : jobs.claim(Set.of(AnalysisStage.FETCH_BODY), 100, clock.instant())) {
+			if (job.disclosureId() == disclosureId) {
+				jobs.complete(job, StageResult.ended(), clock.instant());
+			}
+			else {
 				jobs.putPending(job.disclosureId(), AnalysisStage.FETCH_BODY, job.priority(), EnqueueReason.NEW, clock.instant());
 			}
 		}

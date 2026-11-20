@@ -37,6 +37,8 @@ dependencies {
 	annotationProcessor("com.github.therapi:therapi-runtime-javadoc-scribe:$therapiVersion")
 	implementation("com.github.ben-manes.caffeine:caffeine")
 	implementation("io.github.resilience4j:resilience4j-ratelimiter:2.4.0")
+	// 공시 본문(HTML, DART 전용 XML)에서 글자와 표를 읽는다
+	implementation("org.jsoup:jsoup:1.21.2")
 	implementation("io.github.openfeign.querydsl:querydsl-jpa:$querydslVersion")
 	annotationProcessor("io.github.openfeign.querydsl:querydsl-apt:$querydslVersion:jpa")
 	annotationProcessor("jakarta.persistence:jakarta.persistence-api")

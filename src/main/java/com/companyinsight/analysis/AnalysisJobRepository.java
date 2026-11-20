@@ -106,7 +106,10 @@ public class AnalysisJobRepository {
 	/**
 	 * 다시 분류해 유형·방향·경우가 바뀐 공시 가운데 본문을 이미 받아 둔 것의 표 읽기 작업을 대기로 되돌린다(없으면 넣는다).
 	 * 저장된 본문으로 표 읽기부터 다시 지난다. 본문 받기를 기다리는 공시는 본문 받기가 끝날 때 새 분류로 이어지므로
-	 * 건드리지 않는다. 본문이 없는 공시도 읽을 것이 없어 건드리지 않는다.
+	 * 건드리지 않는다. 출처에 본문이 없던 공시도 읽을 것이 없어 건드리지 않는다.
+	 *
+	 * <p>본문을 받아 두었는지는 저장된 본문(disclosure_body)으로 본다. 본문 받기가 출처를 부르지 않고 끝난 공시
+	 * (그때는 철회됐거나 본문을 받지 않는 유형이었다)는 본문이 없으므로, 본문 받기 작업을 대기로 되돌려 새 분류로 다시 보게 한다.
 	 *
 	 * <p>마침 본문 받기가 실행 중인 공시는 그 작업을 대기로 되돌린다. 실행 중인 쪽은 옛 분류를 보고 다음 단계를
 	 * 정했을 수 있다. 되돌리면 그 실행의 결과는 버려지고 새 분류로 다시 실행된다.
@@ -128,6 +131,19 @@ public class AnalysisJobRepository {
 			.param("ids", disclosureIds)
 			.param("fetchStage", AnalysisStage.FETCH_BODY.name())
 			.update();
+		jdbc.sql("""
+				UPDATE analysis_job f
+				   SET status = 'PENDING', outcome = NULL, priority = :priority, run_after = :now, attempts = 0,
+				       deferrals = 0, enqueue_reason = :reason, updated_at = :now
+				 WHERE f.disclosure_id IN (:ids) AND f.stage = :fetchStage AND f.status = 'DONE' AND f.outcome = 'ENDED'
+				   AND NOT EXISTS (SELECT 1 FROM disclosure_body b WHERE b.disclosure_id = f.disclosure_id)
+				""")
+			.param("priority", AnalysisPriority.BACKLOG)
+			.param("now", at(now))
+			.param("reason", EnqueueReason.RERUN.name())
+			.param("ids", disclosureIds)
+			.param("fetchStage", AnalysisStage.FETCH_BODY.name())
+			.update();
 		return jdbc.sql("""
 				INSERT INTO analysis_job (disclosure_id, stage, status, priority, run_after, enqueue_reason, created_at, updated_at)
 				SELECT f.disclosure_id, :stage, 'PENDING', :priority, :now, :reason, :now, :now
@@ -135,7 +151,7 @@ public class AnalysisJobRepository {
 				 WHERE f.disclosure_id IN (:ids)
 				   AND f.stage = :fetchStage
 				   AND f.status = 'DONE'
-				   AND f.outcome IN ('PASSED', 'ENDED')
+				   AND EXISTS (SELECT 1 FROM disclosure_body b WHERE b.disclosure_id = f.disclosure_id)
 				 ORDER BY f.disclosure_id
 				ON CONFLICT (disclosure_id, stage) DO UPDATE
 				   SET status = 'PENDING', outcome = NULL, priority = EXCLUDED.priority, run_after = EXCLUDED.run_after,

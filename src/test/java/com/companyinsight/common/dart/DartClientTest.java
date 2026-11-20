@@ -312,4 +312,73 @@ class DartClientTest {
 		assertThatThrownBy(() -> client.fetchMajorAccounts("00126380", 2025, "11014"))
 			.isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.QUOTA_EXCEEDED));
 	}
+
+	@Test
+	void 공시_원문은_접수번호로_받고_zip을_그대로_돌려준다() {
+		byte[] zip = { 'P', 'K', 3, 4, 9, 8, 7 };
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andExpect(queryParam("crtfc_key", SECRET))
+			.andExpect(queryParam("rcept_no", "20261029000539"))
+			.andRespond(withSuccess(zip, MediaType.APPLICATION_OCTET_STREAM));
+
+		assertThat(client.downloadDocument("20261029000539")).contains(zip);
+	}
+
+	@Test
+	void 공시_원문이_없으면_비어_있다() {
+		// 본문이 없는 공시의 실제 응답 모양. zip이 아니라 상태 코드가 든 XML이 온다
+		String body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><result><status>014</status><message>파일이 존재하지 않습니다.</message></result>";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withSuccess(body.getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_XML));
+
+		assertThat(client.downloadDocument("20261029000539")).isEmpty();
+	}
+
+	@Test
+	void 공시_원문_요청이_하루_한도에_걸리면_재시도하지_않는_예외() {
+		String body = "<result><status>020</status><message>사용한도를 초과하였습니다.</message></result>";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withSuccess(body.getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_XML));
+
+		assertThatThrownBy(() -> client.downloadDocument("20261029000539"))
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> {
+				assertThat(e.kind()).isEqualTo(ErrorKind.QUOTA_EXCEEDED);
+				assertThat(e.code()).isEqualTo("020");
+				assertThat(e).isNotInstanceOf(RetryableExternalApiException.class);
+			});
+	}
+
+	@Test
+	void 공시_원문_요청이_점검_중이면_재시도_대상_예외() {
+		String body = "<result><status>800</status><message>시스템 점검 중입니다.</message></result>";
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withSuccess(body.getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_XML));
+
+		assertThatThrownBy(() -> client.downloadDocument("20261029000539"))
+			.isInstanceOfSatisfying(RetryableExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.TRANSIENT));
+	}
+
+	@Test
+	void 공시_원문_응답이_비었거나_알_수_없는_모양이면_해석_오류() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withSuccess(new byte[0], MediaType.APPLICATION_OCTET_STREAM));
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withSuccess("<html>점검 안내</html>".getBytes(StandardCharsets.UTF_8), MediaType.TEXT_HTML));
+
+		assertThatThrownBy(() -> client.downloadDocument("20261029000539"))
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.PARSE));
+		assertThatThrownBy(() -> client.downloadDocument("20261029000539"))
+			.isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.kind()).isEqualTo(ErrorKind.UNKNOWN));
+	}
+
+	@Test
+	void 공시_원문_서버_오류_메시지에_인증키가_없다() {
+		server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://dart.test/api/document.xml")))
+			.andRespond(withServerError());
+
+		assertThatThrownBy(() -> client.downloadDocument("20261029000539"))
+			.isInstanceOf(RetryableExternalApiException.class)
+			.hasNoCause()
+			.message().doesNotContain(SECRET);
+	}
 }
