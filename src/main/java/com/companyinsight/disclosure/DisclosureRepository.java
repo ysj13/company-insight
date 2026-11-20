@@ -89,7 +89,7 @@ public class DisclosureRepository {
 		""";
 
 	private static final String SELECT_OUTDATED = """
-		SELECT id, report_name, remark, type_code, case_code, tone, classified_by
+		SELECT id, report_name, remark, type_code, case_code, tone, classified_by, title_attributes
 		  FROM disclosure
 		 WHERE title_rule_version < ?
 		   AND id > ?
@@ -98,17 +98,32 @@ public class DisclosureRepository {
 		""";
 
 	private static final String UPDATE_CLASSIFICATION = """
-		UPDATE disclosure
-		   SET type_code = ?, title_rule_id = ?, case_code = ?, normalized_title = ?,
-		       title_attributes = string_to_array(?, ','),
-		       -- LLM이 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다
-		       tone = CASE WHEN classified_by = 'LLM' THEN tone ELSE ? END,
-		       classified_by = CASE WHEN classified_by = 'LLM' THEN classified_by ELSE ? END,
-		       title_rule_version = ?, is_correction = ?, is_withdrawn = ?,
-		       -- 영향도는 뒤 단계가 매긴다. 방향이 바뀌면 옛 영향도가 맞지 않으므로 비운다
-		       impact = CASE WHEN classified_by = 'LLM' OR tone IS NOT DISTINCT FROM ? THEN impact ELSE NULL END,
+		UPDATE disclosure d
+		   SET type_code = n.type_code, title_rule_id = n.title_rule_id, case_code = n.case_code,
+		       normalized_title = n.normalized_title, title_attributes = n.title_attributes,
+		       -- 본문으로 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다.
+		       -- LLM의 판정은 유형이 바뀌어도 둔다. 표로 한 판정은 유형이 같고 제목이 방향을 정하지 않을 때만 둔다
+		       -- (표를 읽는 규칙이 유형마다 다르고, 제목이 방향을 정하게 됐으면 제목의 방향이 맞다)
+		       tone = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                   THEN d.tone ELSE n.tone END,
+		       classified_by = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                            THEN d.classified_by ELSE n.classified_by END,
+		       title_rule_version = n.title_rule_version, is_correction = n.is_correction, is_withdrawn = n.is_withdrawn,
+		       -- 영향도는 뒤 단계가 매긴다. 방향이 바뀌면 옛 영향도가 맞지 않으므로 비운다. 보존하지 않는 표 판정의 영향도도 비운다
+		       impact = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                          OR (d.classified_by IS DISTINCT FROM 'TABLE' AND d.tone IS NOT DISTINCT FROM n.tone)
+		                     THEN d.impact ELSE NULL END,
+		       -- 비율은 본문에서 읽은 값이다. 유형이 바뀌면 읽는 비율도 달라지므로 비운다
+		       impact_ratio = CASE WHEN d.type_code IS NOT DISTINCT FROM n.type_code THEN d.impact_ratio ELSE NULL END,
 		       updated_at = now()
-		 WHERE id = ?
+		  FROM (SELECT ?::varchar AS type_code, ?::bigint AS title_rule_id, ?::varchar AS case_code,
+		               ?::varchar AS normalized_title, string_to_array(?, ',')::varchar(20)[] AS title_attributes,
+		               ?::varchar AS tone, ?::varchar AS classified_by, ?::int AS title_rule_version,
+		               ?::boolean AS is_correction, ?::boolean AS is_withdrawn, ?::bigint AS id) n
+		 WHERE d.id = n.id
 		""";
 
 	private final JdbcTemplate jdbc;
@@ -188,12 +203,14 @@ public class DisclosureRepository {
 			(rs, rowNum) -> new Outdated(rs.getLong("id"), rs.getString("report_name"), rs.getString("remark"),
 				rs.getString("type_code"), rs.getString("case_code"),
 				rs.getString("tone") == null ? null : Tone.valueOf(rs.getString("tone")),
-				rs.getString("classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("classified_by"))),
+				rs.getString("classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("classified_by")),
+				rs.getArray("title_attributes") == null ? java.util.Set.of()
+						: java.util.Set.of((String[]) rs.getArray("title_attributes").getArray())),
 			ruleVersion, afterId, limit);
 	}
 
 	/**
-	 * 분류 결과를 저장한다. LLM이 판정한 공시는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
+	 * 분류 결과를 저장한다. 본문으로 판정한 공시(LLM, 유형이 그대로인 표 판정)는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
 	 *
 	 * @param ruleVersion 적용한 대응표 버전
 	 */
@@ -203,8 +220,7 @@ public class DisclosureRepository {
 		jdbc.batchUpdate(UPDATE_CLASSIFICATION, entries, entries.size(), (ps, entry) -> {
 			Classification c = entry.getValue();
 			setClassification(ps, 1, c, ruleVersion);
-			ps.setString(11, c.tone() == null ? null : c.tone().name());
-			ps.setLong(12, entry.getKey());
+			ps.setLong(11, entry.getKey());
 		});
 	}
 
@@ -244,12 +260,14 @@ public class DisclosureRepository {
 	 * @param caseCode   지금 저장된 경우
 	 * @param tone         지금 저장된 판정
 	 * @param classifiedBy 지금 저장된 판정의 주체. 판정하지 않았으면 null
+	 * @param attributes   지금 저장된 제목 속성
 	 */
 	public record Outdated(long id, String reportName, String remark, String typeCode, String caseCode, Tone tone,
-			ClassifiedBy classifiedBy) {
+			ClassifiedBy classifiedBy, java.util.Set<String> attributes) {
 
 		/**
-		 * 다시 분류한 결과가 지금 저장된 것과 유형·경우·제목이 정한 방향 중 하나라도 다른지. 다르면 뒤 단계를 다시 지나야 한다.
+		 * 다시 분류한 결과가 지금 저장된 것과 유형·경우·제목이 정한 방향·제목 속성 중 하나라도 다른지.
+		 * 속성(자회사의 공시, 철회·취하 꼬리)은 본문 표 읽기가 판정을 가르는 데 쓴다. 다르면 뒤 단계를 다시 지나야 한다.
 		 *
 		 * <p>방향은 제목 규칙이 정한 것끼리만 견준다. 뒤 단계(본문)가 정한 방향은 제목 규칙의 결과가 아니므로,
 		 * 제목이 방향을 정하지 않는 공시가 본문으로 판정을 받았다는 것만으로는 바뀐 것이 아니다.
@@ -258,7 +276,7 @@ public class DisclosureRepository {
 		public boolean differsFrom(Classification c) {
 			Tone titleTone = classifiedBy == ClassifiedBy.RULE ? tone : null;
 			return !java.util.Objects.equals(typeCode, c.typeCode()) || !java.util.Objects.equals(caseCode, c.caseCode())
-					|| titleTone != c.tone();
+					|| titleTone != c.tone() || !attributes.equals(java.util.Set.copyOf(c.attributes()));
 		}
 	}
 

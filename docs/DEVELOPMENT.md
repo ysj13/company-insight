@@ -59,7 +59,7 @@ com.companyinsight
 | 테이블 | 핵심 컬럼 |
 |---|---|
 | `company` | id(PK), country, source, source_key(source와 묶어 **unique**. DART는 고유번호), stock_code, name, market |
-| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, classified_by(RULE/LLM), is_correction, is_withdrawn |
+| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, impact_ratio(크기를 정할 때 본 원래 비율), classified_by(RULE 제목 규칙/TABLE 본문 표/LLM), is_correction, is_withdrawn |
 | `disclosure_type` | code(PK. 예: A1), bundle, name, judge_method(TITLE/CODE/AI), default_tone, fetch_body, sort_order |
 | `title_rule` | id, source, match_kind(EXACT/FORM/FORM_WORD), pattern, tail_word(FORM_WORD 줄의 꼬리 낱말. source, match_kind, pattern과 묶어 **unique**), type_code, tone, judge_method, case_code, memo, added_version |
 | `title_attribute` | source, token(제목에서 떼는 속성 꼬리), attribute |
@@ -165,12 +165,13 @@ com.companyinsight
 | 5-6 | 11/20 | 유형 대응표 | 공시 유형 75가지와 "제목 → 유형" 대응표를 DB 테이블로(Flyway V10 구조, V11 처음 값, V12 대응표 버전 2: 꼬리별 방향 고침과 금융감독원 조치 서식 셋, V13 버전 3: 서식 이름 + 꼬리에 든 낱말로 거는 대응 방식, V14 버전 4: 소송 제기의 항고 꼬리), 분류기가 앱이 뜰 때 대응표를 읽어 유형·걸린 규칙·대응표 버전·속성을 저장, 제목으로 방향이 정해지는 공시만 판정(관리종목·상장폐지 관련 안내는 꼬리별로 방향과 경우), 종류 9가지(`kind`)와 자바 규칙 걷어냄, 공시 목록 화면은 유형 묶음으로 거름 | 로컬 DB 15,594건에 적용해 대응표를 만들 때 본 제목이 모두 확정한 유형과 같음 (`PLAN.md` 6절) |
 | 6 | 11/21 | 분석 작업 큐 | 큐 `analysis_job`(공시 한 건의 한 단계가 한 행)과 실행 기록 `analysis_run`(Flyway V15), `SKIP LOCKED`로 꺼내기, 끝 기록·다음 단계 줄 세우기를 한 트랜잭션으로, 실패 3번이면 멈춤, 실패로 세지 않는 미룸, 끝을 보지 못한 실행 되돌리기(10분), 우선순위(새 공시 → 과거분·다시 돌리기), 본문을 받는 유형의 공시를 본문 받기에 줄 세우기, 분석 대상 회사 설정(`app.analysis.target-stock-codes`), 다시 분류해 바뀐 공시는 표 읽기부터 다시. 단계별 처리(본문 받기, 표 읽기, AI)는 다음 단계에서 붙인다 | 워커 여럿이 같은 작업을 집지 않음을 테스트로 확인, 로컬 DB에서 테스트 회사 세 곳의 공시 3,982건이 한 번씩 줄 섬 |
 | 7-1 | 11/21 | 공시 본문 받기 | 큐의 본문 받기 단계: OpenDART 공시서류원본파일로 본문 zip을 받아 풀리는지 확인한 뒤 그대로 저장(`disclosure_body`, Flyway V16), 본문이 없는 공시는 "본문 없음"으로 끝냄, 하루 한도·인증 오류는 실패로 세지 않고 본문 받기 전체를 미룸, 이미 받은 본문은 다시 받지 않음. 글자 추출(HTML과 DART 전용 XML. 표의 한 줄을 글의 한 줄로)은 저장하지 않고 쓸 때마다 한다. 다음 단계 정하기: 제목으로 중립이 정해진 공시와 첨부만 고친 공시는 여기서 끝, 포괄 제목·꼬리 미상·미분류는 AI 판정으로, 나머지와 본문을 고친 정정 공시는 표 읽기로 | 테스트 회사 세 곳의 공시 가운데 유형 29가지의 표본 70건을 실제로 받아 모두 저장되고 글자가 뽑힘 |
+| 7-2a | 11/21 | 본문 표 읽기 (틀, 실적·감사·유상증자) | 큐의 표 읽기 단계: 저장한 본문의 표를 자리가 맞는 격자로 펼쳐 정해진 항목을 읽는다(정정 공시는 맨 앞의 정정 표를 빼고 고친 본문을 읽는다). 잠정실적·손익구조 변동(영업이익의 증감), 감사보고서 제출(감사의견, 계속기업, 내부회계), 유상증자(증자방식, 신주 비율)는 코드가 방향과 크기를 정하고 판정 주체 `TABLE`로 적는다(Flyway V17, `disclosure.impact_ratio`). 방향을 정하는 항목을 읽지 못했거나 제3자배정·자회사의 유상증자, 철회가 적힌 정정이면 AI 판정으로, 호재·악재면 AI 요약으로 넘긴다. 크기의 경계값과 고정값은 `app.judgment.impact` 설정 | 테스트 회사 세 곳의 네 유형 46건이 모두 읽힘(코드가 판정 39, 규칙에 따라 AI로 넘김 7). 다른 상장사의 최근 30일치를 더한 813건은 코드가 판정 641, 규칙에 따라 AI로 넘김 171, 읽지 못함 1 |
 
 **MVP (~ 11/22)**
 
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 7-2 | 11/25~26 | 본문 표 읽기 | 본문 표의 정해진 항목을 코드로 읽어 판정 | 표로 판정되는 유형의 공시에 판정이 붙음 |
+| 7-2b | 11/25~26 | 본문 표 읽기 (남은 유형) | 지분 보고 → 크기에 쓸 비율(공급계약, 주식 소각 등)과 보증·대여·차입 → 정정 표 읽기와 묶음 잇기 | 표로 판정되는 유형의 공시에 판정과 크기가 붙음 |
 | 7-3 | 11/27~28 | AI 판정과 요약 | AI 판정·요약 → 근거 문장·금액·날짜 원문 대조 → 하루 한도 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
 | 8 | 11/20 | 판단 계산 | 회사 단위 판단 점수 계산(공시 건별 판정과 재무 실적 반영), 단계 이름 변환, 저장 | 테스트 회사의 판단이 계산되고 근거를 설명할 수 있음 |
 | 9·10 | 11/21~22 | 조회와 종목 화면 | 종목 요약·타임라인 조회(QueryDSL), Thymeleaf 종목 화면(결론, 판단 근거, 실적, 타임라인, 고지 문구), 검색창에서 종목 화면으로 이동. 판단 추이와 예정 일정은 자리만 | 테스트 회사의 종목 화면이 실제 데이터로 뜸 |

@@ -26,7 +26,15 @@ public class DisclosureBodyReader {
 	 * @throws BodyFormatException 저장한 파일을 풀거나 읽지 못했을 때
 	 */
 	public Optional<List<BodyDocument>> read(long disclosureId) {
-		return bodies.findContent(disclosureId)
-			.map(zip -> BodyArchive.unzip(zip).stream().map(BodyTextExtractor::extract).toList());
+		return bodies.findContent(disclosureId).map(DisclosureBodyReader::documents);
+	}
+
+	/**
+	 * 본문 원문(출처가 준 압축 파일 그대로)을 문서들로 읽는다.
+	 *
+	 * @throws BodyFormatException 파일을 풀거나 읽지 못했을 때
+	 */
+	public static List<BodyDocument> documents(byte[] zip) {
+		return BodyArchive.unzip(zip).stream().map(BodyTextExtractor::extract).toList();
 	}
 }
