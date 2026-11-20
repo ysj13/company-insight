@@ -261,7 +261,7 @@ class DisclosureClassifierTest {
 	/**
 	 * 꼬리에 든 낱말로 거는 줄(FORM_WORD). "실제"는 실제 공시의 제목이고 "가정"은 아직 나오지 않은 꼬리를 가정한 제목이다.
 	 * 방향이 비어 있으면 본문을 읽는 줄이다. 마지막 칸은 걸려야 하는 줄의 대응 방식이다.
-	 * 실제 제목 가운데 낱말 줄에 걸리는 것은 하나뿐이다(나머지 실제 제목은 버전 2에서 제목 전체 줄로 적었다).
+	 * 이행현황·재공시·항소의 실제 제목은 대부분 버전 2에서 제목 전체 줄로 적어 그 줄에 먼저 걸린다. 항고의 실제 제목 일곱은 낱말 줄에 걸린다.
 	 */
 	@ParameterizedTest(name = "{0} → {1} {2} ({3}, {4})")
 	@CsvSource(delimiter = '|', textBlock = """
@@ -280,6 +280,15 @@ class DisclosureClassifierTest {
 		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(상고))                     | I1 |          | 가정 | FORM_WORD
 		소송등의제기ㆍ신청(자율공시:일정금액미만의청구)(물품대금청구(항소))            | I1 |          | 가정 | FORM_WORD
 		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(항소취하))                 | I1 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(임시주주총회소집허가신청(항고))             | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회소집허가(재항고))                   | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(임시주주총회개최금지가처분-즉시항고)        | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(임시주주총회소집허가-항고)                  | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(장부등열람허용가처분(항고))                 | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회개최금지가처분(항고))               | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(직무집행정지등가처분신청서-즉시항고)        | G5 |          | 실제 | FORM_WORD
+		소송등의제기ㆍ신청(일정금액이상의청구)(채권가압류결정에대한즉시항고)           | I1 |          | 가정 | FORM_WORD
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주명부열람및등사가처분신청)               | G5 | NEGATIVE | 실제 | FORM
 		소송등의제기ㆍ신청(일정금액이상의청구)                                         | I1 | NEGATIVE | 실제 | FORM
 		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의취소의소)                       | G5 | NEGATIVE | 가정 | FORM
 		""")
@@ -404,14 +413,14 @@ class DisclosureClassifierTest {
 
 	@Test
 	void 대응표의_줄_수와_버전이_마이그레이션과_같다() {
-		assertThat(classifier.version()).isEqualTo(3);
+		assertThat(classifier.version()).isEqualTo(4);
 		assertThat(jdbc.sql("SELECT count(*) FROM disclosure_type").query(Integer.class).single()).isEqualTo(75);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'EXACT'").query(Integer.class).single())
 			.isEqualTo(284);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM'").query(Integer.class).single())
 			.isEqualTo(332);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM_WORD'").query(Integer.class).single())
-			.isEqualTo(8);
+			.isEqualTo(11);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_attribute").query(Integer.class).single()).isEqualTo(6);
 		// 관리종목·상장폐지 관련 안내는 줄마다 방향이 있거나 본문을 읽는 줄이다. 방향 없이 제목 판정으로 남은 줄이 없다
 		assertThat(jdbc.sql("""
