@@ -31,7 +31,7 @@ Gradle 모듈 하나, 기능별 패키지로 나눈다.
 com.companyinsight
 ├── company       기업 목록(고유번호), 검색
 ├── disclosure    공시 수집, 규칙 분류
-├── analysis      작업 큐, 워커, LLM 요약, 원문 대조 검증
+├── analysis      작업 큐, 워커, 본문 받기, 표 읽기, AI 판정·요약, 원문 대조 검증
 ├── score         호재/악재 점수, 일별 추이
 ├── financial     재무 수집
 ├── backfill      Spring Batch 백필
@@ -64,12 +64,13 @@ com.companyinsight
 | `title_attribute` | source, token(제목에서 떼는 속성 꼬리), attribute |
 | `title_rule_version` | version(PK), applied_at, note. 대응표를 고치는 마이그레이션마다 한 줄 |
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
-| `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
+| `analysis_job` | id, disclosure_id, stage(FETCH_BODY/READ_TABLE/AI_JUDGE/AI_SUMMARY. disclosure_id와 묶어 **unique**), status(PENDING/RUNNING/DONE/FAILED), outcome(ENDED/PASSED/NO_BODY/HELD), priority, run_after, attempts, deferrals, enqueue_reason, locked_at, last_run_id. 공시 한 건의 한 단계가 한 행 |
+| `analysis_run` | job_id, disclosure_id, stage, started_at, finished_at, outcome, enqueue_reason, pass_reason, error_kind, error_code, error, result(JSONB), setting_version_id, input_tokens, output_tokens. 실행 한 번이 한 행이고 쌓기만 한다 |
 | `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
 | `financial` | company_id, source, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL. 넷을 묶어 **unique**), payload(출처 응답 전체, JSONB), fetched_at. 보고서 한 건의 응답 하나가 한 행 |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `disclosure_type`, `title_rule`, `title_attribute`, `title_rule_version`, `collection_run`, `financial`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `disclosure_type`, `title_rule`, `title_attribute`, `title_rule_version`, `collection_run`, `financial`, `analysis_job`, `analysis_run`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -160,13 +161,15 @@ com.companyinsight
 | 5-4 | 11/17 | 재무 응답 그대로 저장 | `financial`을 주요계정 응답을 보고서 단위로 그대로 저장하는 테이블로 변경(Flyway V9), 계정의 금액은 조회할 때 응답에서 읽음 | 테스트 회사 세 곳의 응답 33건이 저장되고 실적 조회 결과가 이전과 같음 |
 | 5-5 | 11/20 | 회사 지정 공시 수집 | 종목코드로 지정한 회사의 공시 목록을 기간(기본 12개월)으로 받기(공시검색에 고유번호 지정), 설정한 종목코드는 앱 시작 때 수집. 본문은 받지 않는다 | 테스트 회사 세 곳의 1년치 공시 목록이 저장되고 다시 받아도 건수가 같음 |
 | 5-6 | 11/20 | 유형 대응표 | 공시 유형 75가지와 "제목 → 유형" 대응표를 DB 테이블로(Flyway V10 구조, V11 처음 값, V12 대응표 버전 2: 꼬리별 방향 고침과 금융감독원 조치 서식 셋, V13 버전 3: 서식 이름 + 꼬리에 든 낱말로 거는 대응 방식, V14 버전 4: 소송 제기의 항고 꼬리), 분류기가 앱이 뜰 때 대응표를 읽어 유형·걸린 규칙·대응표 버전·속성을 저장, 제목으로 방향이 정해지는 공시만 판정(관리종목·상장폐지 관련 안내는 꼬리별로 방향과 경우), 종류 9가지(`kind`)와 자바 규칙 걷어냄, 공시 목록 화면은 유형 묶음으로 거름 | 로컬 DB 15,594건에 적용해 대응표를 만들 때 본 제목이 모두 확정한 유형과 같음 (`PLAN.md` 6절) |
+| 6 | 11/21 | 분석 작업 큐 | 큐 `analysis_job`(공시 한 건의 한 단계가 한 행)과 실행 기록 `analysis_run`(Flyway V15), `SKIP LOCKED`로 꺼내기, 끝 기록·다음 단계 줄 세우기를 한 트랜잭션으로, 실패 3번이면 멈춤, 실패로 세지 않는 미룸, 끝을 보지 못한 실행 되돌리기(10분), 우선순위(새 공시 → 과거분·다시 돌리기), 본문을 받는 유형의 공시를 본문 받기에 줄 세우기, 분석 대상 회사 설정(`app.analysis.target-stock-codes`), 다시 분류해 바뀐 공시는 표 읽기부터 다시. 단계별 처리(본문 받기, 표 읽기, AI)는 다음 단계에서 붙인다 | 워커 여럿이 같은 작업을 집지 않음을 테스트로 확인, 로컬 DB에서 테스트 회사 세 곳의 공시 3,982건이 한 번씩 줄 섬 |
 
 **MVP (~ 11/22)**
 
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 6 | 11/18 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
-| 7 | 11/19 | LLM 분석 | 원문 받아 텍스트 추출 → LLM 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
+| 7-1 | 11/24 | 공시 본문 받기 | 본문 원문 받아 저장, 글자 추출 | 테스트 회사의 공시 본문이 저장됨 |
+| 7-2 | 11/25~26 | 본문 표 읽기 | 본문 표의 정해진 항목을 코드로 읽어 판정 | 표로 판정되는 유형의 공시에 판정이 붙음 |
+| 7-3 | 11/27~28 | AI 판정과 요약 | AI 판정·요약 → 근거 문장·금액·날짜 원문 대조 → 하루 한도 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
 | 8 | 11/20 | 판단 계산 | 회사 단위 판단 점수 계산(공시 건별 판정과 재무 실적 반영), 단계 이름 변환, 저장 | 테스트 회사의 판단이 계산되고 근거를 설명할 수 있음 |
 | 9·10 | 11/21~22 | 조회와 종목 화면 | 종목 요약·타임라인 조회(QueryDSL), Thymeleaf 종목 화면(결론, 판단 근거, 실적, 타임라인, 고지 문구), 검색창에서 종목 화면으로 이동. 판단 추이와 예정 일정은 자리만 | 테스트 회사의 종목 화면이 실제 데이터로 뜸 |
 
