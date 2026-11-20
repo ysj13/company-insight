@@ -14,14 +14,14 @@ import java.time.LocalDate;
  * @param companyName 회사명
  * @param stockCode   종목코드
  * @param reportName  보고서명 (공시 제목)
- * @param kind        공시 종류
+ * @param typeName    공시 유형의 이름. 아직 분류하지 않은 공시는 null
  * @param tone        판정. 아직 판정하지 않았으면 null
  * @param impact      영향도. 호재·악재일 때만 값이 있다
  * @param correction  이미 낸 공시의 정정·첨부 추가인지
  * @param withdrawn   철회된 공시인지
  */
 public record DisclosureSummary(Source source, String sourceKey, LocalDate receiptDate, String companyName,
-		String stockCode, String reportName, DisclosureKind kind, Tone tone, Integer impact, boolean correction, boolean withdrawn) {
+		String stockCode, String reportName, String typeName, Tone tone, Integer impact, boolean correction, boolean withdrawn) {
 
 	/** 영향도가 이 값 이상이면 "큼"으로 보여준다. */
 	private static final int HIGH_IMPACT = 3;

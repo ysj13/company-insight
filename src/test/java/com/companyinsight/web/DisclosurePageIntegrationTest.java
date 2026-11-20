@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.companyinsight.TestcontainersConfiguration;
 import com.companyinsight.common.dart.DartClient;
-import com.companyinsight.disclosure.DisclosureKind;
+import com.companyinsight.disclosure.DisclosureBundle;
 import com.companyinsight.disclosure.DisclosurePage;
 import com.companyinsight.disclosure.DisclosureQueryService;
 import com.companyinsight.disclosure.DisclosureSearchCondition;
@@ -59,11 +59,11 @@ class DisclosurePageIntegrationTest {
 		company("00164779", "000660", "SK하이닉스");
 		company("00999001", "123456", "100%_테스트&<b>");
 
-		disclosure("20261116000301", "00126380", "주요사항보고서(자기주식취득결정)", "2026-11-16", "MAJOR", "POSITIVE", 2, false, false);
-		disclosure("20261116000205", "00164779", "연결재무제표기준영업(잠정)실적(공정공시)", "2026-11-16", "EARNINGS", null, null, false, false);
-		disclosure("20261113000410", "00164779", "[기재정정]분기보고서 (2026.09)", "2026-11-13", "PERIODIC", "NEUTRAL", null, true, false);
-		disclosure("20261113000122", "00999001", "투자유의안내 (관리종목지정 우려 예고)", "2026-11-13", "MARKET", "NEGATIVE", 2, false, false);
-		disclosure("20261112000077", "00126380", "임원ㆍ주요주주특정증권등거래계획보고서", "2026-11-12", "OWNERSHIP", "NEUTRAL", null, false, true);
+		disclosure("20261116000301", "00126380", "주요사항보고서(자기주식취득결정)", "2026-11-16", "E2", "POSITIVE", 2, false, false);
+		disclosure("20261116000205", "00164779", "연결재무제표기준영업(잠정)실적(공정공시)", "2026-11-16", "B1", null, null, false, false);
+		disclosure("20261113000410", "00164779", "[기재정정]분기보고서 (2026.09)", "2026-11-13", "A1", "NEUTRAL", null, true, false);
+		disclosure("20261113000122", "00999001", "투자유의안내 (관리종목지정 우려 예고)", "2026-11-13", "J1", "NEGATIVE", 2, false, false);
+		disclosure("20261112000077", "00126380", "임원ㆍ주요주주특정증권등거래계획보고서", "2026-11-12", "A3", "NEUTRAL", null, false, true);
 	}
 
 	@Test
@@ -93,14 +93,14 @@ class DisclosurePageIntegrationTest {
 	}
 
 	@Test
-	void 종류와_회사로_거른다() {
-		assertThat(items(service.search(new DisclosureSearchCondition(null, DisclosureKind.MARKET, null), 1)))
+	void 유형_묶음과_회사로_거른다() {
+		assertThat(items(service.search(new DisclosureSearchCondition(null, DisclosureBundle.J, null), 1)))
 			.extracting(DisclosureSummary::sourceKey).containsExactly("20261113000122");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, " sk하이 "), 1)))
 			.extracting(DisclosureSummary::companyName).containsExactly("SK하이닉스", "SK하이닉스");
 		assertThat(items(service.search(new DisclosureSearchCondition(null, null, "0059"), 1)))
 			.extracting(DisclosureSummary::stockCode).containsExactly("005930", "005930");
-		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.POSITIVE, DisclosureKind.MAJOR, "삼성"), 1)))
+		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.POSITIVE, DisclosureBundle.E, "삼성"), 1)))
 			.extracting(DisclosureSummary::sourceKey).containsExactly("20261116000301");
 	}
 
@@ -116,7 +116,7 @@ class DisclosurePageIntegrationTest {
 	@Test
 	void 한_페이지는_50건이고_범위를_벗어난_페이지는_끝_페이지로_맞춘다() {
 		for (int i = 0; i < 100; i++) {
-			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "IR", "NEUTRAL",
+			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "A6", "NEUTRAL",
 				null, false, false);
 		}
 
@@ -149,11 +149,11 @@ class DisclosurePageIntegrationTest {
 			.andExpect(content().string(not(containsString("class=\"pager\""))));
 	}
 
-	// 아래 표시 검증은 종류로 걸러 한 줄만 나오게 한 뒤 마크업으로 확인한다. 도움말에도 같은 낱말이 있어 글자만 찾으면 항상 통과한다.
+	// 아래 표시 검증은 유형 묶음(과 회사)으로 걸러 한 줄만 나오게 한 뒤 마크업으로 확인한다. 도움말에도 같은 낱말이 있어 글자만 찾으면 항상 통과한다.
 
 	@Test
 	void 호재_공시는_호재_배지와_영향을_보여주고_후속_철회_표시는_없다() throws Exception {
-		mvc.perform(get("/disclosures").param("kind", "MAJOR"))
+		mvc.perform(get("/disclosures").param("bundle", "E"))
 			.andExpect(content().string(containsString("class=\"pill tone-positive\"")))
 			.andExpect(content().string(containsString("<span class=\"impact\">영향 보통</span>")))
 			.andExpect(content().string(not(containsString("<span class=\"tag\">"))))
@@ -162,14 +162,14 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 판정하지_않은_공시는_미판정_배지만_있고_영향은_없다() throws Exception {
-		mvc.perform(get("/disclosures").param("kind", "EARNINGS"))
+		mvc.perform(get("/disclosures").param("bundle", "B"))
 			.andExpect(content().string(containsString("class=\"pill tone-undecided\"")))
 			.andExpect(content().string(not(containsString("class=\"impact\""))));
 	}
 
 	@Test
 	void 머리말이_붙은_공시에는_후속_공시_표시가_붙는다() throws Exception {
-		mvc.perform(get("/disclosures").param("kind", "PERIODIC"))
+		mvc.perform(get("/disclosures").param("bundle", "A").param("q", "SK하이닉스"))
 			.andExpect(content().string(containsString("[기재정정]분기보고서 (2026.09)")))
 			.andExpect(content().string(containsString("<span class=\"tag\">후속 공시</span>")))
 			.andExpect(content().string(not(containsString("<span class=\"tag\">철회</span>"))));
@@ -177,7 +177,7 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 철회된_공시는_철회_표시와_함께_제목에_취소선을_긋는다() throws Exception {
-		mvc.perform(get("/disclosures").param("kind", "OWNERSHIP"))
+		mvc.perform(get("/disclosures").param("bundle", "A").param("q", "삼성전자"))
 			.andExpect(content().string(containsString("<span class=\"tag\">철회</span>")))
 			.andExpect(content().string(containsString("class=\"title withdrawn\"")))
 			.andExpect(content().string(containsString("class=\"pill tone-neutral\"")))
@@ -187,20 +187,20 @@ class DisclosurePageIntegrationTest {
 	@Test
 	void 다음_페이지_링크는_조건을_유지한다() throws Exception {
 		for (int i = 0; i < 60; i++) {
-			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "IR", "NEUTRAL",
+			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "A6", "NEUTRAL",
 				null, false, false);
 		}
 
-		mvc.perform(get("/disclosures").param("kind", "IR").param("q", "삼성"))
+		mvc.perform(get("/disclosures").param("bundle", "A").param("q", "삼성"))
 			.andExpect(content().string(containsString("class=\"pager\"")))
-			.andExpect(content().string(containsString("/disclosures?kind=IR&amp;q=%EC%82%BC%EC%84%B1&amp;page=2")));
+			.andExpect(content().string(containsString("/disclosures?bundle=A&amp;q=%EC%82%BC%EC%84%B1&amp;page=2")));
 	}
 
 	@Test
 	void 공시_제목과_검색어의_HTML_문자도_바꿔서_보여준다() throws Exception {
-		disclosure("20261116000999", "00126380", "<script>alert(1)</script>", "2026-11-16", "ETC", null, null, false, false);
+		disclosure("20261116000999", "00126380", "<script>alert(1)</script>", "2026-11-16", "Z9", null, null, false, false);
 
-		mvc.perform(get("/disclosures").param("kind", "ETC"))
+		mvc.perform(get("/disclosures").param("bundle", "Z"))
 			.andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
 			.andExpect(content().string(not(containsString("<script>"))));
 		mvc.perform(get("/disclosures").param("q", "\"><i>"))
@@ -220,7 +220,7 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 회사명의_HTML_문자는_그대로_실행되지_않게_바꿔서_보여준다() throws Exception {
-		mvc.perform(get("/disclosures").param("kind", "MARKET"))
+		mvc.perform(get("/disclosures").param("bundle", "J"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("100%_테스트&amp;&lt;b&gt;")))
 			.andExpect(content().string(not(containsString("테스트&<b>"))));
@@ -228,10 +228,10 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 조건_링크는_다른_조건을_유지하고_검색어를_인코딩한다() throws Exception {
-		mvc.perform(get("/disclosures").param("q", "테스트&").param("kind", "MARKET").param("tone", "NEGATIVE"))
+		mvc.perform(get("/disclosures").param("q", "테스트&").param("bundle", "J").param("tone", "NEGATIVE"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("투자유의안내 (관리종목지정 우려 예고)")))
-			.andExpect(content().string(containsString("/disclosures?tone=POSITIVE&amp;kind=MARKET&amp;q=%ED%85%8C%EC%8A%A4%ED%8A%B8%26")));
+			.andExpect(content().string(containsString("/disclosures?tone=POSITIVE&amp;bundle=J&amp;q=%ED%85%8C%EC%8A%A4%ED%8A%B8%26")));
 	}
 
 	@Test
@@ -243,7 +243,7 @@ class DisclosurePageIntegrationTest {
 
 	@Test
 	void 빈_조건은_전체로_보고_모르는_판정_값과_숫자가_아닌_페이지는_400() throws Exception {
-		mvc.perform(get("/disclosures").param("tone", "").param("kind", "").param("q", ""))
+		mvc.perform(get("/disclosures").param("tone", "").param("bundle", "").param("q", ""))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("임원ㆍ주요주주특정증권등거래계획보고서")));
 		mvc.perform(get("/disclosures").param("tone", "GOOD")).andExpect(status().isBadRequest());
@@ -253,7 +253,7 @@ class DisclosurePageIntegrationTest {
 	@Test
 	void 회사를_고르면_이름이_비슷한_회사는_빼고_그_회사_공시만_보여준다() {
 		company("00126371", "009150", "삼성전기");
-		disclosure("20261116000555", "00126371", "기업설명회(IR)개최(안내공시)", "2026-11-16", "IR", "NEUTRAL", null, false, false);
+		disclosure("20261116000555", "00126371", "기업설명회(IR)개최(안내공시)", "2026-11-16", "A6", "NEUTRAL", null, false, false);
 
 		DisclosurePage byName = service.search(new DisclosureSearchCondition(null, null, "삼성전"), 1);
 		DisclosurePage picked = service.search(new DisclosureSearchCondition(null, null, null, samsung), 1);
@@ -266,7 +266,7 @@ class DisclosurePageIntegrationTest {
 		assertThat(picked.toneCounts()).containsEntry(ToneFilter.POSITIVE, 1L).containsEntry(ToneFilter.NEUTRAL, 1L)
 			.containsEntry(ToneFilter.NEGATIVE, 0L).containsEntry(ToneFilter.UNDECIDED, 0L);
 		assertThat(picked.company().name()).isEqualTo("삼성전자");
-		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, DisclosureKind.OWNERSHIP, null, samsung), 1)))
+		assertThat(items(service.search(new DisclosureSearchCondition(ToneFilter.NEUTRAL, DisclosureBundle.A, null, samsung), 1)))
 			.extracting(DisclosureSummary::sourceKey).containsExactly("20261112000077");
 	}
 
@@ -274,17 +274,17 @@ class DisclosurePageIntegrationTest {
 	void 고른_회사를_화면에_보여주고_링크는_고른_회사를_유지한다() throws Exception {
 		jdbc.sql("UPDATE company SET market = 'Y' WHERE source_key = '00126380'").update();
 
-		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)).param("kind", "MAJOR"))
+		mvc.perform(get("/disclosures").param("company", String.valueOf(samsung)).param("bundle", "E"))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("<b>삼성전자</b>")))
 			.andExpect(content().string(containsString("<span class=\"market\">KOSPI</span>")))
 			.andExpect(content().string(containsString("의 공시만 보고 있습니다.")))
 			.andExpect(content().string(containsString("name=\"company\" value=\"" + samsung + "\"")))
-			.andExpect(content().string(containsString("href=\"/disclosures?tone=POSITIVE&amp;kind=MAJOR&amp;company=" + samsung + "\"")))
+			.andExpect(content().string(containsString("href=\"/disclosures?tone=POSITIVE&amp;bundle=E&amp;company=" + samsung + "\"")))
 			// 출처의 번호(DART 고유번호)는 화면 주소에 쓰지 않는다
 			.andExpect(content().string(not(containsString("00126380"))))
-			// 모든 회사 보기: 종류는 유지하고 회사만 푼다
-			.andExpect(content().string(containsString("href=\"/disclosures?kind=MAJOR\"")));
+			// 모든 회사 보기: 유형 묶음은 유지하고 회사만 푼다
+			.andExpect(content().string(containsString("href=\"/disclosures?bundle=E\"")));
 	}
 
 	@Test
@@ -328,7 +328,7 @@ class DisclosurePageIntegrationTest {
 	@Test
 	void 회사를_고른_채로_페이지를_넘겨도_고른_회사를_유지한다() throws Exception {
 		for (int i = 0; i < 60; i++) {
-			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "IR", "NEUTRAL",
+			disclosure("202611100%05d".formatted(i), "00126380", "기업설명회(IR)개최(안내공시)", "2026-11-10", "A6", "NEUTRAL",
 				null, false, false);
 		}
 
@@ -372,15 +372,15 @@ class DisclosurePageIntegrationTest {
 			.param("c", corpCode).param("s", stockCode).param("n", name).query(Long.class).single();
 	}
 
-	private void disclosure(String rceptNo, String corpCode, String name, String date, String kind, String tone,
+	private void disclosure(String rceptNo, String corpCode, String name, String date, String typeCode, String tone,
 			Integer impact, boolean correction, boolean withdrawn) {
 		jdbc.sql("""
-			INSERT INTO disclosure (source, source_key, company_id, report_name, rcept_date, kind, tone, impact,
-			                        classified_by, rule_version, is_correction, is_withdrawn)
+			INSERT INTO disclosure (source, source_key, company_id, report_name, rcept_date, type_code, tone, impact,
+			                        classified_by, title_rule_version, is_correction, is_withdrawn)
 			VALUES ('DART', :no, (SELECT id FROM company WHERE source = 'DART' AND source_key = :corp), :name,
-			        CAST(:date AS date), :kind, :tone, :impact, :by, 1, :correction, :withdrawn)
+			        CAST(:date AS date), :type, :tone, :impact, :by, 1, :correction, :withdrawn)
 			""")
-			.param("no", rceptNo).param("corp", corpCode).param("name", name).param("date", date).param("kind", kind)
+			.param("no", rceptNo).param("corp", corpCode).param("name", name).param("date", date).param("type", typeCode)
 			.param("tone", tone, java.sql.Types.VARCHAR).param("impact", impact, java.sql.Types.SMALLINT)
 			.param("by", tone == null ? null : "RULE", java.sql.Types.VARCHAR)
 			.param("correction", correction).param("withdrawn", withdrawn).update();

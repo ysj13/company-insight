@@ -8,10 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 이미 저장한 공시를 지금의 제목 규칙으로 다시 분류한다.
+ * 이미 저장한 공시를 지금의 대응표로 다시 분류한다.
  *
- * <p>새 공시는 저장할 때 분류된다. 이 서비스는 규칙이 생기기 전에 저장한 공시와,
- * 규칙을 바꾼 뒤({@link DisclosureClassifier#RULE_VERSION}을 올린 뒤) 옛 규칙으로 남아 있는 공시를 맞춘다.
+ * <p>새 공시는 저장할 때 분류된다. 이 서비스는 대응표가 생기기 전에 저장한 공시와,
+ * 대응표를 고친 뒤(마이그레이션이 버전을 올린 뒤) 옛 버전으로 남아 있는 공시를 맞춘다.
  */
 @Service
 public class DisclosureClassificationService {
@@ -30,30 +30,38 @@ public class DisclosureClassificationService {
 	}
 
 	/**
-	 * 옛 규칙 버전으로 남아 있는 공시를 모두 다시 분류한다. LLM이 판정한 공시는 그대로 둔다.
+	 * 옛 대응표 버전으로 남아 있는 공시를 모두 다시 분류한다. LLM이 판정한 공시는 그대로 둔다.
 	 * 중간에 멈춰도 다시 실행하면 남은 것부터 이어서 한다.
+	 *
+	 * <p>제목만 보므로 전부 다시 해도 가볍다. 다만 유형·방향·경우가 실제로 바뀐 공시만 뒤 단계(본문, 판정, 요약)를
+	 * 다시 지나야 하므로 그 건수를 따로 센다.
 	 *
 	 * @return 다시 분류한 건수
 	 */
 	public int reclassifyOutdated() {
+		int version = classifier.version();
 		int total = 0;
+		int changed = 0;
 		long afterId = 0;
 		while (true) {
-			List<DisclosureRepository.Outdated> rows = repository.findOutdated(DisclosureClassifier.RULE_VERSION,
-				afterId, BATCH_SIZE);
+			List<DisclosureRepository.Outdated> rows = repository.findOutdated(version, afterId, BATCH_SIZE);
 			if (rows.isEmpty()) {
 				break;
 			}
 			Map<Long, Classification> byId = new LinkedHashMap<>();
 			for (DisclosureRepository.Outdated row : rows) {
-				byId.put(row.id(), classifier.classify(row.reportName(), row.remark()));
+				Classification c = classifier.classify(row.reportName(), row.remark());
+				byId.put(row.id(), c);
+				if (row.differsFrom(c)) {
+					changed++;
+				}
 			}
-			repository.updateClassifications(byId, DisclosureClassifier.RULE_VERSION);
+			repository.updateClassifications(byId, version);
 			total += rows.size();
 			afterId = rows.getLast().id();
 		}
 		if (total > 0) {
-			log.info("공시 재분류: 규칙 버전 {}로 {}건", DisclosureClassifier.RULE_VERSION, total);
+			log.info("공시 재분류: 대응표 버전 {}로 {}건, 그중 유형·방향·경우가 바뀐 공시 {}건", version, total, changed);
 		}
 		return total;
 	}

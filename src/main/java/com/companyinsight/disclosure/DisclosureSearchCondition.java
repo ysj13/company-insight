@@ -10,11 +10,11 @@ import java.util.regex.Pattern;
  * 둘이 함께 오면 검색어가 우선하고 {@code companyId}는 비운다.
  *
  * @param tone      판정. null이면 전체
- * @param kind      공시 종류. null이면 전체
+ * @param bundle    공시 유형의 묶음. null이면 전체
  * @param keyword   회사명 일부 또는 종목코드 앞부분. null이면 전체
  * @param companyId 고른 회사의 ID. null이면 전체
  */
-public record DisclosureSearchCondition(ToneFilter tone, DisclosureKind kind, String keyword, Long companyId) {
+public record DisclosureSearchCondition(ToneFilter tone, DisclosureBundle bundle, String keyword, Long companyId) {
 
 	private static final int KEYWORD_MAX = 50;
 
@@ -59,7 +59,7 @@ public record DisclosureSearchCondition(ToneFilter tone, DisclosureKind kind, St
 	}
 
 	/** 회사를 고르지 않은 조건. */
-	public DisclosureSearchCondition(ToneFilter tone, DisclosureKind kind, String keyword) {
-		this(tone, kind, keyword, null);
+	public DisclosureSearchCondition(ToneFilter tone, DisclosureBundle bundle, String keyword) {
+		this(tone, bundle, keyword, null);
 	}
 }

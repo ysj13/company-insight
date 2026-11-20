@@ -12,7 +12,7 @@ import java.util.Map;
 import org.springframework.stereotype.Repository;
 
 /**
- * 공시 목록 조회. 판정·종류·회사 조건을 조합하므로 QueryDSL로 한다.
+ * 공시 목록 조회. 판정·유형 묶음·회사 조건을 조합하므로 QueryDSL로 한다.
  * 저장은 {@link DisclosureRepository}가 맡는다.
  */
 @Repository
@@ -20,6 +20,7 @@ public class DisclosureQueryRepository {
 
 	private static final QDisclosure DISCLOSURE = QDisclosure.disclosure;
 	private static final QCompany COMPANY = QCompany.company;
+	private static final QDisclosureType TYPE = QDisclosureType.disclosureType;
 
 	private final JPAQueryFactory query;
 
@@ -38,11 +39,13 @@ public class DisclosureQueryRepository {
 	public List<DisclosureSummary> find(DisclosureSearchCondition condition, long offset, int limit) {
 		return query
 			.select(Projections.constructor(DisclosureSummary.class, DISCLOSURE.source, DISCLOSURE.sourceKey, DISCLOSURE.receiptDate,
-				COMPANY.name, COMPANY.stockCode, DISCLOSURE.reportName, DISCLOSURE.kind, DISCLOSURE.tone,
+				COMPANY.name, COMPANY.stockCode, DISCLOSURE.reportName, TYPE.name, DISCLOSURE.tone,
 				DISCLOSURE.impact, DISCLOSURE.correction, DISCLOSURE.withdrawn))
 			.from(DISCLOSURE)
 			.join(DISCLOSURE.company, COMPANY)
-			.where(kindAndKeyword(condition).and(toneIs(condition.tone())))
+			// 아직 분류하지 않은 공시(유형 없음)도 목록에 나와야 하므로 왼쪽 조인이다
+			.leftJoin(DISCLOSURE.type, TYPE)
+			.where(bundleAndKeyword(condition).and(toneIs(condition.tone())))
 			.orderBy(DISCLOSURE.receiptDate.desc(), DISCLOSURE.sourceKey.desc(), DISCLOSURE.id.desc())
 			.offset(offset)
 			.limit(limit)
@@ -50,7 +53,7 @@ public class DisclosureQueryRepository {
 	}
 
 	/**
-	 * 판정별 건수. 종류와 회사 조건만 적용하고 판정 조건은 적용하지 않는다.
+	 * 판정별 건수. 유형 묶음과 회사 조건만 적용하고 판정 조건은 적용하지 않는다.
 	 * 판정을 고르기 전에 호재·악재·중립·미판정이 각각 몇 건인지 보여주기 위해서다.
 	 *
 	 * @return 네 가지 판정 모두에 대한 건수. 없는 판정은 0
@@ -61,7 +64,10 @@ public class DisclosureQueryRepository {
 			// 회사 조건이 없으면 조인하지 않는다. 조건 없는 첫 화면이 가장 자주 열리고 전체 행을 센다
 			counting.join(DISCLOSURE.company, COMPANY);
 		}
-		List<Tuple> rows = counting.where(kindAndKeyword(condition)).groupBy(DISCLOSURE.tone).fetch();
+		if (condition.bundle() != null) {
+			counting.join(DISCLOSURE.type, TYPE);
+		}
+		List<Tuple> rows = counting.where(bundleAndKeyword(condition)).groupBy(DISCLOSURE.tone).fetch();
 		Map<ToneFilter, Long> counts = new EnumMap<>(ToneFilter.class);
 		for (ToneFilter filter : ToneFilter.values()) {
 			counts.put(filter, 0L);
@@ -72,10 +78,10 @@ public class DisclosureQueryRepository {
 		return counts;
 	}
 
-	private static BooleanBuilder kindAndKeyword(DisclosureSearchCondition condition) {
+	private static BooleanBuilder bundleAndKeyword(DisclosureSearchCondition condition) {
 		BooleanBuilder where = new BooleanBuilder();
-		if (condition.kind() != null) {
-			where.and(DISCLOSURE.kind.eq(condition.kind()));
+		if (condition.bundle() != null) {
+			where.and(TYPE.bundle.eq(condition.bundle()));
 		}
 		if (condition.companyId() != null) {
 			// 외래키 컬럼(disclosure.company_id)으로 비교하므로 company를 조인하지 않아도 된다
