@@ -98,17 +98,27 @@ public class DisclosureRepository {
 		""";
 
 	private static final String UPDATE_CLASSIFICATION = """
-		UPDATE disclosure
-		   SET type_code = ?, title_rule_id = ?, case_code = ?, normalized_title = ?,
-		       title_attributes = string_to_array(?, ','),
-		       -- LLM이 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다
-		       tone = CASE WHEN classified_by = 'LLM' THEN tone ELSE ? END,
-		       classified_by = CASE WHEN classified_by = 'LLM' THEN classified_by ELSE ? END,
-		       title_rule_version = ?, is_correction = ?, is_withdrawn = ?,
+		UPDATE disclosure d
+		   SET type_code = n.type_code, title_rule_id = n.title_rule_id, case_code = n.case_code,
+		       normalized_title = n.normalized_title, title_attributes = n.title_attributes,
+		       -- 본문으로 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다.
+		       -- LLM의 판정은 유형이 바뀌어도 둔다. 표로 한 판정은 유형이 같을 때만 둔다 (표를 읽는 규칙이 유형마다 다르다)
+		       tone = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code))
+		                   THEN d.tone ELSE n.tone END,
+		       classified_by = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code))
+		                            THEN d.classified_by ELSE n.classified_by END,
+		       title_rule_version = n.title_rule_version, is_correction = n.is_correction, is_withdrawn = n.is_withdrawn,
 		       -- 영향도는 뒤 단계가 매긴다. 방향이 바뀌면 옛 영향도가 맞지 않으므로 비운다
-		       impact = CASE WHEN classified_by = 'LLM' OR tone IS NOT DISTINCT FROM ? THEN impact ELSE NULL END,
+		       impact = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code))
+		                          OR d.tone IS NOT DISTINCT FROM n.tone THEN d.impact ELSE NULL END,
+		       -- 비율은 본문에서 읽은 값이다. 유형이 바뀌면 읽는 비율도 달라지므로 비운다
+		       impact_ratio = CASE WHEN d.type_code IS NOT DISTINCT FROM n.type_code THEN d.impact_ratio ELSE NULL END,
 		       updated_at = now()
-		 WHERE id = ?
+		  FROM (SELECT ?::varchar AS type_code, ?::bigint AS title_rule_id, ?::varchar AS case_code,
+		               ?::varchar AS normalized_title, string_to_array(?, ',')::varchar(20)[] AS title_attributes,
+		               ?::varchar AS tone, ?::varchar AS classified_by, ?::int AS title_rule_version,
+		               ?::boolean AS is_correction, ?::boolean AS is_withdrawn, ?::bigint AS id) n
+		 WHERE d.id = n.id
 		""";
 
 	private final JdbcTemplate jdbc;
@@ -193,7 +203,7 @@ public class DisclosureRepository {
 	}
 
 	/**
-	 * 분류 결과를 저장한다. LLM이 판정한 공시는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
+	 * 분류 결과를 저장한다. 본문으로 판정한 공시(LLM, 유형이 그대로인 표 판정)는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
 	 *
 	 * @param ruleVersion 적용한 대응표 버전
 	 */
@@ -203,8 +213,7 @@ public class DisclosureRepository {
 		jdbc.batchUpdate(UPDATE_CLASSIFICATION, entries, entries.size(), (ps, entry) -> {
 			Classification c = entry.getValue();
 			setClassification(ps, 1, c, ruleVersion);
-			ps.setString(11, c.tone() == null ? null : c.tone().name());
-			ps.setLong(12, entry.getKey());
+			ps.setLong(11, entry.getKey());
 		});
 	}
 
