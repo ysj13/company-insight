@@ -189,6 +189,35 @@ public class DartClient {
 		throw ExternalApiException.of(SOURCE, kind, response.status(), response.message());
 	}
 
+	/**
+	 * 공시 한 건의 본문 원문 파일(zip. 안에 문서 파일이 하나 이상 있다)을 받는다.
+	 *
+	 * @param receiptNo 접수번호 (14자리)
+	 * @return 받은 zip 그대로. 본문이 없는 공시(첨부만 고친 정정 등)면 비어 있음
+	 */
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
+	public Optional<byte[]> downloadDocument(String receiptNo) {
+		byte[] body = get("/api/document.xml", Map.of("rcept_no", receiptNo), byte[].class);
+		if (body == null || body.length == 0) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "공시 원문 응답이 비어 있음");
+		}
+		if (isZip(body)) {
+			return Optional.of(body);
+		}
+		// 오류와 "파일 없음"은 zip이 아니라 상태 코드가 든 짧은 XML로 온다
+		String text = new String(body, 0, Math.min(body.length, 2000), StandardCharsets.UTF_8);
+		String status = firstGroup(text, XML_STATUS, JSON_STATUS, "unknown");
+		if (STATUS_OK.equals(status)) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "not-zip", "공시 원문 응답이 zip이 아님");
+		}
+		ErrorKind kind = classify(status);
+		if (kind == null) {
+			return Optional.empty();
+		}
+		throw ExternalApiException.of(SOURCE, kind, status, firstGroup(text, XML_MESSAGE, JSON_MESSAGE, "zip이 아닌 응답"));
+	}
+
 	private <T> T get(String path, Map<String, Object> params, Class<T> type) {
 		// acquirePermission()은 예외를 던지지 않고, 대기 시간 안에 허가를 못 받으면 false를 돌려준다.
 		if (!rateLimiter.acquirePermission()) {
