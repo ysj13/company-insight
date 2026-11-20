@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.companyinsight.analysis.AnalysisQueueService;
 import com.companyinsight.common.config.ClockConfig;
 import com.companyinsight.common.schedule.ExclusiveJobRunner;
 import java.time.Clock;
@@ -21,6 +22,7 @@ class DisclosureSchedulerTest {
 
 	private final DisclosureCollector collector = mock(DisclosureCollector.class);
 	private final DisclosureClassificationService classification = mock(DisclosureClassificationService.class);
+	private final AnalysisQueueService analysisQueue = mock(AnalysisQueueService.class);
 
 	@Test
 	void 시작할_때_설정한_종목코드의_최근_12개월_공시를_재분류_뒤에_받는다() {
@@ -30,10 +32,28 @@ class DisclosureSchedulerTest {
 
 		scheduler.runStartupJobs();
 
-		InOrder order = inOrder(classification, collector);
+		InOrder order = inOrder(classification, collector, analysisQueue);
 		order.verify(classification).reclassifyOutdated();
 		order.verify(collector).collectByStockCodes(List.of("005930", "000660", "005380"), LocalDate.of(2025, 11, 21),
 			LocalDate.of(2026, 11, 20));
+		// 유형이 붙고 공시가 들어온 뒤에 분석 작업 큐에 줄 세운다
+		order.verify(analysisQueue).enqueueMissing();
+	}
+
+	@Test
+	void 폴링과_보정_수집_뒤에도_분석_작업_큐에_줄_세운다() {
+		DisclosureScheduler scheduler = scheduler("2026-11-20T09:00:00+09:00", true,
+			new DisclosureCollectProperties(List.of(), null));
+
+		scheduler.poll();
+		scheduler.reconcile();
+
+		InOrder order = inOrder(collector, classification, analysisQueue);
+		order.verify(collector).poll();
+		order.verify(analysisQueue).enqueueMissing();
+		order.verify(collector).reconcile(LocalDate.of(2026, 11, 17), LocalDate.of(2026, 11, 19));
+		order.verify(classification).reclassifyOutdated();
+		order.verify(analysisQueue).enqueueMissing();
 	}
 
 	@Test
@@ -96,6 +116,6 @@ class DisclosureSchedulerTest {
 	private DisclosureScheduler scheduler(String now, boolean reclassifyOnStartup, DisclosureCollectProperties properties) {
 		Clock clock = Clock.fixed(java.time.OffsetDateTime.parse(now).toInstant(), ClockConfig.KST);
 		return new DisclosureScheduler(collector, classification, new ExclusiveJobRunner(), clock, 3, reclassifyOnStartup,
-			properties);
+			properties, analysisQueue, true);
 	}
 }
