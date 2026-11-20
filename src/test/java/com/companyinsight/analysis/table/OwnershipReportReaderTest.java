@@ -102,7 +102,9 @@ class OwnershipReportReaderTest {
 		assertThat(reading.verdict()).isEqualTo(Verdict.JUDGED);
 		assertThat(reading.tone()).isEqualTo(Tone.NEUTRAL);
 		assertThat(reading.caseCode()).isEqualTo("NET_ZERO");
-		assertThat(reading.items()).containsEntry("변동 사유", "신규선임(+) 1건, 장내매수(+) 1건");
+		assertThat(reading.items()).containsEntry("변동 사유", "신규선임(+) 1건, 장내매수(+) 1건")
+			// 이 서식은 "보고자 : 이름"이 한 칸에 들어 있다
+			.containsEntry("보고자", "보고자A");
 	}
 
 	@Test
@@ -211,7 +213,9 @@ class OwnershipReportReaderTest {
 		assertThat(reading.items()).containsEntry("직전 보고서 비율(%)", "9.62")
 			.containsEntry("이번 보고서 비율(%)", "10.68")
 			.containsEntry("보유목적", "단순투자")
-			.containsKeys("보고자", "보고구분", "변동 사유");
+			// 세부변동내역은 다섯 줄이다 (머리가 두 줄이어도 한 번만 센다)
+			.containsEntry("변동 사유", "장내매수(+) 5건")
+			.containsKeys("보고자", "보고구분", "매매 순증감 (주, 계산)");
 	}
 
 	@Test
@@ -232,6 +236,43 @@ class OwnershipReportReaderTest {
 		assertThat(reading.caseCode()).isEqualTo("RATIO_MOVED_WITHOUT_TRADE");
 		// 3.67 - 8.75
 		assertThat(reading.ratio()).isEqualByComparingTo("-5.08");
+	}
+
+	@Test
+	void 대량보유_비율은_줄었는데_매매는_순매수면_중립이다() {
+		// 실제 공시(9.62 → 10.68, 장내매수 다섯 줄)의 직전 비율만 11.62로 바꾼다. 비율은 줄고 매매는 순매수다
+		BodyTables tables = TableFixtures.tablesWithAll(TableFixtures.BLOCK_UP, ">9.62<", ">11.62<");
+
+		TableReading reading = reader.read(BLOCK_BRIEF, tables);
+
+		assertThat(reading.tone()).isEqualTo(Tone.NEUTRAL);
+		assertThat(reading.caseCode()).isEqualTo("RATIO_MOVED_WITHOUT_TRADE");
+		// 10.68 - 11.62
+		assertThat(reading.ratio()).isEqualByComparingTo("-0.94");
+	}
+
+	@Test
+	void 대량보유_비율이_줄어도_매도_줄이_없으면_중립이다() {
+		// 실제 공시(5.00 → 4.08)의 세부변동내역에서 매도 사유를 매매가 아닌 사유로 바꾼다
+		BodyTables tables = BodyTables.of(TableFixtures.documentsWithAll(TableFixtures.BLOCK_DOWN, ">장내매도(-)<", ">증여(-)<",
+			">시간외매매(-)<", ">증여(-)<"));
+
+		TableReading reading = reader.read(BLOCK_BRIEF, tables);
+
+		assertThat(reading.tone()).isEqualTo(Tone.NEUTRAL);
+		assertThat(reading.caseCode()).isEqualTo("RATIO_MOVED_WITHOUT_TRADE");
+		assertThat(reading.ratio()).isEqualByComparingTo("-0.92");
+	}
+
+	@Test
+	void 대량보유_세부변동에_방법은_비고_증감만_있는_줄이_있으면_읽지_못한_것으로_답한다() {
+		BodyTables tables = TableFixtures.tablesWith(TableFixtures.BLOCK_UP, ">장내매수(+)<", ">-<", 1);
+
+		TableReading reading = reader.read(BLOCK_BRIEF, tables);
+
+		assertThat(reading.verdict()).isEqualTo(Verdict.UNREADABLE);
+		assertThat(reading.caseCode()).isEqualTo("UNKNOWN_REASON");
+		assertThat(reading.unread()).containsExactly("변동 사유: (사유 없음)");
 	}
 
 	@Test

@@ -223,6 +223,25 @@ final class TableFixtures {
 	}
 
 	/** 운영 설정(application.yml)과 같은 값. */
+	/** 본문에서 한 글자열을 나오는 대로 모두 바꾼 표. */
+	static BodyTables tablesWithAll(String receiptNo, String target, String replacement) {
+		return BodyTables.of(documentsWithAll(receiptNo, target, replacement));
+	}
+
+	/** 본문에서 글자열을 나오는 대로 모두 바꾼 문서. 바꿀 글자열과 바꿔 넣을 글자열을 번갈아 적는다. */
+	static List<BodyDocument> documentsWithAll(String receiptNo, String... pairs) {
+		return documents(receiptNo).stream().map(document -> {
+			String markup = document.markup();
+			for (int i = 0; i < pairs.length; i += 2) {
+				if (!markup.contains(pairs[i])) {
+					throw new IllegalArgumentException("바꿀 글자가 본문에 없습니다: " + pairs[i]);
+				}
+				markup = markup.replace(pairs[i], pairs[i + 1]);
+			}
+			return new BodyDocument(document.fileName(), document.format(), markup, document.text());
+		}).toList();
+	}
+
 	static ImpactProperties impact() {
 		return new ImpactProperties(
 			new ImpactProperties.Earnings(new BigDecimal("10"), new BigDecimal("30"), new BigDecimal("100"), 3, 1),

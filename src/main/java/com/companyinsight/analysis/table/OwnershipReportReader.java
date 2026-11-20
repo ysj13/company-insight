@@ -31,8 +31,9 @@ import org.springframework.stereotype.Component;
  * 정해 둔 낱말이 아닌 사유가 한 줄이라도 있으면 추측하지 않고 읽지 못한 것으로 답한다.
  *
  * <p>대량보유상황보고서는 보유비율이 직전 보고서보다 늘면 호재, 줄면 악재, 그대로면 중립이고 크기는 증감 폭(%p)으로 정한다.
- * 다만 세부변동내역에 매수·매도 줄이 하나도 없으면 비율이 움직였어도 중립이다
- * (발행주식총수가 바뀌었거나 특별관계자가 바뀌어 비율만 달라진 보고서). 직전 보고서가 없는 신규 보고도 중립이다.
+ * 다만 세부변동내역의 매수·매도 줄을 더한 순증감이 비율과 같은 쪽이 아니면 중립이다
+ * (발행주식총수가 바뀌었거나, 특별관계자가 바뀌었거나, 신주·전환으로 비율만 달라진 보고서).
+ * 직전 보고서가 없는 신규 보고도 중립이다.
  *
  * <p>지분 보고의 요약은 AI가 쓰지 않고 여기서 읽은 항목으로 쓴다. 그래서 방향이 정해져도 AI 요약으로 넘기지 않는다.
  *
@@ -47,6 +48,7 @@ class OwnershipReportReader implements TableReader {
 	private static final String TOTAL_SHARES = "발행주식총수";
 	private static final String REASON = "변동 사유";
 	private static final String NET_TRADE = "매매 순증감 (주, 계산)";
+	private static final String NO_REASON = "(사유 없음)";
 	private static final String BEFORE_RATIO = "직전 보고서 비율(%)";
 	private static final String AFTER_RATIO = "이번 보고서 비율(%)";
 
@@ -95,7 +97,7 @@ class OwnershipReportReader implements TableReader {
 		Map<String, String> items = new LinkedHashMap<>();
 		List<String> unread = new ArrayList<>();
 
-		rowValue(tables, "보고자:").ifPresent(value -> put(items, "보고자", value));
+		reporterName(tables).ifPresent(value -> put(items, "보고자", value));
 		for (Found found : tables.allRows(row -> row.size() >= 3 && Cells.label(row.getFirst()).equals("발행회사와의관계"))) {
 			String name = Cells.compact(found.row().get(1));
 			if (name.equals("임원(등기여부)")) {
@@ -219,7 +221,7 @@ class OwnershipReportReader implements TableReader {
 		Map<String, String> items = new LinkedHashMap<>();
 		List<String> unread = new ArrayList<>();
 
-		rowValue(tables, "보고자:").ifPresent(value -> put(items, "보고자", value));
+		reporterName(tables).ifPresent(value -> put(items, "보고자", value));
 		// 첫 장 요약표의 "발행회사명 | … | 발행회사와의 관계 | …" 줄. 뒤에 나오는 특별관계자 표의 머리 줄에는 값이 없다
 		tables.allRows(row -> column(row, "발행회사와의관계") > 0)
 			.stream()
@@ -238,10 +240,15 @@ class OwnershipReportReader implements TableReader {
 		for (Found header : tables.allRows(row -> column(row, "취득/처분방법") > 0)) {
 			List<List<String>> rows = header.table().rows();
 			int method = column(header.row(), "취득/처분방법");
-			for (int i = header.index() + 1; i < rows.size(); i++) {
+			// 머리가 두 줄이라 아랫줄에도 같은 이름이 걸쳐 내려온다. 표마다 첫 머리 줄에서만 센다
+			if (header.index() > 0 && column(rows.get(header.index() - 1), "취득/처분방법") == method) {
+				continue;
+			}
+			int delta = columnIn(rows, header.index(), "증감");
+			for (int i = header.index() + 1; i < rows.size() && delta >= 0; i++) {
 				String cell = TableGrid.at(rows.get(i), method);
 				if (!Cells.compact(cell).equals("취득/처분방법")) {
-					trades.addReason(cell);
+					trades.add(cell, TableGrid.at(rows.get(i), delta));
 				}
 			}
 		}
@@ -256,12 +263,12 @@ class OwnershipReportReader implements TableReader {
 			return TableReading.unreadable("NO_HOLDING_RATIO", items, unread);
 		}
 		Optional<BigDecimal> before = Cells.number(holding.get()[0]);
-		if (before.isEmpty()) {
-			if (!Cells.isBlank(holding.get()[0])) {
-				unread.add(BEFORE_RATIO);
-				return TableReading.unreadable("NO_HOLDING_RATIO", items, unread);
-			}
-			// 직전 보고서가 없다: 처음 5%를 넘겨 내는 신규 보고
+		if (before.isEmpty() && !Cells.isBlank(holding.get()[0])) {
+			unread.add(BEFORE_RATIO);
+			return TableReading.unreadable("NO_HOLDING_RATIO", items, unread);
+		}
+		if (before.isEmpty() || before.get().signum() == 0) {
+			// 직전 보고서가 없다(칸이 비었거나 0): 처음 5%를 넘겨 내는 신규 보고
 			return TableReading.neutral("NEW_REPORT", null, items, unread);
 		}
 		BigDecimal change = after.get().subtract(before.get());
@@ -269,12 +276,21 @@ class OwnershipReportReader implements TableReader {
 		if (size == 0) {
 			return TableReading.neutral("RATIO_UNCHANGED", change, items, unread);
 		}
-		if (trades.tradeRows == 0) {
-			if (!trades.unknown.isEmpty()) {
-				unread.add(REASON + ": " + String.join(", ", trades.unknown));
-				return TableReading.unreadable("UNKNOWN_REASON", items, unread);
-			}
-			// 사고판 줄이 없다: 발행주식총수가 바뀌었거나 특별관계자가 바뀌어 비율만 움직였다
+		// 비율이 움직였다. 사고팔아서 움직인 것인지 세부변동내역으로 확인한다
+		if (!trades.unknown.isEmpty()) {
+			unread.add(REASON + ": " + String.join(", ", trades.unknown));
+			return TableReading.unreadable("UNKNOWN_REASON", items, unread);
+		}
+		if (trades.badAmount) {
+			unread.add("증감");
+			return TableReading.unreadable("TRADE_AMOUNT", items, unread);
+		}
+		if (trades.tradeRows > 0) {
+			items.put(NET_TRADE, trades.net.toPlainString());
+		}
+		// 매수·매도 줄의 순증감이 비율과 같은 쪽이어야 한다. 아니면 사고팔아서 움직인 비율이 아니다
+		// (발행주식총수가 바뀌었거나, 특별관계자가 바뀌었거나, 신주·전환으로 늘었다)
+		if (trades.net.signum() != change.signum()) {
 			return TableReading.neutral("RATIO_MOVED_WITHOUT_TRADE", change, items, unread);
 		}
 		return change.signum() > 0 ? TableReading.judged(Tone.POSITIVE, size, "RATIO_UP", change, items, unread)
@@ -366,6 +382,22 @@ class OwnershipReportReader implements TableReader {
 			.map(found -> found.valueAfter(column(found.row(), compactLabel)));
 	}
 
+	/** 보고자. "보고자 : | 이름"처럼 두 칸에 나뉜 서식과 "보고자 : 이름"처럼 한 칸에 든 서식이 있다. */
+	private static Optional<String> reporterName(BodyTables tables) {
+		Optional<String> split = rowValue(tables, "보고자:").filter(value -> !Cells.isBlank(value));
+		if (split.isPresent()) {
+			return split;
+		}
+		return tables.lastRow(row -> row.stream().anyMatch(OwnershipReportReader::isReporterCell))
+			.map(found -> found.row().stream().filter(OwnershipReportReader::isReporterCell).findFirst().orElseThrow())
+			.map(cell -> Cells.squeeze(cell.substring(cell.indexOf(':') + 1)));
+	}
+
+	private static boolean isReporterCell(String cell) {
+		String compact = Cells.compact(cell);
+		return compact.startsWith("보고자:") && compact.length() > "보고자:".length();
+	}
+
 	/** 줄에서 이 글(공백을 없애고 견준다)이 든 첫 자리. 없으면 -1. */
 	private static int column(List<String> row, String compactLabel) {
 		for (int i = 0; i < row.size(); i++) {
@@ -432,6 +464,12 @@ class OwnershipReportReader implements TableReader {
 				return false;
 			}
 			rows++;
+			if (Cells.isBlank(reasonCell)) {
+				// 증감은 있는데 사유를 적지 않았다 (대량보유 약식 서식은 일부 보고자가 방법 칸을 비울 수 있다)
+				counts.merge(NO_REASON, 1, Integer::sum);
+				unknown.add(NO_REASON);
+				return true;
+			}
 			String word = Cells.compact(reasonCell);
 			counts.merge(word, 1, Integer::sum);
 			Optional<Kind> kind = OwnershipReasons.kindOf(reasonCell);
@@ -453,22 +491,6 @@ class OwnershipReportReader implements TableReader {
 				net = net.add(delta.get());
 			}
 			return true;
-		}
-
-		/** 사유만 센다 (증감은 보지 않는다). 사유가 빈 줄은 세지 않는다. */
-		void addReason(String reasonCell) {
-			if (Cells.isBlank(reasonCell)) {
-				return;
-			}
-			rows++;
-			counts.merge(Cells.compact(reasonCell), 1, Integer::sum);
-			Optional<Kind> kind = OwnershipReasons.kindOf(reasonCell);
-			if (kind.isEmpty()) {
-				unknown.add(Cells.squeeze(reasonCell));
-			}
-			else if (kind.get() != Kind.NOT_TRADE) {
-				tradeRows++;
-			}
 		}
 
 		/** "장내매수(+) 3건, 증여(-) 1건" */
