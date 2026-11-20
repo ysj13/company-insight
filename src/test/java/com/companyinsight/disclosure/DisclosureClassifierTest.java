@@ -175,8 +175,9 @@ class DisclosureClassifierTest {
 		대출원리금연체사실발생(대출원리금연체사유해소)                      | I3
 		파생상품거래손실발생                                                | I4
 		풍문또는보도에대한해명                                              | J7
-		기타시장안내(관리종목지정우려종목)(시가총액200억원미달)             | J1
-		투자유의안내(관리종목지정우려예고)                                  | J1
+		기타시장안내(상장폐지관련)                                          | J1
+		기타시장안내(기업심사위원회개최결과안내)                            | J1
+		투자유의안내(처음보는꼬리)                                          | J1
 		투자판단관련주요경영사항(임상시험결과)                              | K1
 		기타시장안내                                                        | K1
 		사채권자집회소집                                                    | Z9
@@ -188,6 +189,37 @@ class DisclosureClassifierTest {
 		assertThat(c.tone()).isNull();
 		assertThat(c.classifiedBy()).isNull();
 		assertThat(c.decided()).isFalse();
+	}
+
+	/** 관리종목·상장폐지 관련 안내는 꼬리가 방향과 경우를 정한다. 마지막 줄만 가정한 제목이 아니라 모두 실제 제목이다. */
+	@ParameterizedTest(name = "{0} → {1} {2}")
+	@CsvSource(delimiter = '|', textBlock = """
+		기타시장안내(코스닥시장위원회개최결과및상장폐지결정안내)            | NEGATIVE | DELISTING
+		기타시장안내(상장적격성실질심사대상결정)                            | NEGATIVE | DELISTING
+		기타시장안내 (상장적격성 실질심사 사유발생)                         | NEGATIVE | DELISTING
+		투자유의안내(상장폐지기준해당)                                      | NEGATIVE | DELISTING
+		지정자문인선임계약의해지                                            | NEGATIVE | DELISTING
+		투자유의안내                                                        | NEGATIVE | WARNING
+		투자유의안내 (관리종목지정 우려 예고)                               | NEGATIVE | WARNING
+		기타시장안내 (주권 상장폐지 우려 예고)                              | NEGATIVE | WARNING
+		기타시장안내(관리종목지정우려종목)(시가총액200억원미달)             | NEGATIVE | REPEATED_WARNING
+		기타시장안내(주가미달에따른상장폐지우려관련안내)                    | NEGATIVE | REPEATED_WARNING
+		기타시장안내 (관리종목 지정사유 추가우려)                           | NEGATIVE | REPEATED_WARNING
+		기타시장안내(상장적격성실질심사대상제외결정)                        | POSITIVE | RELIEF
+		기타시장안내(기업심사위원회심의·의결결과및상장유지결정안내)         | POSITIVE | RELIEF
+		기타시장안내(개선계획서제출)                                        | NEUTRAL  | PROCEDURE
+		기타시장안내(상장폐지관련이의신청서접수)                            | NEUTRAL  | PROCEDURE
+		기타시장안내(상장적격성실질심사대상결정기한안내)                    | NEUTRAL  | PROCEDURE
+		기타시장안내(개선기간부여)                                          | NEUTRAL  | PROCEDURE
+		기타시장안내(정리매매보류관련)                                      | NEUTRAL  | PROCEDURE
+		상장적격성실질심사관련주요개선계획(자율공시)                        | NEUTRAL  | PROCEDURE
+		""")
+	void 관리종목과_상장폐지_안내는_꼬리로_방향과_경우를_정한다(String reportName, Tone tone, String caseCode) {
+		Classification c = classifier.classify(reportName, null);
+
+		assertThat(c.typeCode()).isEqualTo("J1");
+		assertThat(c.tone()).isEqualTo(tone);
+		assertThat(c.caseCode()).isEqualTo(caseCode);
 	}
 
 	@Test
@@ -287,10 +319,15 @@ class DisclosureClassifierTest {
 		assertThat(classifier.version()).isEqualTo(1);
 		assertThat(jdbc.sql("SELECT count(*) FROM disclosure_type").query(Integer.class).single()).isEqualTo(75);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'EXACT'").query(Integer.class).single())
-			.isEqualTo(251);
+			.isEqualTo(261);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM'").query(Integer.class).single())
 			.isEqualTo(329);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_attribute").query(Integer.class).single()).isEqualTo(6);
+		// 관리종목·상장폐지 관련 안내는 줄마다 방향이 있거나 본문을 읽는 줄이다. 방향 없이 제목 판정으로 남은 줄이 없다
+		assertThat(jdbc.sql("""
+			SELECT count(*) FROM title_rule
+			 WHERE type_code = 'J1' AND tone IS NULL AND judge_method IS DISTINCT FROM 'AI'
+			""").query(Integer.class).single()).isZero();
 		// 본문을 받지 않는 유형은 정기보고서와 증권 발행 서류뿐이다
 		assertThat(jdbc.sql("SELECT code FROM disclosure_type WHERE NOT fetch_body ORDER BY code").query(String.class).list())
 			.containsExactly("A1", "A4");
