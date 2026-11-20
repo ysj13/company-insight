@@ -242,7 +242,7 @@ class DisclosureCollectorIntegrationTest {
 
 		assertThat(classificationOf("20261113000004")).containsEntry("type_code", "E2").containsEntry("tone", "POSITIVE")
 			.containsEntry("impact", null).containsEntry("classified_by", "RULE")
-			.containsEntry("title_rule_version", 2).containsEntry("normalized_title", "주요사항보고서(자기주식취득결정)")
+			.containsEntry("title_rule_version", 3).containsEntry("normalized_title", "주요사항보고서(자기주식취득결정)")
 			.containsEntry("attributes", "")
 			.containsEntry("is_correction", false).containsEntry("is_withdrawn", false);
 		assertThat(classificationOf("20261113000004").get("title_rule_id")).isNotNull();
@@ -350,12 +350,12 @@ class DisclosureCollectorIntegrationTest {
 
 		assertThat(reclassified).isEqualTo(3);
 		assertThat(classificationOf("20261113000003")).containsEntry("type_code", "E1").containsEntry("tone", "POSITIVE")
-			.containsEntry("title_rule_version", 2);
+			.containsEntry("title_rule_version", 3);
 		assertThat(classificationOf("20261113000001")).containsEntry("type_code", "I4").containsEntry("tone", "NEGATIVE")
 			.containsEntry("is_correction", true);
 		// 공급계약 체결은 제목으로 호재지만 LLM이 한 판정(호재, 영향도 3)을 덮어쓰지 않는다. 유형과 버전은 맞춘다
 		assertThat(classificationOf("20261113000002")).containsEntry("classified_by", "LLM").containsEntry("impact", 3)
-			.containsEntry("tone", "POSITIVE").containsEntry("type_code", "C1").containsEntry("title_rule_version", 2);
+			.containsEntry("tone", "POSITIVE").containsEntry("type_code", "C1").containsEntry("title_rule_version", 3);
 		assertThat(classification.reclassifyOutdated()).isZero();
 	}
 

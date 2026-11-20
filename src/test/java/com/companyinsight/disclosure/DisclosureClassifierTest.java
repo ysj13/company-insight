@@ -238,7 +238,8 @@ class DisclosureClassifierTest {
 		교환청구권행사                                                                 | L2 | NEUTRAL
 		교환청구권행사(제1회차)                                                        | L2 | NEUTRAL
 		전환청구권ㆍ신주인수권ㆍ교환청구권행사                                         | L2 | NEGATIVE
-		종류주식의보통주식으로전환(안내공시)                                           | L2 | NEUTRAL
+		종류주식의보통주식으로전환(안내공시)                                           | L2 | NEGATIVE
+		전환주식의전환청구권행사(상환전환우선주)                                       | L2 | NEGATIVE
 		주식소각결정(상환전환우선주)                                                   | E1 | NEUTRAL
 		주식소각결정                                                                   | E1 | POSITIVE
 		조회공시요구(외부감사의견)                                                     | J7 | NEGATIVE
@@ -255,6 +256,53 @@ class DisclosureClassifierTest {
 		assertThat(c.typeCode()).isEqualTo(typeCode);
 		assertThat(c.tone()).isEqualTo(tone);
 		assertThat(c.classifiedBy()).isEqualTo(tone == null ? null : ClassifiedBy.RULE);
+	}
+
+	/**
+	 * 꼬리에 든 낱말로 거는 줄(FORM_WORD). "실제"는 실제 공시의 제목이고 "가정"은 아직 나오지 않은 꼬리를 가정한 제목이다.
+	 * 방향이 비어 있으면 본문을 읽는 줄이다.
+	 */
+	@ParameterizedTest(name = "{0} → {1} {2} ({3})")
+	@CsvSource(delimiter = '|', textBlock = """
+		기업가치제고계획(자율공시)(2025년재공시)                                       | E7 | NEUTRAL  | 실제
+		기업가치제고계획(자율공시)(고배당기업)                                         | E7 | NEUTRAL  | 실제
+		기업가치제고계획(자율공시)(2025금호석유화학기업가치제고계획이행현황)           | E7 | NEUTRAL  | 실제
+		기업가치제고계획(자율공시) (2026년 4분기 이행현황)                             | E7 | NEUTRAL  | 가정
+		기업가치제고계획(자율공시)(2027년이행현황)                                     | E7 | NEUTRAL  | 가정
+		[기재정정]기업가치제고계획(자율공시)((주)가나다 2027년 이행 현황)              | E7 | NEUTRAL  | 가정
+		기업가치제고계획(자율공시)((2025년이행현황및2026년기업가치제고계획))           | E7 | POSITIVE | 실제
+		기업가치제고계획(자율공시)(2027년(주)가나다기업가치제고계획)                   | E7 | POSITIVE | 가정
+		기업가치제고계획예고(안내공시)                                                 | A6 | NEUTRAL  | 실제
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의무효확인등의소(항소))           | G5 |          | 실제
+		소송등의제기ㆍ신청(경영권분쟁소송)(이사해임의소(항소))                         | G5 |          | 가정
+		소송등의제기ㆍ신청(일정금액이상의청구)(손해배상청구(상고))                     | I1 |          | 가정
+		소송등의제기ㆍ신청(자율공시:일정금액미만의청구)(물품대금청구(항소))            | I1 |          | 가정
+		소송등의제기ㆍ신청(일정금액이상의청구)                                         | I1 | NEGATIVE | 실제
+		소송등의제기ㆍ신청(경영권분쟁소송)(주주총회결의취소의소)                       | G5 | NEGATIVE | 가정
+		""")
+	void 꼬리에_든_낱말로_방향을_가른다(String reportName, String typeCode, Tone tone, String kind) {
+		Classification c = classifier.classify(reportName, null);
+
+		assertThat(c.typeCode()).isEqualTo(typeCode);
+		assertThat(c.tone()).isEqualTo(tone);
+	}
+
+	@Test
+	void 낱말_줄은_서식_이름_줄보다_먼저이고_제목_전체_줄보다는_뒤다() {
+		TitleRuleBook.Type z9 = new TitleRuleBook.Type("Z9", JudgeMethod.AI, null);
+		TitleRuleBook.Type e7 = new TitleRuleBook.Type("E7", JudgeMethod.TITLE, Tone.POSITIVE);
+		TitleRuleBook book = new TitleRuleBook(1, List.of(z9, e7), List.of(
+			new TitleRuleBook.Rule(1, TitleRuleBook.MatchKind.FORM, "계획", "E7", null, null, null, null),
+			new TitleRuleBook.Rule(2, TitleRuleBook.MatchKind.FORM_WORD, "계획", "E7", Tone.NEUTRAL, null, null, "현황"),
+			new TitleRuleBook.Rule(3, TitleRuleBook.MatchKind.EXACT, "계획(현황과새계획)", "E7", null, null, null, null)),
+			List.of());
+
+		assertThat(book.find("계획(올해현황)")).map(TitleRuleBook.Rule::id).contains(2L);
+		assertThat(book.find("계획(현황과새계획)")).map(TitleRuleBook.Rule::id).contains(3L);
+		assertThat(book.find("계획(올해)")).map(TitleRuleBook.Rule::id).contains(1L);
+		// 낱말은 서식 이름 뒤의 꼬리에서만 찾는다. 꼬리가 없으면 서식 이름 줄이다
+		assertThat(book.find("계획")).map(TitleRuleBook.Rule::id).contains(1L);
+		assertThat(book.find("현황(계획)")).isEmpty();
 	}
 
 	@Test
@@ -351,12 +399,14 @@ class DisclosureClassifierTest {
 
 	@Test
 	void 대응표의_줄_수와_버전이_마이그레이션과_같다() {
-		assertThat(classifier.version()).isEqualTo(2);
+		assertThat(classifier.version()).isEqualTo(3);
 		assertThat(jdbc.sql("SELECT count(*) FROM disclosure_type").query(Integer.class).single()).isEqualTo(75);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'EXACT'").query(Integer.class).single())
-			.isEqualTo(282);
+			.isEqualTo(284);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM'").query(Integer.class).single())
 			.isEqualTo(332);
+		assertThat(jdbc.sql("SELECT count(*) FROM title_rule WHERE match_kind = 'FORM_WORD'").query(Integer.class).single())
+			.isEqualTo(8);
 		assertThat(jdbc.sql("SELECT count(*) FROM title_attribute").query(Integer.class).single()).isEqualTo(6);
 		// 관리종목·상장폐지 관련 안내는 줄마다 방향이 있거나 본문을 읽는 줄이다. 방향 없이 제목 판정으로 남은 줄이 없다
 		assertThat(jdbc.sql("""
@@ -375,15 +425,22 @@ class DisclosureClassifierTest {
 
 		// 방향이 있는데 제목으로 판정하는 줄이 아니다
 		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(z9, b1), List.of(new TitleRuleBook.Rule(1,
-			TitleRuleBook.MatchKind.FORM, "영업(잠정)실적", "B1", Tone.POSITIVE, null, null)), List.of()))
+			TitleRuleBook.MatchKind.FORM, "영업(잠정)실적", "B1", Tone.POSITIVE, null, null, null)), List.of()))
 			.isInstanceOf(IllegalStateException.class);
 		// 없는 유형
 		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(z9), List.of(new TitleRuleBook.Rule(1,
-			TitleRuleBook.MatchKind.FORM, "영업(잠정)실적", "B1", null, null, null)), List.of()))
+			TitleRuleBook.MatchKind.FORM, "영업(잠정)실적", "B1", null, null, null, null)), List.of()))
 			.isInstanceOf(IllegalStateException.class);
 		// 다듬은 제목과 모양이 다른 글자(공백)는 영영 걸리지 않는다
 		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(z9, b1), List.of(new TitleRuleBook.Rule(1,
-			TitleRuleBook.MatchKind.FORM, "영업(잠정) 실적", "B1", null, null, null)), List.of()))
+			TitleRuleBook.MatchKind.FORM, "영업(잠정) 실적", "B1", null, null, null, null)), List.of()))
+			.isInstanceOf(IllegalStateException.class);
+		// 낱말 줄인데 낱말이 없다, 낱말 줄이 아닌데 낱말이 있다
+		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(z9, b1), List.of(new TitleRuleBook.Rule(1,
+			TitleRuleBook.MatchKind.FORM_WORD, "영업(잠정)실적", "B1", null, null, null, null)), List.of()))
+			.isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(z9, b1), List.of(new TitleRuleBook.Rule(1,
+			TitleRuleBook.MatchKind.FORM, "영업(잠정)실적", "B1", null, null, null, "정정")), List.of()))
 			.isInstanceOf(IllegalStateException.class);
 		// 미분류 유형이 없다
 		assertThatThrownBy(() -> new TitleRuleBook(1, List.of(b1), List.of(), List.of()))
