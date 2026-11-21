@@ -640,7 +640,7 @@ let CJ = [];
 function initCharts(){
   CJ.forEach(c=>c.destroy()); CJ=[]; if(!window.Chart) return;
   const cs=getComputedStyle(document.documentElement), v=n=>cs.getPropertyValue(n).trim();
-  Chart.defaults.font.family = v("--font"); Chart.defaults.font.size = 12;
+  Chart.defaults.font.family = v("--font"); Chart.defaults.font.size = parseFloat(v("--fs-small"));
   document.querySelectorAll("canvas[data-cj]").forEach(cv=>{ const d=JSON.parse(cv.dataset.cj);
     const ca=v(d.ca), cb=v(d.cb), cl=v("--vz-line"), grid=v("--line"), tick=v("--text-sub"), card=v("--card");
     CJ.push(new Chart(cv,{ data:{ labels:Q, datasets:[

@@ -590,7 +590,7 @@ const VZ = [["--vz-blue","매출액"],["--vz-teal","순이익"],["--vz-amber","�
 const resolve = n => { let v=css(n); while(v.startsWith("var(")) v=css(v.slice(4,-1)); return v; };
 $("vz").innerHTML = VZ.map(([k,r])=>`<div class="sw"><i style="background:var(${k})"></i><div><b class="row-title">${r}</b><p class="meta"><code>${k}</code> · ${resolve(k)}</p></div></div>`).join("");
 if(window.Chart){ const v=resolve, Q=["24.4Q","25.1Q","25.2Q","25.3Q","25.4Q","26.1Q","26.2Q","26.3Q"], A=[75.8,71.2,73.9,76.9,79.2,78.1,76.9,82.3], B=[8.2,8.9,8.7,10.0,10.4,9.8,10.1,11.3], R=B.map((b,i)=>Math.round(b/A[i]*1000)/10);
-  Chart.defaults.font.family = css("--font"); Chart.defaults.font.size = 12;
+  Chart.defaults.font.family = css("--font"); Chart.defaults.font.size = parseFloat(css("--fs-small"));
   const grid=v("--line"), tick=v("--text-sub"), cl=v("--vz-line");
   new Chart($("cj-sample"),{ data:{ labels:Q, datasets:[
       {type:"line",label:"영업이익률",data:R,yAxisID:"y2",borderColor:cl,backgroundColor:cl,borderWidth:2,pointRadius:4,pointBorderColor:v("--card"),pointBorderWidth:2,pointBackgroundColor:cl,order:0},
