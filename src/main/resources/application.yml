@@ -52,6 +52,11 @@ app:
     retry-jitter: 500ms
   gemini:
     api-key: ${GEMINI_API_KEY:}
+    model: gemini-3.5-flash-lite
+    connect-timeout: 10s
+    read-timeout: 120s
+    min-interval: 4500ms           # 호출 사이 간격. 무료 구간의 분당 15회를 넘지 않게
+    quota-reset-zone: America/Los_Angeles   # 하루 한도가 풀리는 자정의 시간대 (확인하지 못한 값)
   disclosure:
     # 앱이 뜬 직후 공시 목록을 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
     collect-on-startup: ${DISCLOSURE_COLLECT_ON_STARTUP:}
@@ -101,6 +106,41 @@ app:
         trade-neutral-below: 0.01   # 매매 순증감 ÷ 발행주식총수(%). 이보다 작으면 중립
         trade-medium-from: 0.1      # 이 이상이면 2
         holding-medium-from: 1      # 대량보유상황보고서. 보유비율 증감(%p)이 이 이상이면 2
+    # AI가 방향을 정한 공시의 크기. 비율 유형(타법인 주식 F4, 자산 양수도 F5, 판결 I1, 제3자배정 D1)은 위의 경계를 쓴다
+    ai-impact:
+      fixed:                    # 유형마다 하나 (호재·악재 모두)
+        B3: 1                   # 장래 사업·경영 계획
+        C3: 2                   # 기술 계약·특허·임상
+        D6: 1                   # 해외 상장·이전상장
+        E4: 1                   # 자기주식 처분 (악재로 판정될 때)
+        F2: 2                   # 회사 분할 (물적분할)
+        F3: 2                   # 주식 교환·이전
+        G1: 2                   # 최대주주 변경
+        G2: 2                   # 경영권 양수도 계약
+        G5: 2                   # 경영권 분쟁 소송의 인용 판결·결정
+        G7: 1                   # 종속회사 상장
+        I2: 2                   # 횡령·배임 혐의 진행사항 (횡령·배임의 가장 작은 크기와 같게)
+        I4: 1                   # 파생상품 거래 손실, 채권 손상차손
+        J7: 1                   # 풍문 해명
+      by-tone:                  # 호재와 악재의 크기가 다른 유형
+        E8:                     # 감자: 결손 보전 무상감자(악재), 자기주식 소각 방식(호재)
+          positive: 2
+          negative: 3
+        I3:                     # 회생·파산·부도·연체: 해소(호재), 개시·신청·부도(악재)
+          positive: 2
+          negative: 3
+      cases:                    # AI가 함께 고른 경우마다
+        F1:                     # 합병
+          SMALL: 1              # 소규모·간이합병, 완전자회사 흡수
+          NORMAL: 2
+        J1:                     # 관리종목·상장폐지 관련 안내
+          DELISTING: 3          # 상장폐지 사유, 실질심사 대상
+          DESIGNATION: 2        # 관리종목 지정, 지정 우려 예고
+          RECURRING: 1          # 되풀이되는 우려 안내
+          RELIEF: 2             # 벗어남 (호재)
+      dissolution: 1            # 해산사유 발생
+      withdrawal: 1             # 제목 꼬리에 철회·취하가 든 공시
+      fallback: 1               # 어디에도 없을 때
   financial:
     # 앱이 뜬 직후 재무를 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
     collect-on-startup: ${FINANCIAL_COLLECT_ON_STARTUP:}

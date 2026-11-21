@@ -59,12 +59,13 @@ com.companyinsight
 | 테이블 | 핵심 컬럼 |
 |---|---|
 | `company` | id(PK), country, source, source_key(source와 묶어 **unique**. DART는 고유번호), stock_code, name, market |
-| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, impact_ratio(크기를 정할 때 본 원래 비율), classified_by(RULE 제목 규칙/TABLE 본문 표/LLM), is_correction, is_withdrawn |
+| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, impact_ratio(크기를 정할 때 본 원래 비율), classified_by(RULE 제목 규칙/TABLE 본문 표/LLM), picked_type_code(포괄 제목 등에 AI가 고른 유형), is_correction, is_withdrawn |
 | `disclosure_type` | code(PK. 예: A1), bundle, name, judge_method(TITLE/CODE/AI), default_tone, fetch_body, sort_order |
 | `title_rule` | id, source, match_kind(EXACT/FORM/FORM_WORD), pattern, tail_word(FORM_WORD 줄의 꼬리 낱말. source, match_kind, pattern과 묶어 **unique**), type_code, tone, judge_method, case_code, memo, added_version |
 | `title_attribute` | source, token(제목에서 떼는 속성 꼬리), attribute |
 | `title_rule_version` | version(PK), applied_at, note. 대응표를 고치는 마이그레이션마다 한 줄 |
-| `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
+| `disclosure_summary` | disclosure_id(PK), headline(패널 제목. 무슨 일인지 쉬운 말 한 줄), lines(요약 문장. 줄 수는 정하지 않음), written_by(AI/CODE), run_id(쓴 실행). 원문 대조를 통과한 요약만, 호재·악재 공시에만 |
+| `setting_version` | id, bundle(AI_JUDGE/AI_SUMMARY), version(묶음 안의 번호), hash(값 전체의 SHA-256. bundle과 묶어 **unique**), settings(값 전체, JSONB), first_seen_at. 앱이 처음 보는 값이면 번호를 올린 줄을 더한다 |
 | `analysis_job` | id, disclosure_id, stage(FETCH_BODY/READ_TABLE/AI_JUDGE/AI_SUMMARY. disclosure_id와 묶어 **unique**), status(PENDING/RUNNING/DONE/FAILED), outcome(ENDED/PASSED/NO_BODY/HELD), priority, run_after, attempts, deferrals, enqueue_reason, locked_at, last_run_id. 공시 한 건의 한 단계가 한 행 |
 | `analysis_run` | job_id, disclosure_id, stage, started_at, finished_at, outcome, enqueue_reason, pass_reason, error_kind, error_code, error, result(JSONB), setting_version_id, input_tokens, output_tokens. 실행 한 번이 한 행이고 쌓기만 한다 |
 | `disclosure_body` | disclosure_id(PK), content(출처가 준 본문 압축 파일 그대로, bytea), byte_size, file_count, fetched_at. 공시 한 건의 본문 원문이 한 행. 글자는 저장하지 않고 쓸 때마다 뽑는다 |
@@ -72,7 +73,7 @@ com.companyinsight
 | `financial` | company_id, source, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL. 넷을 묶어 **unique**), payload(출처 응답 전체, JSONB), fetched_at. 보고서 한 건의 응답 하나가 한 행 |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `disclosure_type`, `title_rule`, `title_attribute`, `title_rule_version`, `collection_run`, `financial`, `analysis_job`, `analysis_run`, `disclosure_body`는 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `disclosure_type`, `title_rule`, `title_attribute`, `title_rule_version`, `collection_run`, `financial`, `analysis_job`, `analysis_run`, `disclosure_body`, `disclosure_summary`, `setting_version`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 

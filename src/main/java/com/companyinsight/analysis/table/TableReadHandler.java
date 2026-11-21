@@ -72,6 +72,12 @@ public class TableReadHandler implements StageHandler {
 	/** 자회사의 공시의 속성 */
 	private static final String SUBSIDIARY = "SUBSIDIARY";
 
+	/** AI로 넘긴 경우: 정정 표에 철회·취소 같은 말이 있어 원래 결정을 거둔 정정인지 AI가 본다 */
+	public static final String CORRECTION_MAY_WITHDRAW = "CORRECTION_MAY_WITHDRAW";
+
+	/** 실행 기록의 키: 철회 여부를 AI에 묻기 전에 표로 정했던 판정 (방향, 크기) */
+	public static final String JUDGED_BEFORE_WITHDRAW_CHECK = "judgedBeforeWithdrawCheck";
+
 	/** 건너뛴 이유: 코드가 방향을 정하는 유형인데 읽는 규칙이 없다 */
 	static final String NO_READER = "NO_READER";
 
@@ -228,15 +234,18 @@ public class TableReadHandler implements StageHandler {
 		boolean subsidiary = target.attributes().contains(SUBSIDIARY);
 		BodyTables tables = BodyTables.of(documents);
 		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary, target.title()), tables);
-		if (read.verdict() == TableReading.Verdict.JUDGED && tables.correctionMayWithdraw()) {
-			// 정정 표에 철회·취소가 적혀 있다. 원래 결정을 거둔 정정이면 본문 표의 방향이 뜻을 잃는다
-			read = TableReading.needsAi("CORRECTION_MAY_WITHDRAW", read.ratio(), read.items(), read.unread());
-		}
 		if (read.impact() != null && subsidiary) {
 			read = read.withImpact(impactProperties.stepDownForSubsidiary(read.impact()));
 		}
+		TableReading judgedBeforeCheck = null;
+		if (read.verdict() == TableReading.Verdict.JUDGED && tables.correctionMayWithdraw()) {
+			// 정정 표에 철회·취소가 적혀 있다. 원래 결정을 거둔 정정이면 본문 표의 방향이 뜻을 잃는다.
+			// 거둔 정정이 아니라고 AI가 답하면 이 판정을 그대로 쓰도록 실행 기록에 남긴다
+			judgedBeforeCheck = read;
+			read = TableReading.needsAi(CORRECTION_MAY_WITHDRAW, read.ratio(), read.items(), read.unread());
+		}
 		TableReading reading = read;
-		String result = result(reading);
+		String result = judgedBeforeCheck == null ? result(reading) : result(reading, judgedBeforeCheck);
 		return switch (reading.verdict()) {
 			case JUDGED -> {
 				Runnable write = () -> repository.saveJudgment(disclosureId, reading.tone(), reading.impact(), reading.ratio());
@@ -252,6 +261,18 @@ public class TableReadHandler implements StageHandler {
 				.withResult(result)
 				.withWrites(() -> repository.saveRatioOnly(disclosureId, null));
 		};
+	}
+
+	/**
+	 * 실행 기록에 남길 결과에, 정정 표의 철회 낱말 때문에 AI로 넘기기 전의 판정을 더한다 ({@code judgedBeforeWithdrawCheck}).
+	 */
+	private static String result(TableReading reading, TableReading judged) {
+		Map<String, Object> result = JSON.readValue(result(reading), MAP_TYPE);
+		Map<String, Object> before = new LinkedHashMap<>();
+		before.put("tone", judged.tone() == null ? null : judged.tone().name());
+		before.put("impact", judged.impact());
+		result.put(JUDGED_BEFORE_WITHDRAW_CHECK, before);
+		return JSON.writeValueAsString(result);
 	}
 
 	/** 실행 기록에 남길 결과. 읽은 항목, 읽지 못한 항목, 비율, 경우, 정한 방향과 크기. */
