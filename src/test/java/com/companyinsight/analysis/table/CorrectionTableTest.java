@@ -19,6 +19,7 @@ class CorrectionTableTest {
 
 		// 삼성전자 2026-01-29 [기재정정]: "2. 정정관련 공시서류제출일 | 2026년 1월 8일"
 		assertThat(table.correctedFiledOn()).isEqualTo(LocalDate.of(2026, 1, 8));
+		assertThat(table.firstFiling()).isFalse();
 		assertThat(table.reasons()).containsExactly("2025년 4분기 연결재무제표기준영업(잠정)실적(공정공시) 내용 정정");
 		assertThat(table.changes()).isNotEmpty();
 		assertThat(table.authorityOrdered()).isFalse();
@@ -39,6 +40,7 @@ class CorrectionTableTest {
 
 		// "2. 정정대상 공시서류의 최초제출일 : 2026년 06월 24일"
 		assertThat(table.correctedFiledOn()).isEqualTo(LocalDate.of(2026, 6, 24));
+		assertThat(table.firstFiling()).isTrue();
 		assertThat(table.reasons()).containsExactly("발행 조건 확정에 따른 기재 정정");
 		assertThat(table.changes().getFirst())
 			.isEqualTo(new CorrectionTable.Change("4. 자금조달의 목적- 시설자금(원)", "43,140,750,000,000", "40,023,070,290,000"));
@@ -121,7 +123,7 @@ class CorrectionTableTest {
 	void 있을_수_없는_날짜는_읽지_않는다() {
 		BodyDocument document = xml("<P>2. 정정대상 공시서류의 최초제출일 : 2026년 02월 30일</P>");
 
-		assertThat(CorrectionTable.filedOn(List.of(document))).isNull();
+		assertThat(CorrectionTable.filedOn(List.of(document))).isEmpty();
 	}
 
 	private static CorrectionTable read(String receiptNo) {

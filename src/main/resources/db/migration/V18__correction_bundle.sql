@@ -28,19 +28,35 @@ COMMENT ON COLUMN disclosure.first_filed_on IS '회사 판단에 쓰는 최초 �
 -- 앞 공시는 회사·접수일 색인(disclosure_company_date_idx)으로 찾는다. 묶음은 앞 공시를 거슬러 올라가고 내려가며 찾는다
 CREATE INDEX disclosure_corrects_idx ON disclosure (corrects_id) WHERE corrects_id IS NOT NULL;
 
+-- 보고서명 앞의 머리말("[기재정정]", "[첨부추가]" 등)을 공백 없이 이어 붙인 것. 머리말이 없으면 빈 글
+CREATE FUNCTION disclosure_prefixes(report_name TEXT) RETURNS TEXT
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN COALESCE(substring(regexp_replace(report_name, '[\s\u00a0\u3000]+', '', 'g') from '^((\[[^]]*\])+)'), '');
+
+-- 보고서명에서 머리말과 공백을 뗀 제목. 가운뎃점은 DART가 쓰는 글자(ㆍ)로 맞춘다. 정정과 앞 공시를 같은 제목으로 견줄 때 쓴다
+CREATE FUNCTION disclosure_title_key(report_name TEXT) RETURNS TEXT
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN regexp_replace(regexp_replace(translate(report_name, '·・', 'ㆍㆍ'), '[\s\u00a0\u3000]+', '', 'g'), '^(\[[^]]*\])+', '');
+
+COMMENT ON FUNCTION disclosure_prefixes(TEXT) IS '보고서명 앞의 머리말을 공백 없이 이어 붙인 것. 머리말이 없으면 빈 글';
+COMMENT ON FUNCTION disclosure_title_key(TEXT) IS '보고서명에서 머리말과 공백을 뗀 제목(가운뎃점은 ㆍ로). 정정과 앞 공시를 같은 제목으로 견줄 때 쓴다';
+
 -- 회사 판단(호재·악재 점수)에 세는 공시. 판단 계산은 이 뷰만 읽는다.
 -- 1) 묶음에서 대체된 공시는 세지 않는다 (가장 늦게 낸 공시 하나만 센다)
--- 2) 첨부만 고치거나 더한 공시([첨부정정], [첨부추가], [발행조건확정])는 기록만 하고 세지 않는다
--- 3) 앞 공시를 고르지 못했거나(AMBIGUOUS) 고친 날을 읽지 못한(NO_DATE) 정정은 세지 않는다. 앞 공시 후보(원래 공시)를 센다
+-- 2) 첨부만 고치거나 더한 공시([첨부정정], [첨부추가], [발행조건확정])는 기록만 하고 세지 않는다. [기재정정]이 함께 붙으면 본문을 고친 정정이다
+-- 3) 묶음의 맨 앞(뿌리)이 본문을 고친 정정인데 앞 공시를 찾지 못한 까닭이 "저장된 앞 공시가 없음"이 아니면 세지 않는다:
+--    앞 공시를 고르지 못함(AMBIGUOUS), 고친 날을 읽지 못함(NO_DATE), 아직 읽지 않음(NULL). 그 정정에 이어진 뒤 정정도 세지 않는다.
+--    고치려던 앞 공시(원래 공시)가 저장돼 있을 수 있어 그쪽을 센다
 -- 날짜는 묶음의 최초 제출일이다(정정일로 옮기지 않는다). 없으면 접수일.
 CREATE VIEW disclosure_counted AS
 SELECT d.id, d.company_id, d.source, d.source_key, d.report_name, d.rcept_date,
        COALESCE(d.first_filed_on, d.rcept_date) AS event_date,
        d.type_code, d.tone, d.impact, d.impact_ratio, d.classified_by, d.bundle_id
   FROM disclosure d
+  JOIN disclosure r ON r.id = COALESCE(d.bundle_id, d.id)
  WHERE d.superseded_by IS NULL
-   AND COALESCE(d.correction_link, '') NOT IN ('AMBIGUOUS', 'NO_DATE')
-   AND COALESCE(substring(regexp_replace(d.report_name, '[\s\u00a0\u3000]+', '', 'g') from '^((\[[^]]*\])+)'), '')
-       !~ '\[(첨부정정|첨부추가|발행조건확정)\]';
+   AND (position('[기재정정]' in disclosure_prefixes(d.report_name)) > 0
+        OR disclosure_prefixes(d.report_name) !~ '\[(첨부정정|첨부추가|발행조건확정)\]')
+   AND (position('[기재정정]' in disclosure_prefixes(r.report_name)) = 0 OR r.correction_link = 'NO_PREDECESSOR');
 
-COMMENT ON VIEW disclosure_counted IS '회사 판단에 세는 공시. 정정 묶음에서 가장 늦게 낸 공시 하나만, 첨부만 고친 공시와 잇지 못한 정정은 빼고. event_date는 회사 판단에 쓰는 날(묶음의 최초 제출일, 없으면 접수일)';
+COMMENT ON VIEW disclosure_counted IS '회사 판단에 세는 공시. 정정 묶음에서 가장 늦게 낸 공시 하나만, 첨부만 고친 공시와 앞 공시를 고르지 못하거나 아직 잇지 않은 정정(과 그 뒤 정정)은 빼고. event_date는 회사 판단에 쓰는 날(묶음의 최초 제출일, 없으면 접수일)';

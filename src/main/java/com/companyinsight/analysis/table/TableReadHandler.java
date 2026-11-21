@@ -147,14 +147,17 @@ public class TableReadHandler implements StageHandler {
 		}
 		result.put("correction", correction.map(CorrectionTable::toResult).orElse(null));
 		LocalDate correctedFiledOn = correction.map(CorrectionTable::correctedFiledOn).orElse(null);
+		boolean firstFiling = correction.map(CorrectionTable::firstFiling).orElse(false);
 		List<String> beforeValues = correction.map(c -> c.changes().stream().map(CorrectionTable.Change::before).toList())
 			.orElse(List.of());
 		Runnable writes = done.writes();
 		return done.withResult(JSON.writeValueAsString(result)).withWrites(() -> {
+			// 묶음의 잠금을 이 공시의 행을 고치기 전에 건다 (행 잠금을 쥔 채 기다리지 않게)
+			bundles.lockCompanyOf(disclosureId);
 			if (writes != null) {
 				writes.run();
 			}
-			bundles.link(disclosureId, correctedFiledOn, beforeValues);
+			bundles.link(disclosureId, correctedFiledOn, firstFiling, beforeValues);
 		});
 	}
 

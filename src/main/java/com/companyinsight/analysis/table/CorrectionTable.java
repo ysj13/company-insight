@@ -28,15 +28,16 @@ import java.util.regex.Pattern;
  * (2026-11-21 실제 공시 4,441건에서 확인).
  *
  * @param correctedFiledOn 고친 공시의 제출일. 읽지 못했으면 null
+ * @param firstFiling     날짜를 금융위원회 서식의 "최초제출일"에서 읽었는지 (거래소 서식의 "정정관련 공시서류제출일"이면 false)
  * @param reasons         정정 사유. 나온 순서대로, 같은 것은 한 번만
  * @param changes         바뀐 항목. 정정 표에 나온 순서대로
  * @param authorityOrdered 정정 표에 "정정요구ㆍ명령관련 여부: 예"인 줄이 있는지 (금융당국이 요구한 정정)
  */
-record CorrectionTable(LocalDate correctedFiledOn, List<String> reasons, List<Change> changes, boolean authorityOrdered) {
+record CorrectionTable(LocalDate correctedFiledOn, boolean firstFiling, List<String> reasons, List<Change> changes, boolean authorityOrdered) {
 
 	/** 고친 공시의 제출일 항목 이름과 날짜. 이름과 날짜 사이에는 공백, 쌍점, 칸 나눔(" | ")만 온다 */
 	private static final Pattern FILED_ON = Pattern.compile(
-			"(?:최\\s*초\\s*제\\s*출\\s*일|정\\s*정\\s*관\\s*련\\s*공\\s*시\\s*서\\s*류\\s*제\\s*출\\s*일)[\\s:：|]{0,12}"
+			"(?:(최\\s*초\\s*제\\s*출\\s*일)|정\\s*정\\s*관\\s*련\\s*공\\s*시\\s*서\\s*류\\s*제\\s*출\\s*일)[\\s:：|]{0,12}"
 					+ "(\\d{4})\\s*(?:[-./]|년)\\s*(\\d{1,2})\\s*(?:[-./]|월)\\s*(\\d{1,2})");
 
 	/** 칸 하나에 담는 글의 최대 길이. 실행 기록이 커지지 않게 자른다 */
@@ -58,7 +59,8 @@ record CorrectionTable(LocalDate correctedFiledOn, List<String> reasons, List<Ch
 	 * @return 정정 표가 없고 제출일도 찾지 못하면 비어 있음
 	 */
 	static Optional<CorrectionTable> read(List<BodyDocument> documents, BodyTables tables) {
-		LocalDate correctedFiledOn = filedOn(documents);
+		Optional<FiledOn> filedOn = filedOn(documents);
+		LocalDate correctedFiledOn = filedOn.map(FiledOn::date).orElse(null);
 		if (correctedFiledOn == null && tables.correctionTables().isEmpty()) {
 			return Optional.empty();
 		}
@@ -68,24 +70,34 @@ record CorrectionTable(LocalDate correctedFiledOn, List<String> reasons, List<Ch
 		for (TableGrid table : tables.correctionTables()) {
 			authorityOrdered |= readTable(table, reasons, changes);
 		}
-		return Optional.of(new CorrectionTable(correctedFiledOn, reasons, changes, authorityOrdered));
+		return Optional.of(new CorrectionTable(correctedFiledOn, filedOn.map(FiledOn::firstFiling).orElse(false), reasons,
+				changes, authorityOrdered));
 	}
 
-	/** 문서들의 글에서 처음 나온, 고친 공시의 제출일. 없거나 날짜가 아니면 null. */
-	static LocalDate filedOn(List<BodyDocument> documents) {
+	/** 문서들의 글에서 처음 나온, 고친 공시의 제출일. 없거나 날짜가 아니면 비어 있음. */
+	static Optional<FiledOn> filedOn(List<BodyDocument> documents) {
 		for (BodyDocument document : documents) {
 			Matcher matcher = FILED_ON.matcher(document.text());
 			if (matcher.find()) {
 				try {
-					return LocalDate.of(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)),
-							Integer.parseInt(matcher.group(3)));
+					return Optional.of(new FiledOn(LocalDate.of(Integer.parseInt(matcher.group(2)),
+							Integer.parseInt(matcher.group(3)), Integer.parseInt(matcher.group(4))), matcher.group(1) != null));
 				}
 				catch (DateTimeException e) {
-					return null;
+					return Optional.empty();
 				}
 			}
 		}
-		return null;
+		return Optional.empty();
+	}
+
+	/**
+	 * 정정 표에서 읽은 날.
+	 *
+	 * @param date        날짜
+	 * @param firstFiling 금융위원회 서식의 "최초제출일"에서 읽었는지
+	 */
+	record FiledOn(LocalDate date, boolean firstFiling) {
 	}
 
 	/**
@@ -171,6 +183,7 @@ record CorrectionTable(LocalDate correctedFiledOn, List<String> reasons, List<Ch
 	Map<String, Object> toResult() {
 		Map<String, Object> result = new LinkedHashMap<>();
 		result.put("correctedFiledOn", correctedFiledOn == null ? null : correctedFiledOn.toString());
+		result.put("firstFiling", firstFiling);
 		result.put("reasons", reasons);
 		result.put("changes", changes.stream().map(c -> List.of(c.item(), c.before(), c.after())).toList());
 		if (authorityOrdered) {

@@ -88,8 +88,8 @@ class CorrectionBundleIntegrationTest {
 		long first = disclosure(companyId, "[기재정정]" + RIGHTS, D1);
 		long second = disclosure(companyId, "[기재정정]" + RIGHTS, D2);
 
-		link(first, D0);
-		link(second, D0);
+		linkFirstFiling(first, D0);
+		linkFirstFiling(second, D0);
 
 		assertThat(state(second)).isEqualTo(new BundleState(D0, original, "LINKED", original, null, D0));
 		assertThat(state(first).supersededBy()).isEqualTo(second);
@@ -140,17 +140,18 @@ class CorrectionBundleIntegrationTest {
 		long original = disclosure(companyId, RIGHTS, D0.plusDays(1));
 		long correction = disclosure(companyId, "[기재정정]" + RIGHTS, D1);
 
-		link(correction, D0);
+		linkFirstFiling(correction, D0);
 
 		assertThat(state(correction)).isEqualTo(new BundleState(D0, original, "LINKED", original, null, D0.plusDays(1)));
 	}
 
 	@Test
-	void 제목이_같은_공시가_없으면_유형과_꼬리를_뗀_제목으로_찾는다() {
+	void 제목이_같은_공시가_없으면_유형과_꼬리를_뗀_제목으로_찾되_정정_전_값이_맞아야_잇는다() {
 		long original = disclosure(companyId, "주주총회소집결의", D0, "E9", "주주총회소집결의");
+		body(original, "<table><tr><td>1. 일시</td><td>2026-01-15 오전 10시</td></tr></table>");
 		long correction = disclosure(companyId, "[기재정정]주주총회소집결의 (임시주주총회)", D1, "E9", "주주총회소집결의");
 
-		link(correction, D0);
+		link(correction, D0, "2026-01-15 오전 10시");
 
 		assertThat(state(correction).correctsId()).isEqualTo(original);
 	}
@@ -298,14 +299,118 @@ class CorrectionBundleIntegrationTest {
 	}
 
 	@Test
+	void 꼬리를_뗀_제목으로_찾은_후보는_정정_전_값이_맞지_않으면_잇지_않는다() {
+		long original = disclosure(companyId, "주주총회소집결의", D0, "E9", "주주총회소집결의");
+		body(original, "<table><tr><td>1. 일시</td><td>2026-03-20 오전 9시</td></tr></table>");
+		long correction = disclosure(companyId, "[기재정정]주주총회소집결의 (임시주주총회)", D1, "E9", "주주총회소집결의");
+
+		link(correction, D0, "2026-01-15 오전 10시");
+
+		assertThat(state(correction).correctionLink()).isEqualTo("AMBIGUOUS");
+		assertThat(counted()).containsExactly(original);
+	}
+
+	@Test
+	void 거래소_서식은_다음_날의_다른_공시와_잇지_않는다() {
+		// 원래 공시가 수집 기간 밖이고, 다음 날 같은 제목의 다른 계약이 있다
+		long other = disclosure(companyId, CONTRACT, D0.plusDays(1));
+		long correction = disclosure(companyId, "[기재정정]" + CONTRACT, D1);
+
+		link(correction, D0);
+
+		assertThat(state(correction).correctionLink()).isEqualTo("NO_PREDECESSOR");
+		assertThat(counted()).containsExactly(other, correction);
+	}
+
+	@Test
+	void 후보_가운데_본문이_없는_것이_있으면_고르지_않는다() {
+		long a = disclosure(companyId, CONTRACT, D0);
+		long b = disclosure(companyId, CONTRACT, D0);
+		body(b, "<table><tr><td>종료일</td><td>2025-12-31</td></tr></table>");
+		long correction = disclosure(companyId, "[기재정정]" + CONTRACT, D1);
+
+		link(correction, D0, "2025-12-31");
+
+		assertThat(state(correction).correctionLink()).isEqualTo("AMBIGUOUS");
+		assertThat(counted()).containsExactly(a, b);
+	}
+
+	@Test
+	void 고르지_못한_정정에_뒤_정정이_이어져도_세지_않고_원래_공시를_센다() {
+		long a = disclosure(companyId, CONTRACT, D0);
+		long b = disclosure(companyId, CONTRACT, D0);
+		long first = disclosure(companyId, "[기재정정]" + CONTRACT, D1);
+		link(first, D0);
+		long second = disclosure(companyId, "[기재정정]" + CONTRACT, D2);
+
+		link(second, D1);
+
+		assertThat(state(second).correctsId()).isEqualTo(first);
+		assertThat(counted()).containsExactly(a, b);
+	}
+
+	@Test
+	void 아직_읽지_않은_정정과_그_뒤_정정은_세지_않는다() {
+		long original = disclosure(companyId, CONTRACT, D0);
+		long unread = disclosure(companyId, "[기재정정]" + CONTRACT, D1);
+		long later = disclosure(companyId, "[기재정정]" + CONTRACT, D2);
+
+		link(later, D1);
+
+		assertThat(state(later).correctsId()).isEqualTo(unread);
+		assertThat(counted()).containsExactly(original);
+		// 앞 정정을 읽으면 셋이 한 묶음이 되어 마지막 하나를 원래 공시의 날로 센다
+		link(unread, D0);
+		assertThat(counted()).containsExactly(later);
+		assertThat(state(later).firstFiledOn()).isEqualTo(D0);
+	}
+
+	@Test
+	void 먼저_읽은_정정이_고르지_못했어도_앞_정정이_이어지면_다시_잇는다() {
+		// 금융위 서식: 원래 공시와 첫 정정이 같은 날 나왔고, 둘째 정정(최초 제출일 = 원래 공시의 날)을 먼저 읽었다
+		long original = disclosure(companyId, RIGHTS, D0);
+		long first = disclosure(companyId, "[기재정정]" + RIGHTS, D0);
+		long second = disclosure(companyId, "[기재정정]" + RIGHTS, D1);
+		linkFirstFiling(second, D0);
+		assertThat(state(second).correctionLink()).isEqualTo("AMBIGUOUS");
+
+		linkFirstFiling(first, D0);
+
+		assertThat(state(second).correctionLink()).isEqualTo("LINKED");
+		assertThat(state(original).supersededBy()).isEqualTo(second);
+		assertThat(counted()).containsExactly(second);
+	}
+
+	@Test
+	void 본문을_고친_정정에_첨부추가가_함께_붙어도_묶음의_마지막이면_센다() {
+		long original = disclosure(companyId, CONTRACT, D0);
+		long correction = disclosure(companyId, "[기재정정][첨부추가]" + CONTRACT, D1);
+
+		link(correction, D0);
+
+		assertThat(state(original).supersededBy()).isEqualTo(correction);
+		assertThat(counted()).containsExactly(correction);
+	}
+
+	@Test
 	void 정정_전_값에서_숫자가_든_네_글자_이상만_견준다() {
 		assertThat(CorrectionBundles.tokens(List.of("95,437,300,000 34.25", "- 종료일 : 2026-02-18", "-", "주1) 정정 전", "8.5",
 				"8.22% 1,295,482주 343,860,000,000원", "181,139,…")))
 			.containsExactly("95,437,300,000", "34.25", "2026-02-18", "8.22", "1,295,482", "343,860,000,000");
 	}
 
+	/** 거래소 서식("정정관련 공시서류제출일")으로 읽은 정정을 잇는다. */
 	private void link(long id, LocalDate date, String... beforeValues) {
-		transaction.executeWithoutResult(status -> bundles.link(id, date, List.of(beforeValues)));
+		transaction.executeWithoutResult(status -> bundles.link(id, date, false, List.of(beforeValues)));
+	}
+
+	/** 금융위원회 서식("최초제출일")으로 읽은 정정을 잇는다. */
+	private void linkFirstFiling(long id, LocalDate date, String... beforeValues) {
+		transaction.executeWithoutResult(status -> bundles.link(id, date, true, List.of(beforeValues)));
+	}
+
+	private List<Long> counted() {
+		return jdbc.sql("SELECT id FROM disclosure_counted ORDER BY id").query(Long.class).list();
 	}
 
 	private BundleState state(long id) {

@@ -1,6 +1,5 @@
 package com.companyinsight.analysis.table;
 
-import com.companyinsight.analysis.body.BodyDocument;
 import com.companyinsight.analysis.body.DisclosureBodyReader;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -25,11 +24,13 @@ import org.springframework.stereotype.Component;
  * <p>앞 공시를 찾는 순서 (실제 공시에서 본 어긋남을 받는다):
  * <ol>
  * <li>같은 회사, 머리말·공백을 뗀 제목이 같고, 그날 낸 공시
- * <li>없으면 그다음 날 낸 공시 (금융위원회 서식의 최초 제출일이 접수일보다 하루 앞서 적힌 것이 있다)
- * <li>없으면 유형과 속성 꼬리를 뗀 제목이 같은 공시로 1·2를 다시 (정정에 "(임시주주총회)" 같은 꼬리가 더 붙은 것이 있다)
+ * <li>금융위원회 서식이면, 없을 때 그다음 날 낸 공시 (최초 제출일이 접수일보다 하루 앞서 적힌 것이 있다)
+ * <li>없으면 유형과 속성 꼬리를 뗀 제목이 같은 공시로 1·2를 다시 (정정에 "(임시주주총회)" 같은 꼬리가 더 붙은 것이 있다).
+ *   제목이 다르므로 "정정 전" 값이 본문에 맞아야만 잇는다
  * </ol>
  * 후보가 여럿이고 서로 다른 묶음이면(같은 날 같은 제목의 다른 계약 등), 정정 표의 "정정 전" 값의 숫자가 모두 본문에 든 후보 하나를
- * 고른다. 그래도 하나로 좁혀지지 않으면 잇지 않는다({@code AMBIGUOUS}).
+ * 고른다. 본문이 없는 후보가 있거나 하나로 좁혀지지 않으면 잇지 않는다({@code AMBIGUOUS}). 그런 정정은 회사 판단에 세지 않고
+ * 후보(원래 공시)를 센다(뷰 {@code disclosure_counted}).
  *
  * <p>묶음은 앞 공시를 따라 올라간 맨 앞 공시(뿌리)에서 내려가며 모은다. 묶음에서는 가장 늦게 낸 공시(접수번호가 가장 큰 것)가
  * 나머지를 대체한다. 앞선 공시의 판정은 지우지 않고 {@code superseded_by}만 적는다. 회사 판단의 날짜({@code first_filed_on})는
@@ -40,13 +41,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class CorrectionBundles {
 
-	/** 보고서명에서 머리말과 공백을 뗀 제목. 가운뎃점은 DART가 쓰는 글자(ㆍ)로 맞춘다 */
-	static final String TITLE_KEY = """
-			regexp_replace(regexp_replace(translate(%s, '·・', 'ㆍㆍ'), '[\\s\\u00a0\\u3000]+', '', 'g'), '^(\\[[^]]*\\])+', '')""";
+	/** 보고서명에서 머리말과 공백을 뗀 제목 (V18의 함수) */
+	static final String TITLE_KEY = "disclosure_title_key(%s)";
 
-	/** 보고서명 앞의 머리말을 공백 없이 이어 붙인 것. 머리말이 없으면 빈 글 */
-	static final String PREFIXES = """
-			COALESCE(substring(regexp_replace(%s, '[\\s\\u00a0\\u3000]+', '', 'g') from '^((\\[[^]]*\\])+)'), '')""";
+	/** 보고서명 앞의 머리말을 공백 없이 이어 붙인 것. 머리말이 없으면 빈 글 (V18의 함수) */
+	static final String PREFIXES = "disclosure_prefixes(%s)";
 
 	/** 원래 공시: 머리말이 없거나, 금융당국이 원래 공시에 뒤에 붙이는 머리말뿐이다 */
 	static final String IS_ORIGINAL = "replace(replace(" + PREFIXES + ", '[정정명령부과]', ''), '[정정제출요구]', '') = ''";
@@ -77,24 +76,46 @@ public class CorrectionBundles {
 	}
 
 	/**
+	 * 이 공시를 낸 회사의 묶음을 고치는 트랜잭션 잠금을 건다. 같은 트랜잭션에서 공시의 행을 고치기 전에 부른다
+	 * (행 잠금을 쥔 채 이 잠금을 기다리면 다른 워커와 서로 기다릴 수 있다). 트랜잭션이 끝나면 풀린다.
+	 */
+	public void lockCompanyOf(long disclosureId) {
+		lock(node(disclosureId).companyId());
+	}
+
+	private void lock(long companyId) {
+		jdbc.sql("SELECT pg_advisory_xact_lock(:space, :companyId)")
+			.param("space", LOCK_SPACE)
+			.param("companyId", (int) companyId)
+			.query((rs, n) -> 1)
+			.list();
+	}
+
+	/**
 	 * 정정 공시에서 읽은 날로 앞 공시를 찾아 잇고, 그 공시가 들었던 묶음과 새로 든 묶음을 다시 정한다.
-	 * 같은 값으로 다시 불러도 결과가 같다.
+	 * 이어서 이 공시를 앞 공시 후보로 기다리던 정정(후보가 여러 묶음이라 고르지 못한 것)을 다시 본다.
+	 * 결과는 그때 다른 공시들이 묶여 있는 모양에 따라 달라질 수 있다(먼저 읽은 정정이 고르지 못한 것은 뒤에 다시 본다).
 	 *
 	 * @param disclosureId     본문을 고친 정정 공시
 	 * @param correctedFiledOn 정정 표에서 읽은, 고친 공시의 제출일. 읽지 못했으면 null. 정정 공시의 접수일보다 늦으면
 	 *                         잘못 적힌 것으로 보고 읽지 못한 것과 같이 다룬다
+	 * @param firstFiling      날짜가 금융위원회 서식의 "최초제출일"인지 (원래 공시가 다음 날 접수된 것이 있어 다음 날도 본다)
 	 * @param beforeValues     정정 표의 "정정 전" 칸들. 앞 공시 후보가 여럿일 때 고르는 데 쓴다
 	 */
-	public void link(long disclosureId, LocalDate correctedFiledOn, List<String> beforeValues) {
+	public void link(long disclosureId, LocalDate correctedFiledOn, boolean firstFiling, List<String> beforeValues) {
 		Node node = node(disclosureId);
-		jdbc.sql("SELECT pg_advisory_xact_lock(:space, :companyId)")
-			.param("space", LOCK_SPACE)
-			.param("companyId", (int) node.companyId())
-			.query((rs, n) -> 1)
-			.list();
+		lock(node.companyId());
 		long oldRoot = root(disclosureId);
 		LocalDate date = correctedFiledOn == null || correctedFiledOn.isAfter(node.receivedOn()) ? null : correctedFiledOn;
-		Resolution resolution = date == null ? new Resolution("NO_DATE", null) : resolve(node, date, beforeValues);
+		Resolution resolution = date == null ? new Resolution("NO_DATE", null)
+				: resolve(node, date, firstFiling, tokens(beforeValues));
+		save(disclosureId, date, resolution);
+		recompute(root(oldRoot));
+		recompute(root(disclosureId));
+		retryWaiting(node);
+	}
+
+	private void save(long disclosureId, LocalDate date, Resolution resolution) {
 		jdbc.sql("""
 				UPDATE disclosure
 				   SET corrected_filed_on = :date, corrects_id = :corrects, correction_link = :link, updated_at = now()
@@ -105,43 +126,100 @@ public class CorrectionBundles {
 			.param("link", resolution.link())
 			.param("id", disclosureId)
 			.update();
-		recompute(root(oldRoot));
-		recompute(root(disclosureId));
 	}
 
-	/** 앞 공시를 찾는다. */
-	private Resolution resolve(Node node, LocalDate date, List<String> beforeValues) {
+	/**
+	 * 앞 공시를 찾는다.
+	 * <ol>
+	 * <li>그날 낸 같은 제목의 공시. 후보가 모두 한 묶음이면 그중 가장 늦은 것
+	 * <li>금융위원회 서식이면 다음 날 낸 같은 제목의 공시(위와 같이)
+	 * <li>유형과 꼬리를 뗀 제목이 같은 공시. 제목이 다르므로 "정정 전" 값이 맞아야만 잇는다
+	 * </ol>
+	 * 후보가 여러 묶음이면 "정정 전" 값의 낱말이 모두 든 본문의 후보 하나를 고른다. 본문이 없는 후보가 있으면 고르지 않는다
+	 * (다른 사건을 고를 수 있다).
+	 */
+	private Resolution resolve(Node node, LocalDate date, boolean firstFiling, List<String> tokens) {
+		List<LocalDate> days = new ArrayList<>(List.of(date));
+		if (firstFiling && !date.plusDays(1).isAfter(node.receivedOn())) {
+			days.add(date.plusDays(1));
+		}
 		List<Candidate> candidates = List.of();
+		boolean mustMatch = false;
 		for (boolean sameTitle : new boolean[] {true, false}) {
-			for (LocalDate day : List.of(date, date.plusDays(1))) {
-				if (day.isAfter(node.receivedOn())) {
-					continue;
-				}
+			for (LocalDate day : days) {
 				candidates = candidates(node, day, sameTitle);
 				if (!candidates.isEmpty()) {
 					break;
 				}
 			}
 			if (!candidates.isEmpty()) {
+				mustMatch = !sameTitle;
 				break;
 			}
 		}
 		if (candidates.isEmpty()) {
 			return new Resolution("NO_PREDECESSOR", null);
 		}
-		Optional<Candidate> one = oneBundle(candidates);
-		if (one.isPresent()) {
-			return new Resolution("LINKED", one.get().id());
+		if (!mustMatch) {
+			Optional<Candidate> one = oneBundle(candidates);
+			if (one.isPresent()) {
+				return new Resolution("LINKED", one.get().id());
+			}
 		}
-		List<String> tokens = tokens(beforeValues);
 		if (tokens.isEmpty()) {
 			return new Resolution("AMBIGUOUS", null);
 		}
-		List<Candidate> matched = candidates.stream().filter(candidate -> contains(candidate.id(), tokens)).toList();
+		List<Candidate> matched = new ArrayList<>();
+		for (Candidate candidate : candidates) {
+			Optional<String> text = compactText(candidate.id());
+			if (text.isEmpty()) {
+				return new Resolution("AMBIGUOUS", null);
+			}
+			if (tokens.stream().allMatch(text.get()::contains)) {
+				matched.add(candidate);
+			}
+		}
 		if (matched.isEmpty()) {
 			return new Resolution("AMBIGUOUS", null);
 		}
 		return oneBundle(matched).map(c -> new Resolution("LINKED", c.id())).orElse(new Resolution("AMBIGUOUS", null));
+	}
+
+	/**
+	 * 이 공시가 앞 공시 후보였던 정정 가운데 후보가 여러 묶음이라 고르지 못한 것을 다시 본다. 이 공시가 이어지면서 후보들이
+	 * 한 묶음이 됐으면 잇는다. "정정 전" 값은 다시 견주지 않는다(저장해 두지 않는다).
+	 */
+	private void retryWaiting(Node linked) {
+		List<Long> waiting = jdbc.sql("""
+				SELECT id FROM disclosure
+				 WHERE company_id = :companyId AND correction_link = 'AMBIGUOUS' AND source_key > :receiptNo
+				   AND corrected_filed_on BETWEEN CAST(:day AS date) - 1 AND CAST(:day AS date)
+				 ORDER BY source_key
+				""")
+			.param("companyId", linked.companyId())
+			.param("receiptNo", linked.receiptNo())
+			.param("day", linked.receivedOn())
+			.query(Long.class)
+			.list();
+		for (long id : waiting) {
+			Node node = node(id);
+			LocalDate date = jdbc.sql("SELECT corrected_filed_on FROM disclosure WHERE id = :id")
+				.param("id", id)
+				.query(LocalDate.class)
+				.single();
+			for (LocalDate day : List.of(date, date.plusDays(1))) {
+				List<Candidate> candidates = day.isAfter(node.receivedOn()) ? List.of() : candidates(node, day, true);
+				if (candidates.isEmpty()) {
+					continue;
+				}
+				Optional<Candidate> one = oneBundle(candidates);
+				if (one.isPresent()) {
+					save(id, date, new Resolution("LINKED", one.get().id()));
+					recompute(root(id));
+				}
+				break;
+			}
+		}
 	}
 
 	/** 후보가 모두 한 묶음이면 그중 가장 늦게 낸 것. 여러 묶음이면 비어 있음. */
@@ -201,16 +279,13 @@ public class CorrectionBundles {
 		return List.copyOf(tokens);
 	}
 
-	/** 후보의 저장한 본문에 낱말이 모두 들었는지. 본문이 없으면 false. */
-	private boolean contains(long candidateId, List<String> tokens) {
-		Optional<List<BodyDocument>> documents = bodies.read(candidateId);
-		if (documents.isEmpty()) {
-			return false;
-		}
-		StringBuilder text = new StringBuilder();
-		documents.get().forEach(document -> text.append(SPACES.matcher(document.text()).replaceAll("")));
-		String compact = text.toString();
-		return tokens.stream().allMatch(compact::contains);
+	/** 후보의 저장한 본문을 공백 없이 이은 글. 본문이 없으면 비어 있음. */
+	private Optional<String> compactText(long candidateId) {
+		return bodies.read(candidateId).map(documents -> {
+			StringBuilder text = new StringBuilder();
+			documents.forEach(document -> text.append(SPACES.matcher(document.text()).replaceAll("")));
+			return text.toString();
+		});
 	}
 
 	/** 앞 공시를 따라 올라간 맨 앞 공시의 id. */

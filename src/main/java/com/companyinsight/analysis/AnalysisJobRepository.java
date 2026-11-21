@@ -246,8 +246,7 @@ public class AnalysisJobRepository {
 				  FROM disclosure d
 				 WHERE j.stage = :stage AND j.status = 'DONE'
 				   AND d.id = j.disclosure_id AND d.correction_link IS NULL AND NOT d.is_withdrawn
-				   AND position('[기재정정]' in COALESCE(substring(regexp_replace(d.report_name, '[\\s\\u00a0\\u3000]+', '', 'g')
-				                                         from '^((\\[[^]]*\\])+)'), '')) > 0
+				   AND position('[기재정정]' in disclosure_prefixes(d.report_name)) > 0
 				""")
 			.param("priority", AnalysisPriority.BACKLOG)
 			.param("now", at(now))
