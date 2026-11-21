@@ -29,6 +29,8 @@ Thumbs.db
 # Data
 data/
 *.zip
+# 테스트에 쓰는 실제 응답은 올린다
+!src/test/resources/**/*.zip
 *.sql.gz
 
 # Local

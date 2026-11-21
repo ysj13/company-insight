@@ -41,15 +41,20 @@ public class DisclosureRepository {
 	/**
 	 * 공시에 나온 회사를 먼저 맞춘다. 고유번호 동기화 전에 새로 상장한 회사의 공시가 올 수 있어
 	 * 없으면 넣고, 있으면 시장 구분과 마지막 공시일만 갱신한다.
+	 *
+	 * <p>시장 구분은 이미 아는 마지막 공시일보다 앞선 공시로는 바꾸지 않는다. 긴 기간을 최신부터 읽으면 오래된 페이지가
+	 * 나중에 오는데, 공시에 실린 시장 구분이 접수 당시 값이라면 그 사이 시장을 옮긴 회사가 옛 시장으로 되돌아가기 때문이다.
 	 */
 	private static final String UPSERT_COMPANY = """
 		INSERT INTO company (country, source, source_key, stock_code, name, market, last_disclosed_on)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (source, source_key) DO UPDATE
-		   SET market = EXCLUDED.market,
+		   SET market = CASE WHEN EXCLUDED.last_disclosed_on < company.last_disclosed_on
+		                     THEN company.market ELSE EXCLUDED.market END,
 		       last_disclosed_on = GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on),
 		       updated_at = now()
-		 WHERE company.market IS DISTINCT FROM EXCLUDED.market
+		 WHERE (company.market IS DISTINCT FROM EXCLUDED.market
+		        AND EXCLUDED.last_disclosed_on IS NOT DISTINCT FROM GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on))
 		    OR company.last_disclosed_on IS DISTINCT FROM GREATEST(company.last_disclosed_on, EXCLUDED.last_disclosed_on)
 		""";
 
@@ -59,8 +64,10 @@ public class DisclosureRepository {
 	 */
 	private static final String INSERT_DISCLOSURE = """
 		INSERT INTO disclosure (source, source_key, company_id, report_name, filer_name, rcept_date, remark,
-		                        kind, tone, impact, classified_by, rule_version, is_correction, is_withdrawn)
-		VALUES (?, ?, (SELECT id FROM company WHERE source = ? AND source_key = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                        type_code, title_rule_id, case_code, normalized_title, title_attributes,
+		                        tone, classified_by, title_rule_version, is_correction, is_withdrawn)
+		VALUES (?, ?, (SELECT id FROM company WHERE source = ? AND source_key = ?), ?, ?, ?, ?,
+		        ?, ?, ?, ?, string_to_array(?, ','), ?, ?, ?, ?, ?)
 		ON CONFLICT (source, source_key) DO NOTHING
 		""";
 
@@ -82,21 +89,41 @@ public class DisclosureRepository {
 		""";
 
 	private static final String SELECT_OUTDATED = """
-		SELECT id, report_name, remark
+		SELECT id, report_name, remark, type_code, case_code, tone, classified_by, title_attributes
 		  FROM disclosure
-		 WHERE rule_version < ?
+		 WHERE title_rule_version < ?
 		   AND id > ?
-		   AND classified_by IS DISTINCT FROM 'LLM'
 		 ORDER BY id
 		 LIMIT ?
 		""";
 
 	private static final String UPDATE_CLASSIFICATION = """
-		UPDATE disclosure
-		   SET kind = ?, tone = ?, impact = ?, classified_by = ?, rule_version = ?, is_correction = ?, is_withdrawn = ?,
+		UPDATE disclosure d
+		   SET type_code = n.type_code, title_rule_id = n.title_rule_id, case_code = n.case_code,
+		       normalized_title = n.normalized_title, title_attributes = n.title_attributes,
+		       -- 본문으로 한 판정(방향, 영향도, 판정 주체)은 그대로 두고 유형과 걸린 규칙만 맞춘다.
+		       -- LLM의 판정은 유형이 바뀌어도 둔다. 표로 한 판정은 유형이 같고 제목이 방향을 정하지 않을 때만 둔다
+		       -- (표를 읽는 규칙이 유형마다 다르고, 제목이 방향을 정하게 됐으면 제목의 방향이 맞다)
+		       tone = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                   THEN d.tone ELSE n.tone END,
+		       classified_by = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                            THEN d.classified_by ELSE n.classified_by END,
+		       title_rule_version = n.title_rule_version, is_correction = n.is_correction, is_withdrawn = n.is_withdrawn,
+		       -- 영향도는 뒤 단계가 매긴다. 방향이 바뀌면 옛 영향도가 맞지 않으므로 비운다. 보존하지 않는 표 판정의 영향도도 비운다
+		       impact = CASE WHEN (d.classified_by = 'LLM' OR (d.classified_by = 'TABLE' AND d.type_code IS NOT DISTINCT FROM n.type_code
+		                                                      AND n.tone IS NULL))
+		                          OR (d.classified_by IS DISTINCT FROM 'TABLE' AND d.tone IS NOT DISTINCT FROM n.tone)
+		                     THEN d.impact ELSE NULL END,
+		       -- 비율은 본문에서 읽은 값이다. 유형이 바뀌면 읽는 비율도 달라지므로 비운다
+		       impact_ratio = CASE WHEN d.type_code IS NOT DISTINCT FROM n.type_code THEN d.impact_ratio ELSE NULL END,
 		       updated_at = now()
-		 WHERE id = ?
-		   AND classified_by IS DISTINCT FROM 'LLM'
+		  FROM (SELECT ?::varchar AS type_code, ?::bigint AS title_rule_id, ?::varchar AS case_code,
+		               ?::varchar AS normalized_title, string_to_array(?, ',')::varchar(20)[] AS title_attributes,
+		               ?::varchar AS tone, ?::varchar AS classified_by, ?::int AS title_rule_version,
+		               ?::boolean AS is_correction, ?::boolean AS is_withdrawn, ?::bigint AS id) n
+		 WHERE d.id = n.id
 		""";
 
 	private final JdbcTemplate jdbc;
@@ -140,7 +167,7 @@ public class DisclosureRepository {
 			ps.setString(6, DartText.clean(item.filerName(), FILER_NAME_MAX));
 			ps.setDate(7, Date.valueOf(receiptDate(item)));
 			ps.setString(8, remark);
-			setClassification(ps, 9, c);
+			setClassification(ps, 9, c, classifier.version());
 		})[0];
 		for (int c : counts) {
 			if (c > 0) {
@@ -165,48 +192,52 @@ public class DisclosureRepository {
 	}
 
 	/**
-	 * 지금 규칙보다 옛 버전으로 분류된 공시를 id 순서로 가져온다. LLM이 판정한 공시는 대상이 아니다.
+	 * 지금 대응표보다 옛 버전으로 분류된 공시를 id 순서로 가져온다.
 	 *
-	 * @param ruleVersion 지금 규칙 버전
+	 * @param ruleVersion 지금 대응표 버전
 	 * @param afterId     이 id보다 큰 행부터 (처음이면 0)
 	 * @param limit       최대 건수
 	 */
 	public List<Outdated> findOutdated(int ruleVersion, long afterId, int limit) {
 		return jdbc.query(SELECT_OUTDATED,
-			(rs, rowNum) -> new Outdated(rs.getLong("id"), rs.getString("report_name"), rs.getString("remark")),
+			(rs, rowNum) -> new Outdated(rs.getLong("id"), rs.getString("report_name"), rs.getString("remark"),
+				rs.getString("type_code"), rs.getString("case_code"),
+				rs.getString("tone") == null ? null : Tone.valueOf(rs.getString("tone")),
+				rs.getString("classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("classified_by")),
+				rs.getArray("title_attributes") == null ? java.util.Set.of()
+						: java.util.Set.of((String[]) rs.getArray("title_attributes").getArray())),
 			ruleVersion, afterId, limit);
 	}
 
 	/**
-	 * 분류 결과를 저장한다. 그 사이 LLM이 판정한 공시는 건드리지 않는다.
+	 * 분류 결과를 저장한다. 본문으로 판정한 공시(LLM, 유형이 그대로인 표 판정)는 유형과 걸린 규칙만 맞추고 판정은 건드리지 않는다.
 	 *
-	 * @param ruleVersion 적용한 규칙 버전
+	 * @param ruleVersion 적용한 대응표 버전
 	 */
 	@Transactional
 	public void updateClassifications(Map<Long, Classification> byId, int ruleVersion) {
 		List<Map.Entry<Long, Classification>> entries = new ArrayList<>(byId.entrySet());
 		jdbc.batchUpdate(UPDATE_CLASSIFICATION, entries, entries.size(), (ps, entry) -> {
 			Classification c = entry.getValue();
-			ps.setString(1, c.kind().name());
-			ps.setString(2, c.tone() == null ? null : c.tone().name());
-			ps.setObject(3, c.impact(), Types.SMALLINT);
-			ps.setString(4, c.classifiedBy() == null ? null : c.classifiedBy().name());
-			ps.setInt(5, ruleVersion);
-			ps.setBoolean(6, c.correction());
-			ps.setBoolean(7, c.withdrawn());
-			ps.setLong(8, entry.getKey());
+			setClassification(ps, 1, c, ruleVersion);
+			ps.setLong(11, entry.getKey());
 		});
 	}
 
-	/** kind부터 is_withdrawn까지 분류 컬럼 7개를 채운다. */
-	private static void setClassification(PreparedStatement ps, int start, Classification c) throws SQLException {
-		ps.setString(start, c.kind().name());
-		ps.setString(start + 1, c.tone() == null ? null : c.tone().name());
-		ps.setObject(start + 2, c.impact(), Types.SMALLINT);
-		ps.setString(start + 3, c.classifiedBy() == null ? null : c.classifiedBy().name());
-		ps.setInt(start + 4, DisclosureClassifier.RULE_VERSION);
-		ps.setBoolean(start + 5, c.correction());
-		ps.setBoolean(start + 6, c.withdrawn());
+	/** type_code부터 is_withdrawn까지 분류 컬럼 10개를 채운다. */
+	private static void setClassification(PreparedStatement ps, int start, Classification c, int ruleVersion)
+			throws SQLException {
+		ps.setString(start, c.typeCode());
+		ps.setObject(start + 1, c.titleRuleId(), Types.BIGINT);
+		ps.setString(start + 2, c.caseCode());
+		ps.setString(start + 3, c.normalizedTitle());
+		// 빈 문자열은 빈 배열이 된다
+		ps.setString(start + 4, String.join(",", c.attributes()));
+		ps.setString(start + 5, c.tone() == null ? null : c.tone().name());
+		ps.setString(start + 6, c.classifiedBy() == null ? null : c.classifiedBy().name());
+		ps.setInt(start + 7, ruleVersion);
+		ps.setBoolean(start + 8, c.correction());
+		ps.setBoolean(start + 9, c.withdrawn());
 	}
 
 	/** 저장하는 보고서명. 분류도 이 값으로 한다. */
@@ -225,8 +256,28 @@ public class DisclosureRepository {
 	 * @param id         공시 ID
 	 * @param reportName 보고서명
 	 * @param remark     비고
+	 * @param typeCode   지금 저장된 유형. 아직 분류하지 않았으면 null
+	 * @param caseCode   지금 저장된 경우
+	 * @param tone         지금 저장된 판정
+	 * @param classifiedBy 지금 저장된 판정의 주체. 판정하지 않았으면 null
+	 * @param attributes   지금 저장된 제목 속성
 	 */
-	public record Outdated(long id, String reportName, String remark) {
+	public record Outdated(long id, String reportName, String remark, String typeCode, String caseCode, Tone tone,
+			ClassifiedBy classifiedBy, java.util.Set<String> attributes) {
+
+		/**
+		 * 다시 분류한 결과가 지금 저장된 것과 유형·경우·제목이 정한 방향·제목 속성 중 하나라도 다른지.
+		 * 속성(자회사의 공시, 철회·취하 꼬리)은 본문 표 읽기가 판정을 가르는 데 쓴다. 다르면 뒤 단계를 다시 지나야 한다.
+		 *
+		 * <p>방향은 제목 규칙이 정한 것끼리만 견준다. 뒤 단계(본문)가 정한 방향은 제목 규칙의 결과가 아니므로,
+		 * 제목이 방향을 정하지 않는 공시가 본문으로 판정을 받았다는 것만으로는 바뀐 것이 아니다.
+		 * 그렇게 보지 않으면 대응표를 고칠 때마다 이미 판정한 공시가 모두 뒤 단계를 다시 지난다.
+		 */
+		public boolean differsFrom(Classification c) {
+			Tone titleTone = classifiedBy == ClassifiedBy.RULE ? tone : null;
+			return !java.util.Objects.equals(typeCode, c.typeCode()) || !java.util.Objects.equals(caseCode, c.caseCode())
+					|| titleTone != c.tone() || !attributes.equals(java.util.Set.copyOf(c.attributes()));
+		}
 	}
 
 	/** 공시에 나온 회사를 추가하거나 시장 구분·마지막 공시일을 갱신한다. 공시보다 먼저 실행해야 공시가 회사의 내부 번호를 찾는다. */

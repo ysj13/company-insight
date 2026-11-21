@@ -15,6 +15,7 @@
 | 스키마 | Flyway |
 | 캐시 | Caffeine |
 | 외부 API 호출 | Spring `RestClient`, 가상 스레드, `@Retryable`, `@ConcurrencyLimit`, Resilience4j RateLimiter |
+| 공시 본문 읽기 | jsoup (거래소 공시의 HTML, 금융위·공정위 문서의 DART 전용 XML에서 글자와 표를 읽는다) |
 | LLM | LLM API를 `LlmClient` 인터페이스 뒤에 두어 모델을 바꿀 수 있게 한다. 모델은 분석 기능을 설계할 때 정한다 |
 | API 문서 | springdoc-openapi |
 | 화면 | Thymeleaf(서버 렌더링), JavaScript, Chart.js (`static/vendor`에 고정 버전으로 포함) |
@@ -31,7 +32,7 @@ Gradle 모듈 하나, 기능별 패키지로 나눈다.
 com.companyinsight
 ├── company       기업 목록(고유번호), 검색
 ├── disclosure    공시 수집, 규칙 분류
-├── analysis      작업 큐, 워커, LLM 요약, 원문 대조 검증
+├── analysis      작업 큐, 워커, 본문 받기, 표 읽기, AI 판정·요약, 원문 대조 검증
 ├── score         호재/악재 점수, 일별 추이
 ├── financial     재무 수집
 ├── backfill      Spring Batch 백필
@@ -58,14 +59,20 @@ com.companyinsight
 | 테이블 | 핵심 컬럼 |
 |---|---|
 | `company` | id(PK), country, source, source_key(source와 묶어 **unique**. DART는 고유번호), stock_code, name, market |
-| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, kind, tone, impact, classified_by(RULE/LLM), rule_version, is_correction, is_withdrawn |
+| `disclosure` | id, source, source_key(source와 묶어 **unique**. DART는 접수번호), company_id, report_name, rcept_date, type_code, title_rule_id, title_rule_version, case_code, normalized_title, title_attributes, tone, impact, impact_ratio(크기를 정할 때 본 원래 비율), classified_by(RULE 제목 규칙/TABLE 본문 표/LLM), is_correction, is_withdrawn |
+| `disclosure_type` | code(PK. 예: A1), bundle, name, judge_method(TITLE/CODE/AI), default_tone, fetch_body, sort_order |
+| `title_rule` | id, source, match_kind(EXACT/FORM/FORM_WORD), pattern, tail_word(FORM_WORD 줄의 꼬리 낱말. source, match_kind, pattern과 묶어 **unique**), type_code, tone, judge_method, case_code, memo, added_version |
+| `title_attribute` | source, token(제목에서 떼는 속성 꼬리), attribute |
+| `title_rule_version` | version(PK), applied_at, note. 대응표를 고치는 마이그레이션마다 한 줄 |
 | `disclosure_summary` | disclosure_id, lines(핵심 3줄), model, verified |
-| `analysis_job` | id, disclosure_id, priority, status(READY/RUNNING/DONE/FAILED), attempts, next_run_at |
+| `analysis_job` | id, disclosure_id, stage(FETCH_BODY/READ_TABLE/AI_JUDGE/AI_SUMMARY. disclosure_id와 묶어 **unique**), status(PENDING/RUNNING/DONE/FAILED), outcome(ENDED/PASSED/NO_BODY/HELD), priority, run_after, attempts, deferrals, enqueue_reason, locked_at, last_run_id. 공시 한 건의 한 단계가 한 행 |
+| `analysis_run` | job_id, disclosure_id, stage, started_at, finished_at, outcome, enqueue_reason, pass_reason, error_kind, error_code, error, result(JSONB), setting_version_id, input_tokens, output_tokens. 실행 한 번이 한 행이고 쌓기만 한다 |
+| `disclosure_body` | disclosure_id(PK), content(출처가 준 본문 압축 파일 그대로, bytea), byte_size, file_count, fetched_at. 공시 한 건의 본문 원문이 한 행. 글자는 저장하지 않고 쓸 때마다 뽑는다 |
 | `company_score` | company_id, date, score, up_sum, down_sum (company_id+date unique) |
 | `financial` | company_id, source, fiscal_year, report_type(Q1/HALF/Q3/ANNUAL. 넷을 묶어 **unique**), payload(출처 응답 전체, JSONB), fetched_at. 보고서 한 건의 응답 하나가 한 행 |
 | `collection_run` | source, started_at, finished_at, status, fetched, saved, error, error_kind, error_code |
 
-`company`, `disclosure`, `collection_run`, `financial`은 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
+`company`, `disclosure`, `disclosure_type`, `title_rule`, `title_attribute`, `title_rule_version`, `collection_run`, `financial`, `analysis_job`, `analysis_run`, `disclosure_body`는 만들어져 있다. 나머지 테이블의 컬럼은 해당 단계에서 확정한다.
 
 ## 2. 개발 도구
 
@@ -154,13 +161,20 @@ com.companyinsight
 | 5-2 | 11/17 | 구조 변경 | `company`의 기준 키를 내부 번호로 바꾸고 나라·출처·출처에서의 번호를 저장, `disclosure`의 중복 방지를 "출처 + 출처의 공시 번호"로 변경, 회사 참조를 내부 번호로, 기존 데이터 이전(Flyway V7) | 이전 뒤 회사·공시 건수가 같고, 같은 공시를 다시 받아도 한 번만 저장됨 |
 | 5-3 | 11/17 | 재무 수집 | OpenDART 주요계정으로 보고서별 매출액·영업이익·당기순이익 수집(회사 한 곳을 지정해 받기, 설정한 종목코드는 앱 시작 때 수집), 분기·연간 실적과 전년 동기 대비 증감·영업이익률 계산, 실적 조회 API(`/api/companies/{id}/financials`) | 테스트 회사 세 곳의 재무가 저장되고 증감이 보고서의 수치로 계산한 값과 맞음 |
 | 5-4 | 11/17 | 재무 응답 그대로 저장 | `financial`을 주요계정 응답을 보고서 단위로 그대로 저장하는 테이블로 변경(Flyway V9), 계정의 금액은 조회할 때 응답에서 읽음 | 테스트 회사 세 곳의 응답 33건이 저장되고 실적 조회 결과가 이전과 같음 |
+| 5-5 | 11/20 | 회사 지정 공시 수집 | 종목코드로 지정한 회사의 공시 목록을 기간(기본 12개월)으로 받기(공시검색에 고유번호 지정), 설정한 종목코드는 앱 시작 때 수집. 본문은 받지 않는다 | 테스트 회사 세 곳의 1년치 공시 목록이 저장되고 다시 받아도 건수가 같음 |
+| 5-6 | 11/20 | 유형 대응표 | 공시 유형 75가지와 "제목 → 유형" 대응표를 DB 테이블로(Flyway V10 구조, V11 처음 값, V12 대응표 버전 2: 꼬리별 방향 고침과 금융감독원 조치 서식 셋, V13 버전 3: 서식 이름 + 꼬리에 든 낱말로 거는 대응 방식, V14 버전 4: 소송 제기의 항고 꼬리), 분류기가 앱이 뜰 때 대응표를 읽어 유형·걸린 규칙·대응표 버전·속성을 저장, 제목으로 방향이 정해지는 공시만 판정(관리종목·상장폐지 관련 안내는 꼬리별로 방향과 경우), 종류 9가지(`kind`)와 자바 규칙 걷어냄, 공시 목록 화면은 유형 묶음으로 거름 | 로컬 DB 15,594건에 적용해 대응표를 만들 때 본 제목이 모두 확정한 유형과 같음 (`PLAN.md` 6절) |
+| 6 | 11/21 | 분석 작업 큐 | 큐 `analysis_job`(공시 한 건의 한 단계가 한 행)과 실행 기록 `analysis_run`(Flyway V15), `SKIP LOCKED`로 꺼내기, 끝 기록·다음 단계 줄 세우기를 한 트랜잭션으로, 실패 3번이면 멈춤, 실패로 세지 않는 미룸, 끝을 보지 못한 실행 되돌리기(10분), 우선순위(새 공시 → 과거분·다시 돌리기), 본문을 받는 유형의 공시를 본문 받기에 줄 세우기, 분석 대상 회사 설정(`app.analysis.target-stock-codes`), 다시 분류해 바뀐 공시는 표 읽기부터 다시. 단계별 처리(본문 받기, 표 읽기, AI)는 다음 단계에서 붙인다 | 워커 여럿이 같은 작업을 집지 않음을 테스트로 확인, 로컬 DB에서 테스트 회사 세 곳의 공시 3,982건이 한 번씩 줄 섬 |
+| 7-1 | 11/21 | 공시 본문 받기 | 큐의 본문 받기 단계: OpenDART 공시서류원본파일로 본문 zip을 받아 풀리는지 확인한 뒤 그대로 저장(`disclosure_body`, Flyway V16), 본문이 없는 공시는 "본문 없음"으로 끝냄, 하루 한도·인증 오류는 실패로 세지 않고 본문 받기 전체를 미룸, 이미 받은 본문은 다시 받지 않음. 글자 추출(HTML과 DART 전용 XML. 표의 한 줄을 글의 한 줄로)은 저장하지 않고 쓸 때마다 한다. 다음 단계 정하기: 제목으로 중립이 정해진 공시와 첨부만 고친 공시는 여기서 끝, 포괄 제목·꼬리 미상·미분류는 AI 판정으로, 나머지와 본문을 고친 정정 공시는 표 읽기로 | 테스트 회사 세 곳의 공시 가운데 유형 29가지의 표본 70건을 실제로 받아 모두 저장되고 글자가 뽑힘 |
+| 7-2a | 11/21 | 본문 표 읽기 (틀, 실적·감사·유상증자) | 큐의 표 읽기 단계: 저장한 본문의 표를 자리가 맞는 격자로 펼쳐 정해진 항목을 읽는다(정정 공시는 맨 앞의 정정 표를 빼고 고친 본문을 읽는다). 잠정실적·손익구조 변동(영업이익의 증감), 감사보고서 제출(감사의견, 계속기업, 내부회계), 유상증자(증자방식, 신주 비율)는 코드가 방향과 크기를 정하고 판정 주체 `TABLE`로 적는다(Flyway V17, `disclosure.impact_ratio`). 방향을 정하는 항목을 읽지 못했거나 제3자배정·자회사의 유상증자, 철회가 적힌 정정이면 AI 판정으로, 호재·악재면 AI 요약으로 넘긴다. 크기의 경계값과 고정값은 `app.judgment.impact` 설정 | 테스트 회사 세 곳의 네 유형 46건이 모두 읽힘(코드가 판정 39, 규칙에 따라 AI로 넘김 7). 다른 상장사의 최근 30일치를 더한 813건은 코드가 판정 641, 규칙에 따라 AI로 넘김 171, 읽지 못함 1 |
+| 7-2b | 11/21 | 본문 표 읽기 (지분 보고) | 지분 보고의 세 서식을 제목으로 가려 읽는다. 임원ㆍ주요주주 소유상황보고서와 최대주주등 소유주식변동신고서는 변동 내역의 줄마다 사유와 증감을 읽어, 매수·매도(장내, 장외, 시간외, 신고대량매매, 공개매수)인 줄의 순증감이 발행주식총수의 몇 %인지로 방향과 크기를 정한다(0.01% 미만은 중립, 0.1% 이상은 2, 가장 큰 크기는 2). 상여금·신규 선임·증여·신주 취득·"기타"처럼 매매가 아닌 변동만 있으면 중립이다. 대량보유상황보고서는 주식등의 비율이 직전 보고서보다 얼마나 늘거나 줄었는지(%p)로 정하고(1%p 이상은 2), 세부변동내역의 매수·매도 줄을 더한 순증감이 비율과 같은 쪽이 아니거나 직전 보고서가 없는 신규 보고면 중립이다. 정해 두지 않은 사유가 있거나 사유 없이 증감만 적혀 있으면 추측하지 않고 AI 판정으로 넘긴다. 지분 보고는 방향이 정해져도 AI 요약으로 넘기지 않는다(요약은 읽은 항목으로 쓴다). 읽는 규칙이 없어 판정 없이 끝났던 표 읽기 작업은 앱이 뜰 때 규칙이 생긴 유형만 다시 줄 세운다. 경계값은 `app.judgment.impact.ownership` 설정 | 테스트 회사 세 곳의 1년치와 다른 상장사의 최근 30일치 지분 보고 5,963건: 코드가 판정 5,945(호재 816, 악재 244, 중립 4,885), AI로 넘김 18(사유 없이 증감만 적힌 것 9, 정해 두지 않은 사유 4, 철회가 적힌 정정 3, 증감의 부호가 사유와 다른 것 2). 다른 방법으로 다시 읽은 값과 견준 5,960건의 판정이 모두 같음 |
+| 7-2c | 11/21 | 본문 표 읽기 (크기 비율, 보증·대여·차입, 전환가액, 자산 재평가) | 제목으로 방향이 정해지는 유형은 본문 표의 비율로 크기를 정해 적는다(방향과 판정 주체는 제목 규칙 그대로): 공급계약 체결·해지는 매출액 대비, 시설 투자·소송 제기는 자기자본 대비(10% / 30% 경계), 주식 관련 사채 발행·자기사채 매도·전환 청구 행사는 발행할 주식의 주식총수 대비(5% / 20%, 전환 청구 행사는 1% 미만이면 중립), 주식 소각은 소각 주식 수 ÷ 발행주식 총수(1% / 5%), 횡령·배임은 자기자본 대비에 가장 작은 크기 2, 회계처리기준 위반 조치는 2. 비율 칸이 비면 크기 1. 채무보증·담보 제공·금전 대여는 자기자본 대비 30% 이상 악재 1, 100% 이상 악재 2, 단기차입금 증가는 50% 이상 악재 1이고 그 아래는 중립. 단기차입금 감소는 중립, 표를 확인하지 않은 서식(채무인수 등)은 AI 판정. 전환가액 등 조정은 가액이 내려갔고 사유가 시가 하락(시가 변동)뿐이면 악재 1, 가액이 그대로이거나 비례 조정뿐이거나 시가 하락 없이 오르면 중립, 시가 하락과 비례 조정이 함께 적히거나 사유와 가액이 어긋나면 AI 판정. 자산 재평가 결과는 재평가차액이 0보다 크면 호재 1, 손실이면 AI 판정. 규칙이 없던 때 크기 없이 지나간 제목 유형의 공시도 앱이 뜰 때 다시 줄 세운다. 경계값과 고정값은 `app.judgment.impact` 설정 | 테스트 회사 세 곳의 1년치와 다른 상장사의 최근 30일치, 자산 재평가 1년치를 더한 14개 유형 995건: 제목 유형 724건 모두 크기가 붙음, 보증·대여·차입 188건 중 악재 16, 중립 163, AI로 넘김 9, 전환가액 조정 56건 중 악재 41, 중립 9, AI로 넘김 6, 자산 재평가 결과 27건 모두 호재. 다른 방법으로 다시 낸 판정과 995건이 모두 같음 |
 
 **MVP (~ 11/22)**
 
 | # | 기간 | 단계 | 만드는 것 | 완료 기준 |
 |---|---|---|---|---|
-| 6 | 11/18 | 작업 큐 | `analysis_job`, `SKIP LOCKED` 워커, 우선순위, 3회 실패 시 FAILED | 워커 2개가 같은 작업을 중복 처리하지 않음을 테스트로 확인 |
-| 7 | 11/19 | LLM 분석 | 원문 받아 텍스트 추출 → LLM 요약·분류 → 금액·날짜 원문 대조 → 하루 예산 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
+| 7-2d | 11/25~26 | 본문 표 읽기 (정정) | 정정 표 읽기와 묶음 잇기 | 정정 공시가 원래 공시와 이어지고 같은 일을 두 번 세지 않음 |
+| 7-3 | 11/27~28 | AI 판정과 요약 | AI 판정·요약 → 근거 문장·금액·날짜 원문 대조 → 하루 한도 | 테스트 회사의 공시에 판정과 핵심 3줄이 붙음 |
 | 8 | 11/20 | 판단 계산 | 회사 단위 판단 점수 계산(공시 건별 판정과 재무 실적 반영), 단계 이름 변환, 저장 | 테스트 회사의 판단이 계산되고 근거를 설명할 수 있음 |
 | 9·10 | 11/21~22 | 조회와 종목 화면 | 종목 요약·타임라인 조회(QueryDSL), Thymeleaf 종목 화면(머리의 판단, 탭: 공시·개요·재무·뉴스, 공시 패널, 고지 문구), 검색창에서 종목 화면으로 이동. 판단 추이와 예정 일정은 MVP 뒤 | 테스트 회사의 종목 화면이 실제 데이터로 뜸 |
 

@@ -99,11 +99,35 @@ public class DartClient {
 	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
 			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
 	public DisclosureListResponse listDisclosures(LocalDate from, LocalDate to, int pageNo) {
-		Map<String, Object> params = Map.of(
+		return listDisclosures(Map.of(
 			"bgn_de", DartText.formatDate(from),
 			"end_de", DartText.formatDate(to),
 			"page_no", pageNo,
-			"page_count", MAX_PAGE_COUNT);
+			"page_count", MAX_PAGE_COUNT), pageNo);
+	}
+
+	/**
+	 * 회사 한 곳의 기간 내 공시 목록 한 페이지. 최신 접수번호가 먼저 온다. 데이터가 없으면 빈 목록.
+	 *
+	 * <p>회사를 지정하면 검색 기간이 3개월로 제한되지 않아 1년 이상을 한 번에 조회할 수 있다.
+	 *
+	 * @param corpCode DART 고유번호 (8자리)
+	 * @param from     시작일 (포함)
+	 * @param to       종료일 (포함)
+	 * @param pageNo   페이지 번호 (1부터)
+	 */
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
+	public DisclosureListResponse listDisclosures(String corpCode, LocalDate from, LocalDate to, int pageNo) {
+		return listDisclosures(Map.of(
+			"corp_code", corpCode,
+			"bgn_de", DartText.formatDate(from),
+			"end_de", DartText.formatDate(to),
+			"page_no", pageNo,
+			"page_count", MAX_PAGE_COUNT), pageNo);
+	}
+
+	private DisclosureListResponse listDisclosures(Map<String, Object> params, int pageNo) {
 		DisclosureListResponse response = get("/api/list.json", params, DisclosureListResponse.class);
 		if (response == null || response.status() == null) {
 			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "공시검색 응답이 비어 있음");
@@ -163,6 +187,35 @@ public class DartClient {
 			return Optional.empty();
 		}
 		throw ExternalApiException.of(SOURCE, kind, response.status(), response.message());
+	}
+
+	/**
+	 * 공시 한 건의 본문 원문 파일(zip. 안에 문서 파일이 하나 이상 있다)을 받는다.
+	 *
+	 * @param receiptNo 접수번호 (14자리)
+	 * @return 받은 zip 그대로. 본문이 없는 공시(첨부만 고친 정정 등)면 비어 있음
+	 */
+	@Retryable(includes = RetryableExternalApiException.class, maxRetries = 2,
+			delayString = RETRY_DELAY, jitterString = RETRY_JITTER, multiplier = 2)
+	public Optional<byte[]> downloadDocument(String receiptNo) {
+		byte[] body = get("/api/document.xml", Map.of("rcept_no", receiptNo), byte[].class);
+		if (body == null || body.length == 0) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "empty", "공시 원문 응답이 비어 있음");
+		}
+		if (isZip(body)) {
+			return Optional.of(body);
+		}
+		// 오류와 "파일 없음"은 zip이 아니라 상태 코드가 든 짧은 XML로 온다
+		String text = new String(body, 0, Math.min(body.length, 2000), StandardCharsets.UTF_8);
+		String status = firstGroup(text, XML_STATUS, JSON_STATUS, "unknown");
+		if (STATUS_OK.equals(status)) {
+			throw ExternalApiException.of(SOURCE, ErrorKind.PARSE, "not-zip", "공시 원문 응답이 zip이 아님");
+		}
+		ErrorKind kind = classify(status);
+		if (kind == null) {
+			return Optional.empty();
+		}
+		throw ExternalApiException.of(SOURCE, kind, status, firstGroup(text, XML_MESSAGE, JSON_MESSAGE, "zip이 아닌 응답"));
 	}
 
 	private <T> T get(String path, Map<String, Object> params, Class<T> type) {
