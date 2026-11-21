@@ -96,12 +96,13 @@ h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03
 .seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
 .seg button:active{background:var(--btn-press);color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
-/* 칩(누를 수 없는 표시): 호재·악재·중립과 "뉴스". 기호 없이 글자로. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정 */
+/* 칩(누를 수 없는 표시): 호재·악재·중립과 일반 칩(머리의 "업데이트 지연"). 기호 없이 글자로. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정 */
 .tone,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-sm);white-space:nowrap}
 .tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
 .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
 .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
 .chip{color:var(--text-sub);border:1px solid var(--line-hover)}
+.co .chip{margin-left:var(--s2);vertical-align:middle} /* 머리의 기준일 옆 "업데이트 지연" */
 /* 입력창 */
 .field{position:relative}
 .field .i{position:absolute;left:var(--s3);top:50%;margin-top:-10px;color:var(--text-faint);pointer-events:none}
@@ -179,6 +180,7 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .tl .item:hover{background:var(--fill-hover)} .tl .item:active,.tl .item[aria-current="true"]{background:var(--fill-selected)}
 .tl .lab{display:flex;gap:var(--s2);align-items:baseline} .tl .lab b{font-weight:600;color:var(--text-sub)} .tl .lab .tw{font-weight:600}
 .tl .today .lab,.tl .today .lab b{color:var(--text);font-weight:600}
+.tl .lab b.same{visibility:hidden} /* 같은 날 둘째 줄부터 날짜 자리를 비운다(화면 읽기에는 숨긴 글자로 날짜를 준다) */
 .tl .plan .row-title{color:var(--text-sub)}
 .tl + .empty{margin-top:var(--s3)}
 
@@ -219,12 +221,13 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .chk li b{font-weight:600;text-align:right} .chk li.bad b{color:var(--down)}
 .extlink{display:inline-flex;align-items:center;gap:var(--s1);color:inherit;text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px}
 
-/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 언론사 · 시각 */
+/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 출처 · 시각. 누르면 원문 기사(새 창) */
 .news{list-style:none;margin:calc(var(--s3) * -1) 0 0;padding:0} /* 첫 줄의 안쪽 여백이 카드 여백과 겹쳐 위가 비어 보이지 않게 */
 .news li + li{border-top:1px solid var(--line)}
 .news a{display:grid;gap:var(--s1);padding:var(--s3);margin:0 calc(var(--s3) * -1);border-radius:var(--r-md);color:inherit;text-decoration:none;transition:background var(--fast)}
 .news a:hover{background:var(--fill-hover)} .news a:active,.news a[aria-current="true"]{background:var(--fill-selected)}
-.news.nlist{margin-top:var(--s1)} /* 전체 뉴스 화면: 월 제목 아래 */
+.news.nlist{margin-top:var(--s1)} /* 전체 뉴스 화면: 찾기 아래 */
+.news .meta .i{margin-left:var(--s1);vertical-align:-3px} /* 원문 기사로 가는 줄(새 창)의 바깥 링크 아이콘 */
 
 /* 전체 공시 화면 */
 .back{margin-bottom:var(--s2)}
@@ -254,14 +257,13 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
 
-/* ───────── 공시 한 건·뉴스 한 건 (아래에서 올라오는 패널) ───────── */
+/* ───────── 공시 한 건 (아래에서 올라오는 패널) ───────── */
 .dv-verdict{display:flex;gap:var(--s1) var(--s2);flex-wrap:wrap;align-items:center}
 .dv-title{margin-top:var(--s3)}
 .dv-title + .meta,.dv-title + .dv-srclink{margin-top:var(--s2)}
 .dv ul{margin:var(--s2) 0 0;padding-left:var(--s4);line-height:1.65}
 .dv .ai-box,.dv .ai-wait{margin-top:var(--s4)}
 .dv .notice{margin-top:var(--s3)}
-.dv .news-src{margin-top:var(--s6)}
 /* 원문 링크: 패널 제목 아래 "날짜 · DART 공시 이름" 줄이 곧 원문 링크(출처 표시와 원문 링크를 한 줄로) */
 .dv-srclink{display:inline-flex;align-items:center;gap:var(--s1);min-height:32px;color:var(--text-sub);text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px;transition:color var(--fast),text-decoration-color var(--fast)}
 .dv-srclink:hover{color:var(--text);text-decoration-color:var(--text-sub)}
@@ -473,7 +475,7 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
     <h2>표시 부품 (누를 수 없음)</h2>
     <p class="meta">칩, 판단 이름, 카드, 칸은 누를 수 없어서 hover·누름 상태가 없어요. 누를 수 없는 것에 hover를 두면 눌리는 것처럼 보이기 때문이에요.</p>
     <div class="sec-body">
-      <div class="card"><h3 class="box-title">칩: 호재·악재·중립과 뉴스. 한 줄에 하나까지</h3>
+      <div class="card"><h3 class="box-title">칩: 호재·악재·중립과 일반 칩(머리의 "업데이트 지연"). 한 줄에 하나까지</h3>
         <div style="display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)" id="chips"></div>
         <h3 class="box-title" style="margin-top:var(--s6)">판단 이름: 회사 이름 옆 색 글자(17 / 800). 상자·알약·눈금 없음. 다섯 단계 + 판단 보류(보조색)</h3>
         <div style="display:flex;flex-wrap:wrap;gap:var(--s2) var(--s6);margin-top:var(--s3)" id="verdicts"></div></div>
@@ -498,15 +500,17 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
         <div class="tabs" role="tablist" aria-label="탭 예시"><button type="button" role="tab" aria-selected="true">공시</button><button type="button" role="tab" aria-selected="false">개요</button><button type="button" role="tab" aria-selected="false">재무</button><button type="button" role="tab" aria-selected="false">뉴스</button></div>
         <section class="card" aria-label="공시 타임라인 예시"><ol class="tl" id="tl-sample"></ol></section>
       </div>
-      <p class="meta faint">타임라인: 위가 앞날(빈 점, "예정 · D-n"), 흰 큰 점이 오늘, 아래로 지난 공시. 점의 색은 호재·악재, 점의 크기는 영향(작음 8 / 보통 11 / 큼 15px), 공시 사이 간격은 날짜 차이(하루 5px, 최대 14일치). 줄은 "날짜 요일 · 호재/악재" 아래 DART 공시 이름(원문 그대로).</p>
+      <p class="meta faint">타임라인: 위가 앞날(빈 점, "예정 · D-n"), 흰 큰 점이 오늘, 아래로 지난 공시. 점의 색은 호재·악재, 점의 크기는 영향(작음 8 / 보통 11 / 큼 15px), 공시 사이 간격은 날짜 차이(하루 5px, 최대 14일치). 줄은 "날짜 요일 · 호재/악재" 아래 DART 공시 이름(원문 그대로). 같은 날 공시가 여럿이면 둘째 줄부터 날짜 자리를 비워요(화면 읽기에는 날짜를 알려요).</p>
       <div class="long-name"><div class="co"><div class="nm"><h1>에이치디현대중공업기계</h1><span class="verdict down">약한 악재</span></div><div class="meta num">000000 · 코스피 · 11.06 기준</div></div></div>
       <p class="meta faint">폭 375px: 이름이 길어 한 줄에 들어가지 않으면 판단이 이름 바로 아래 줄로 내려가요.</p>
+      <div class="co"><div class="nm"><h1>삼성전자</h1><span class="verdict up">약한 호재</span></div><div class="meta num">005930 · 코스피 · 11.05 기준<span class="chip">업데이트 지연</span></div></div>
+      <p class="meta faint">분석 실패·수집 지연: 마지막 예정 작업(공시 수집 또는 저녁 분석)이 실패로 끝나면 지난 판단과 그 기준일을 보여주고, 기준일 옆에 "업데이트 지연" 칩을 둬요(모든 탭에서 보임). 원인은 공시 탭 첫 카드 아래 한 줄로 알려요.</p>
     </div>
   </section>
 
   <!-- 9. 패널 -->
   <section class="sec" id="panel">
-    <h2>패널 (공시 한 건, 뉴스 한 건)</h2>
+    <h2>패널 (공시 한 건)과 뉴스 줄</h2>
     <p class="meta">아래에서 올라오는 시트예요. 넓은 화면에서는 본문 카드와 같은 너비로 가운데에서, 높이는 화면의 80%까지. 폭 640px 이하에서는 화면 폭 전체에 88%까지. 유리(950 80% + 흐림 24px)이고 위쪽 모서리만 둥글어요. 열면 포커스가 닫기 버튼으로 가고, Esc·바깥 막·닫기·뒤로 가기로 닫혀요.</p>
     <div class="sec-body">
       <div class="panel-mini"><div class="drawer-h"><span class="meta">삼성전자</span><button type="button" class="btn icon" aria-label="닫기 보기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
@@ -518,15 +522,8 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
           <p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p></div></div>
         <div class="drawer-f"><button type="button" class="tbtn num"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>이전 공시 10.24</button><button type="button" class="tbtn num">다음 공시 11.03<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div></div>
       <p class="meta faint">공시 패널: 호재·악재 칩과 영향 → 쉬운 말 한 줄(제목) → "날짜 · DART 공시 이름" 줄이 곧 원문 링크 → AI 3줄 요약(평문) → 고지. 중립 공시는 요약 자리를 비워요.</p>
-      <div class="panel-mini"><div class="drawer-h"><span class="meta">삼성전자</span><button type="button" class="btn icon" aria-label="닫기 보기"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-        <div class="drawer-b"><div class="dv">
-          <div class="dv-verdict meta"><span class="chip">뉴스</span></div>
-          <h2 class="dv-title">삼성전자, 신규 공급 계약 체결</h2>
-          <p class="meta num">예시경제 · 어제 17:20</p>
-          <div class="ai-box"><p class="box-title ai-tag">AI 요약</p><ul><li>메모리 반도체 공급 계약을 새로 맺었다는 내용</li><li>계약 금액은 최근 매출액의 1.2%라고 전함</li><li>계약 기간은 2027년 12월까지</li></ul></div>
-          <p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p>
-          <a class="btn news-src" href="#" onclick="return false">원문 기사 보기<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6"/><path d="M19 5l-8 8"/><path d="M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10"/></svg></a></div></div></div>
-      <p class="meta faint">뉴스 패널: "뉴스" 칩 → 제목 → 언론사 · 시각 → AI 3줄 요약 → 고지 → 원문 기사 보기. 뉴스 요약은 보류이고, 이 모양은 요약을 넣을 때의 모양이에요(넣지 않기로 하면 요약 칸과 고지를 빼요). 요약이 없는 기사는 "준비 중".</p>
+      <div class="card"><ul class="news"><li><a href="#" onclick="return false"><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint num">economy.example.com · 어제 17:20<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6"/><path d="M19 5l-8 8"/><path d="M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10"/></svg></span></a></li></ul><p class="meta faint src">네이버 뉴스 검색결과</p></div>
+      <p class="meta faint">뉴스는 패널을 열지 않아요. 줄을 누르면 원문 기사로 바로 가요(새 창, 바깥 링크 아이콘). 뉴스 검색 결과는 저장하지 않고, 받은 순서 그대로 고치지 않고 보여주며, 목록 아래에 "네이버 뉴스 검색결과"를 밝혀요.</p>
     </div>
   </section>
 
@@ -635,7 +632,7 @@ const TYPES = [
   ["본문","15 / 400 / 1.6","문단, AI 요약, 묶음의 한 줄 결론",`<span>잠정실적의 영업이익 증가와 자기주식 취득이 최근 공시의 분위기를 이끌고 있어요.</span>`],
   ["칸 제목","13 / 700 / 1.5 · 보조색(AI 이름표는 보라)","AI 칸의 이름표, 전체 공시의 연도",`<span class="box-title ai-tag">AI 요약</span>`],
   ["라벨","13 / 600 / 1.5","칩, 세그먼트, 글자형 버튼",`<span class="tbtn" style="margin:0;padding:0;min-height:0">전체 공시 보기</span>`],
-  ["메타","13 / 400 / 1.5 · 보조색 또는 옅은 색","날짜·고지(보조), 출처·언론사(옅은), 요약 띠의 이름, 표",`<span class="meta num">10.28 화 · <span class="up" style="font-weight:600">호재</span></span>`]];
+  ["메타","13 / 400 / 1.5 · 보조색 또는 옅은 색","날짜·고지(보조), 출처(옅은), 요약 띠의 이름, 표",`<span class="meta num">10.28 화 · <span class="up" style="font-weight:600">호재</span></span>`]];
 $("type-rows").innerHTML = TYPES.map(([n,s,u,ex])=>`<div class="type-row"><div>${ex}</div><div><p class="row-title">${n}</p><p class="meta">${s}<br>${u}</p></div></div>`).join("");
 
 /* 5. 간격 */
@@ -654,21 +651,21 @@ const PARTS = [
   ["탭", s => s==="is-press"||s==="dis"?na:`<span class="tabs" style="border:0;padding:0"><button type="button" class="${s==="sel"?"":s}" aria-selected="${s==="sel"}">재무</button></span>`],
   ["세그먼트", s => `<span class="seg"><button type="button" class="${s==="sel"?"":s}" aria-pressed="${s==="sel"}" ${s==="dis"?"disabled":""}>손익계산서</button></span>`],
   ["입력창", s => s==="sel"||s==="is-press"?na:`<span class="field" style="width:200px;display:block"><svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC.search[2]}</svg><input type="search" class="${s}" placeholder="기업명 또는 종목코드" aria-label="입력창 보기" ${s==="dis"?"disabled":""}></span>`],
-  ["목록 줄", s => s==="dis"?na:`<ul class="news"><li><a href="#" onclick="return false" class="${s==="sel"?"":s}" ${s==="sel"?'aria-current="true"':""}><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint">예시경제 · 어제 17:20</span></a></li></ul>`],
+  ["목록 줄", s => s==="dis"?na:`<ul class="news"><li><a href="#" onclick="return false" class="${s==="sel"?"":s}" ${s==="sel"?'aria-current="true"':""}><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint">economy.example.com · 어제 17:20</span></a></li></ul>`],
   ["글자 링크", s => s==="sel"||s==="is-press"||s==="dis"?na:`<a class="dv-srclink meta ${s}" href="#" onclick="return false">DART 원문 줄${svg(IC.external[2],"sm")}</a>`]];
 $("state-rows").innerHTML = PARTS.map(([n,f])=>`<tr><th>${n}</th>${S.map(s=>cell(f(s))).join("")}</tr>`).join("");
 
 /* 7. 칩·판단 이름 */
 const TONE={up:"호재",down:"악재",flat:"중립"};
-$("chips").innerHTML = ["up","down","flat"].map(t=>`<span class="tone ${t}">${TONE[t]}</span>`).join("")+`<span class="chip">뉴스</span>`;
+$("chips").innerHTML = ["up","down","flat"].map(t=>`<span class="tone ${t}">${TONE[t]}</span>`).join("")+`<span class="chip">업데이트 지연</span>`;
 $("verdicts").innerHTML = [["up","강한 호재"],["up","약한 호재"],["flat","중립"],["down","약한 악재"],["down","강한 악재"],["hold","판단 보류"]].map(([c,t])=>`<span class="verdict ${c}">${t}</span>`).join("");
 
 /* 8. 타임라인 예시: 예정 → 오늘 → 지난 공시(점 크기 = 영향) */
-const TL = [["2026-11-05","up",1,"단일판매ㆍ공급계약체결",true],["2026-10-28","up",2,"연결재무제표기준영업(잠정)실적(공정공시)"],["2026-10-21","down",1,"소송등의제기ㆍ신청(일정금액이상의청구)"],["2026-10-15","up",3,"주요사항보고서(자기주식취득결정)"]];
+const TL = [["2026-11-05","up",1,"단일판매ㆍ공급계약체결",true],["2026-10-28","up",2,"연결재무제표기준영업(잠정)실적(공정공시)"],["2026-10-28","up",1,"신규시설투자등(자율공시)"],["2026-10-21","down",1,"소송등의제기ㆍ신청(일정금액이상의청구)"],["2026-10-15","up",3,"주요사항보고서(자기주식취득결정)"]];
 const dn = iso => Math.round(Date.parse(iso+"T00:00:00Z")/864e5), wd = iso => "일월화수목금토"[new Date(iso+"T00:00:00Z").getUTCDay()], md = iso => iso.slice(5).replace("-",".");
 $("tl-sample").innerHTML = `<li class="plan"><span class="n" aria-hidden="true"></span><div class="t3"><span class="lab meta num"><b>11.13</b>예정 · D-7</span><span class="row-title">기업설명회(IR) 개최</span></div></li>`
   + `<li class="today"><span class="n" aria-hidden="true"></span><div class="t3"><span class="lab meta num"><b>11.06 금</b>오늘</span></div></li>`
-  + TL.map(([d,t,imp,name,isNew],i)=>`<li style="--gap:${Math.min(14, dn(i?TL[i-1][0]:"2026-11-06")-dn(d))*5}px"><span class="n ${t} i${imp}" aria-hidden="true"></span><button type="button" class="t3 item"${i===1?' aria-current="true"':""}><span class="lab meta num"><b>${md(d)} ${wd(d)}</b><span class="tw ${t}">${TONE[t]}</span><span class="meta faint">영향 ${["","작음","보통","큼"][imp]}</span></span><span class="row-title">${isNew?`<span class="new-tag">새</span>`:""}${name}</span></button></li>`).join("");
+  + TL.map(([d,t,imp,name,isNew],i)=>`<li style="--gap:${Math.min(14, dn(i?TL[i-1][0]:"2026-11-06")-dn(d))*5}px"><span class="n ${t} i${imp}" aria-hidden="true"></span><button type="button" class="t3 item"${i===1?' aria-current="true"':""}><span class="lab meta num">${i && TL[i-1][0]===d ? `<b class="same" aria-hidden="true">${md(d)} ${wd(d)}</b><span class="sr">${md(d)} ${wd(d)}</span>` : `<b>${md(d)} ${wd(d)}</b>`}<span class="tw ${t}">${TONE[t]}</span><span class="meta faint">영향 ${["","작음","보통","큼"][imp]}</span></span><span class="row-title">${isNew?`<span class="new-tag">새</span>`:""}${name}</span></button></li>`).join("");
 
 /* 10. 아이콘 */
 $("icons-grid").innerHTML = Object.values(IC).map(([n,u,p])=>`<div class="ico"><div class="pair">${svg(p,"sm")}${svg(p)}</div><p class="row-title">${n}</p><p class="meta faint">${u}</p></div>`).join("");
