@@ -224,6 +224,7 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .news li + li{border-top:1px solid var(--line)}
 .news a{display:grid;gap:var(--s1);padding:var(--s3);margin:0 calc(var(--s3) * -1);border-radius:var(--r-md);color:inherit;text-decoration:none;transition:background var(--fast)}
 .news a:hover{background:var(--fill-hover)} .news a:active,.news a[aria-current="true"]{background:var(--fill-selected)}
+.news.nlist{margin-top:var(--s1)} /* 전체 뉴스 화면: 월 제목 아래 */
 
 /* 전체 공시 화면 */
 .back{margin-bottom:var(--s2)}
@@ -522,8 +523,10 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
           <div class="dv-verdict meta"><span class="chip">뉴스</span></div>
           <h2 class="dv-title">삼성전자, 신규 공급 계약 체결</h2>
           <p class="meta num">예시경제 · 어제 17:20</p>
+          <div class="ai-box"><p class="box-title ai-tag">AI 요약</p><ul><li>메모리 반도체 공급 계약을 새로 맺었다는 내용</li><li>계약 금액은 최근 매출액의 1.2%라고 전함</li><li>계약 기간은 2027년 12월까지</li></ul></div>
+          <p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p>
           <a class="btn news-src" href="#" onclick="return false">원문 기사 보기<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6"/><path d="M19 5l-8 8"/><path d="M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10"/></svg></a></div></div></div>
-      <p class="meta faint">뉴스 패널: "뉴스" 칩 → 제목 → 언론사 · 시각 → 원문 기사 보기. 뉴스 요약은 보류예요. 넣기로 하면 시각 줄과 원문 버튼 사이에 공시 패널과 같은 AI 요약 칸과 고지를 둬요.</p>
+      <p class="meta faint">뉴스 패널: "뉴스" 칩 → 제목 → 언론사 · 시각 → AI 3줄 요약 → 고지 → 원문 기사 보기. 뉴스 요약은 보류이고, 이 모양은 요약을 넣을 때의 모양이에요(넣지 않기로 하면 요약 칸과 고지를 빼요). 요약이 없는 기사는 "준비 중".</p>
     </div>
   </section>
 
@@ -571,7 +574,7 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const svg = (p,cls="") => `<svg class="i${cls?" "+cls:""}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const IC = {
-  next:["다음","패널의 다음 공시, 다른 화면으로 가기(전체 공시 보기)","<path d='M9.5 6l6 6-6 6'/>"],
+  next:["다음","패널의 다음 공시, 다른 화면으로 가기(전체 공시·전체 뉴스 보기)","<path d='M9.5 6l6 6-6 6'/>"],
   prev:["이전","패널의 이전 공시, 돌아가기","<path d='M14.5 6l-6 6 6 6'/>"],
   external:["바깥 링크","DART 원문, 원문 기사, 홈페이지(새 창)","<path d='M13 5h6v6'/><path d='M19 5l-8 8'/><path d='M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10'/>"],
   close:["닫기","패널","<path d='M6 6l12 12M18 6 6 18'/>"],
