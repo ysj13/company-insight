@@ -7,6 +7,7 @@ import com.companyinsight.analysis.StageResult;
 import com.companyinsight.analysis.body.BodyDocument;
 import com.companyinsight.analysis.body.DisclosureBodyReader;
 import com.companyinsight.analysis.table.TableReadRepository.TableTarget;
+import com.companyinsight.disclosure.ClassifiedBy;
 import com.companyinsight.disclosure.JudgeMethod;
 import com.companyinsight.disclosure.Tone;
 import java.math.BigDecimal;
@@ -30,7 +31,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   방향을 정하는 항목을 읽지 못했거나, 읽은 값이 AI가 정할 경우(제3자배정 유상증자, 자회사의 유상증자)면 AI 판정으로 넘긴다
  * <li>코드가 방향을 정하는 유형인데 읽는 규칙이 아직 없음: 판정 없이 끝낸다. 규칙을 더할 때 그 유형의 작업을 다시 돌린다
  * <li>AI가 방향을 정하는 유형: AI 판정으로 넘긴다
- * <li>제목으로 방향이 정해진 유형: 호재·악재면 AI 요약으로 넘기고, 중립이면(본문을 고친 정정 공시가 여기까지 온다) 끝낸다
+ * <li>제목으로 방향이 정해진 유형: 호재·악재면 AI 요약으로 넘기고, 중립이면(본문을 고친 정정 공시가 여기까지 온다) 끝낸다.
+ *   호재·악재이고 크기를 읽는 규칙이 있으면 표에서 비율을 읽어 크기를 적는다(방향은 제목의 것 그대로).
+ *   비율이 크기의 하한 아래면(전환 청구 행사가 아주 작을 때) 중립으로 고쳐 적고 여기서 끝낸다
  * <li>제목 꼬리에 철회·취하가 든 공시: 무엇을 거뒀는지에 따라 방향이 달라 AI 판정으로 넘긴다
  * </ul>
  *
@@ -120,20 +123,52 @@ public class TableReadHandler implements StageHandler {
 		}
 		return switch (target.judgeMethod()) {
 			case AI -> StageResult.passed(TONE_BY_AI, StageResult.Next.of(AnalysisStage.AI_JUDGE)).withWrites(clear);
-			case TITLE -> byTitle(target);
+			case TITLE -> byTitle(disclosureId, target);
 			case CODE -> byCode(disclosureId, target);
 		};
 	}
 
-	/** 제목으로 판정하는 유형. 방향은 이미 정해져 있다. 크기와 요약에 쓸 항목을 읽는 규칙은 아직 없다. */
-	private static StageResult byTitle(TableTarget target) {
-		if (target.tone() == null) {
+	/**
+	 * 제목으로 판정하는 유형. 방향은 이미 정해져 있다. 크기를 읽는 규칙이 있으면 표에서 크기를 읽는다.
+	 *
+	 * <p>정정 표에 철회 낱말이 있어도 방향은 제목이 정한 그대로 둔다(제목이 방향을 정하는 유형이다). 자회사의 공시면 크기를 낮춘다.
+	 * 앞선 실행이 표로 중립을 적어 두었으면(크기의 하한 아래였다) 제목 규칙의 방향으로 다시 읽는다.
+	 */
+	private StageResult byTitle(long disclosureId, TableTarget target) {
+		Tone tone = target.classifiedBy() == ClassifiedBy.TABLE ? target.titleTone() : target.tone();
+		if (tone == null) {
 			return StageResult.passed(NO_TITLE_TONE, StageResult.Next.of(AnalysisStage.AI_JUDGE));
 		}
-		if (target.tone() == Tone.NEUTRAL) {
+		if (tone == Tone.NEUTRAL) {
 			return StageResult.ended();
 		}
-		return StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY));
+		TableReader reader = readers.get(target.typeCode());
+		if (reader == null) {
+			return StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY));
+		}
+		List<BodyDocument> documents = bodies.read(disclosureId)
+			.orElseThrow(() -> new IllegalStateException("저장한 본문이 없습니다: " + disclosureId));
+		boolean subsidiary = target.attributes().contains(SUBSIDIARY);
+		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary, target.title(), tone),
+				BodyTables.of(documents));
+		if (read.verdict() != TableReading.Verdict.JUDGED || (read.tone() != tone && read.tone() != Tone.NEUTRAL)) {
+			throw new IllegalStateException("제목이 방향을 정한 공시의 크기를 읽는 규칙이 다른 답을 냈습니다: " + disclosureId + ", "
+					+ read.verdict() + ", " + read.tone());
+		}
+		if (read.impact() != null && subsidiary) {
+			read = read.withImpact(impactProperties.stepDownForSubsidiary(read.impact()));
+		}
+		TableReading reading = read;
+		String result = result(reading);
+		if (reading.tone() == Tone.NEUTRAL) {
+			// 크기의 하한 아래다. 표로 정한 중립으로 고쳐 적는다
+			return StageResult.ended()
+				.withResult(result)
+				.withWrites(() -> repository.saveJudgment(disclosureId, Tone.NEUTRAL, null, reading.ratio()));
+		}
+		return StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY))
+			.withResult(result)
+			.withWrites(() -> repository.saveTitleImpact(disclosureId, reading.tone(), reading.impact(), reading.ratio()));
 	}
 
 	/** 코드가 방향을 정하는 유형. */

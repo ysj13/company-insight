@@ -201,6 +201,36 @@ public class AnalysisJobRepository {
 	}
 
 	/**
+	 * 제목이 방향(호재·악재)을 정했는데 크기가 비어 있는 공시의 표 읽기 작업을 대기로 되돌린다.
+	 * 크기를 읽는 규칙이 없던 때에 표 읽기를 지나 크기 없이 AI 요약으로 넘어간 공시를, 그 유형의 규칙이 생긴 뒤 다시 읽게 한다.
+	 * 다시 읽으면 크기가 적히거나(호재·악재) 표로 정한 중립이 되므로 여러 번 불러도 결과가 같다.
+	 *
+	 * @param typeCodes 지금은 크기를 읽을 수 있는 유형 번호
+	 * @return 대기로 되돌린 건수
+	 */
+	@Transactional
+	public int requeueUnsized(Collection<String> typeCodes, Instant now) {
+		if (typeCodes.isEmpty()) {
+			return 0;
+		}
+		return jdbc.sql("""
+				UPDATE analysis_job j
+				   SET status = 'PENDING', outcome = NULL, priority = :priority, run_after = :now, attempts = 0,
+				       deferrals = 0, enqueue_reason = :reason, updated_at = :now
+				  FROM disclosure d
+				 WHERE j.stage = :stage AND j.status = 'DONE' AND j.outcome = 'PASSED'
+				   AND d.id = j.disclosure_id AND d.type_code IN (:typeCodes)
+				   AND d.classified_by = 'RULE' AND d.tone IN ('POSITIVE', 'NEGATIVE') AND d.impact IS NULL
+				""")
+			.param("priority", AnalysisPriority.BACKLOG)
+			.param("now", at(now))
+			.param("reason", EnqueueReason.RERUN.name())
+			.param("stage", AnalysisStage.READ_TABLE.name())
+			.param("typeCodes", typeCodes)
+			.update();
+	}
+
+	/**
 	 * 공시 한 건의 한 단계를 대기로 만든다. 줄이 없으면 넣고, 있으면 상태가 무엇이든 대기로 되돌린다.
 	 * 실패 횟수와 미룬 횟수는 0으로 돌아간다.
 	 */

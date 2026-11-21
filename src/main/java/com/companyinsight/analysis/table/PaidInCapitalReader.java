@@ -1,6 +1,5 @@
 package com.companyinsight.analysis.table;
 
-import com.companyinsight.analysis.table.BodyTables.Found;
 import com.companyinsight.disclosure.Tone;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -96,35 +95,9 @@ class PaidInCapitalReader implements TableReader {
 		return TableReading.unreadable(Cells.isBlank(method) ? "NO_METHOD" : "UNKNOWN_METHOD", items, unread);
 	}
 
-	/**
-	 * 한 항목이 주식 종류(또는 자금 목적)별로 여러 줄일 때, 줄마다 마지막 칸의 숫자를 더한다. 값이 든 줄은 항목에 그대로 적는다.
-	 * 정정 공시에 같은 항목의 묶음이 여러 번 나오면 마지막 묶음을 읽는다.
-	 *
-	 * @return 숫자가 든 줄이 하나도 없으면 비어 있음
-	 */
 	private static Optional<BigDecimal> sum(BodyTables tables, Predicate<String> labelMatches, String name,
 			Map<String, String> items) {
-		Predicate<List<String>> matches = row -> row.size() >= 2 && labelMatches.test(Cells.label(row.getFirst()));
-		Optional<Found> last = tables.lastRow(matches);
-		if (last.isEmpty()) {
-			return Optional.empty();
-		}
-		List<List<String>> rows = last.get().table().rows();
-		// 마지막 줄에서 위로, 같은 항목이 이어지는 묶음의 첫 줄을 찾는다
-		int first = last.get().index();
-		while (first > 0 && matches.test(rows.get(first - 1))) {
-			first--;
-		}
-		BigDecimal total = null;
-		for (int i = first; i <= last.get().index(); i++) {
-			List<String> row = rows.get(i);
-			Optional<BigDecimal> value = Cells.number(row.getLast());
-			if (value.isPresent()) {
-				total = total == null ? value.get() : total.add(value.get());
-				items.put(name + ": " + row.get(row.size() - 2), row.getLast());
-			}
-		}
-		return Optional.ofNullable(total);
+		return tables.sumOfRows(labelMatches, name, items);
 	}
 
 	/** 항목이 본문에 몇 군데 나오는지. 이어진 줄은 한 군데로 센다. */

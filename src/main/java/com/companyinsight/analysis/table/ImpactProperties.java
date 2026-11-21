@@ -10,20 +10,33 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>경계는 "이상 ~ 미만"이다. 비율이 경계와 같으면 큰 쪽에 든다.
  *
  * @param earnings           실적(잠정실적, 손익구조 변동)
- * @param shareIncrease      주식 수가 늘어나는 일(유상증자)
+ * @param shareIncrease      주식 수가 늘어나는 일(유상증자, 주식 관련 사채 발행, 전환 청구 행사, 자기사채 매도)
+ * @param shareDecrease      주식 수가 줄어드는 일(주식 소각)
+ * @param amount             금액의 크기(공급계약, 시설 투자, 소송 청구). 매출액·자기자본 대비 비율로 정한다
  * @param audit              감사보고서 제출
  * @param ownership          지분 보고
+ * @param guarantee          채무보증·담보 제공, 금전 대여
+ * @param borrowing          차입
+ * @param misconduct         횡령·배임·제재
+ * @param fixed              비율 없이 정해 둔 크기(전환가액 하향 조정, 자산 재평가 이익)
  * @param subsidiaryStepDown 자회사의 공시일 때 크기를 몇 단계 낮출지. 낮춰도 1보다 작아지지 않는다
  */
 @ConfigurationProperties("app.judgment.impact")
-public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, Audit audit, Ownership ownership,
+public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, ShareDecrease shareDecrease, Amount amount,
+		Audit audit, Ownership ownership, Guarantee guarantee, Borrowing borrowing, Misconduct misconduct, Fixed fixed,
 		Integer subsidiaryStepDown) {
 
 	public ImpactProperties {
 		require(earnings != null, "earnings");
 		require(shareIncrease != null, "share-increase");
+		require(shareDecrease != null, "share-decrease");
+		require(amount != null, "amount");
 		require(audit != null, "audit");
 		require(ownership != null, "ownership");
+		require(guarantee != null, "guarantee");
+		require(borrowing != null, "borrowing");
+		require(misconduct != null, "misconduct");
+		require(fixed != null, "fixed");
 		require(subsidiaryStepDown != null && subsidiaryStepDown >= 0, "subsidiary-step-down");
 	}
 
@@ -65,25 +78,138 @@ public record ImpactProperties(Earnings earnings, ShareIncrease shareIncrease, A
 	}
 
 	/**
-	 * 주식 수가 늘어나는 일의 크기. 새로 생기는 주식이 지금 발행주식총수의 몇 %인지로 정한다.
+	 * 주식 수가 늘어나는 일의 크기. 새로 생기는(생길 수 있는) 주식이 발행주식총수의 몇 %인지로 정한다.
 	 *
-	 * @param mediumFrom 이 이상이면 크기 2
-	 * @param largeFrom  이 이상이면 크기 3
+	 * @param mediumFrom           이 이상이면 크기 2
+	 * @param largeFrom            이 이상이면 크기 3
+	 * @param exerciseNeutralBelow 전환·신주인수권·교환 청구 행사에만 쓰는 하한. 이보다 작으면 중립
 	 */
-	public record ShareIncrease(BigDecimal mediumFrom, BigDecimal largeFrom) {
+	public record ShareIncrease(BigDecimal mediumFrom, BigDecimal largeFrom, BigDecimal exerciseNeutralBelow) {
 
 		public ShareIncrease {
 			require(mediumFrom != null && mediumFrom.signum() >= 0, "share-increase.medium-from");
 			require(largeFrom != null && largeFrom.compareTo(mediumFrom) >= 0, "share-increase.large-from");
+			require(exerciseNeutralBelow != null && exerciseNeutralBelow.signum() >= 0
+					&& exerciseNeutralBelow.compareTo(mediumFrom) <= 0, "share-increase.exercise-neutral-below");
 		}
 
 		/** 비율로 크기를 정한다. 비율을 읽지 못했으면(null) 1. */
 		int sizeOf(BigDecimal ratio) {
-			if (ratio == null || ratio.compareTo(mediumFrom) < 0) {
-				return 1;
-			}
-			return ratio.compareTo(largeFrom) < 0 ? 2 : 3;
+			return steps(ratio, mediumFrom, largeFrom);
 		}
+	}
+
+	/**
+	 * 주식 수가 줄어드는 일의 크기. 없어지는 주식이 발행주식총수의 몇 %인지로 정한다. 늘어나는 쪽보다 비율이 훨씬 작아 경계를 따로 둔다.
+	 *
+	 * @param mediumFrom 이 이상이면 크기 2
+	 * @param largeFrom  이 이상이면 크기 3
+	 */
+	public record ShareDecrease(BigDecimal mediumFrom, BigDecimal largeFrom) {
+
+		public ShareDecrease {
+			require(mediumFrom != null && mediumFrom.signum() >= 0, "share-decrease.medium-from");
+			require(largeFrom != null && largeFrom.compareTo(mediumFrom) >= 0, "share-decrease.large-from");
+		}
+
+		/** 비율로 크기를 정한다. 비율을 읽지 못했으면(null) 1. */
+		int sizeOf(BigDecimal ratio) {
+			return steps(ratio, mediumFrom, largeFrom);
+		}
+	}
+
+	/**
+	 * 금액의 크기. 금액이 매출액·자기자본의 몇 %인지로 정한다(유형이 달라도 분포가 거의 같아 한 벌로 둔다).
+	 *
+	 * @param mediumFrom 이 이상이면 크기 2
+	 * @param largeFrom  이 이상이면 크기 3
+	 */
+	public record Amount(BigDecimal mediumFrom, BigDecimal largeFrom) {
+
+		public Amount {
+			require(mediumFrom != null && mediumFrom.signum() >= 0, "amount.medium-from");
+			require(largeFrom != null && largeFrom.compareTo(mediumFrom) >= 0, "amount.large-from");
+		}
+
+		/** 비율로 크기를 정한다. 비율을 읽지 못했으면(null) 1. */
+		int sizeOf(BigDecimal ratio) {
+			return steps(ratio, mediumFrom, largeFrom);
+		}
+	}
+
+	/**
+	 * 채무보증·담보 제공, 금전 대여의 크기. 자기자본 대비 비율이 작으면 일상적인 일로 보고 중립이다.
+	 *
+	 * @param negativeFrom 이 이상이면 악재 1
+	 * @param mediumFrom   이 이상이면 악재 2
+	 */
+	public record Guarantee(BigDecimal negativeFrom, BigDecimal mediumFrom) {
+
+		public Guarantee {
+			require(negativeFrom != null && negativeFrom.signum() > 0, "guarantee.negative-from");
+			require(mediumFrom != null && mediumFrom.compareTo(negativeFrom) >= 0, "guarantee.medium-from");
+		}
+
+		/** 자기자본 대비 비율로 크기를 정한다. 중립이면 0. */
+		int sizeOf(BigDecimal ratio) {
+			if (ratio.compareTo(negativeFrom) < 0) {
+				return 0;
+			}
+			return ratio.compareTo(mediumFrom) < 0 ? 1 : 2;
+		}
+	}
+
+	/**
+	 * 차입의 크기. 자기 사업에 쓰는 돈이라 보증보다 높은 비율부터 악재로 본다.
+	 *
+	 * @param negativeFrom 자기자본 대비 비율이 이 이상이면 악재 1. 그 아래는 중립
+	 */
+	public record Borrowing(BigDecimal negativeFrom) {
+
+		public Borrowing {
+			require(negativeFrom != null && negativeFrom.signum() > 0, "borrowing.negative-from");
+		}
+
+		/** 자기자본 대비 비율로 크기를 정한다. 중립이면 0. */
+		int sizeOf(BigDecimal ratio) {
+			return ratio.compareTo(negativeFrom) < 0 ? 0 : 1;
+		}
+	}
+
+	/**
+	 * 횡령·배임·제재의 크기.
+	 *
+	 * @param embezzlementMinimum 횡령·배임의 가장 작은 크기. 금액 경계로 정한 크기가 이보다 작으면 이 값
+	 * @param accountingViolation 회계처리기준 위반에 따른 조치(금액이 없는 서식)의 크기
+	 */
+	public record Misconduct(Integer embezzlementMinimum, Integer accountingViolation) {
+
+		public Misconduct {
+			require(embezzlementMinimum != null && embezzlementMinimum >= 1, "misconduct.embezzlement-minimum");
+			require(accountingViolation != null && accountingViolation >= 1, "misconduct.accounting-violation");
+		}
+	}
+
+	/**
+	 * 견줄 비율이 없어 정해 둔 크기.
+	 *
+	 * @param conversionPriceDown 시가 하락에 따른 전환가액 등의 하향 조정(악재)
+	 * @param revaluationGain     자산 재평가로 자산이 늘어남(호재)
+	 */
+	public record Fixed(Integer conversionPriceDown, Integer revaluationGain) {
+
+		public Fixed {
+			require(conversionPriceDown != null && conversionPriceDown >= 1, "fixed.conversion-price-down");
+			require(revaluationGain != null && revaluationGain >= 1, "fixed.revaluation-gain");
+		}
+	}
+
+	/** 두 경계로 1·2·3을 정한다. 비율을 읽지 못했으면(null) 1. */
+	private static int steps(BigDecimal ratio, BigDecimal mediumFrom, BigDecimal largeFrom) {
+		if (ratio == null || ratio.compareTo(mediumFrom) < 0) {
+			return 1;
+		}
+		return ratio.compareTo(largeFrom) < 0 ? 2 : 3;
 	}
 
 	/**

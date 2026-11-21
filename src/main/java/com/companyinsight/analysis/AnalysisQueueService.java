@@ -103,6 +103,20 @@ public class AnalysisQueueService {
 	}
 
 	/**
+	 * 제목이 방향을 정했는데 크기가 비어 있는 공시의 표 읽기 작업 가운데, 지금은 크기를 읽을 수 있는 유형의 것을 대기로 되돌린다.
+	 *
+	 * @param typeCodes 지금은 크기를 읽을 수 있는 유형 번호
+	 * @return 대기로 되돌린 건수
+	 */
+	public int requeueUnsized(Collection<String> typeCodes) {
+		int requeued = jobs.requeueUnsized(typeCodes, clock.instant());
+		if (requeued > 0) {
+			log.info("분석 대기열: 크기 없이 지나간 표 읽기 작업 {}건을 다시 줄 세웠습니다", requeued);
+		}
+		return requeued;
+	}
+
+	/**
 	 * 끝을 보지 못한 실행을 되돌린다. 앱이 죽으면 꺼낸 작업이 실행 중으로 남으므로,
 	 * 앱이 뜰 때와 몇 분마다 부른다. 되돌린 실행은 실패 한 번으로 센다.
 	 *

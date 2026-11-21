@@ -9,11 +9,13 @@ import com.companyinsight.analysis.AnalysisQueueService;
 import com.companyinsight.analysis.AnalysisStage;
 import com.companyinsight.analysis.AnalysisWorker;
 import com.companyinsight.analysis.WorkerGroup;
+import com.companyinsight.analysis.body.BodyDocument;
 import com.companyinsight.analysis.body.DisclosureBodyReader;
 import com.companyinsight.analysis.body.DisclosureBodyRepository;
 import com.companyinsight.common.dart.DisclosureListResponse.Item;
 import com.companyinsight.disclosure.DisclosureClassificationService;
 import com.companyinsight.disclosure.DisclosureRepository;
+import com.companyinsight.disclosure.Tone;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -203,9 +205,11 @@ class TableReadIntegrationTest {
 
 	@Test
 	void 읽는_규칙이_아직_없는_유형은_판정_없이_끝난다() {
+		// 코드가 방향을 정하는 유형은 모두 규칙이 생겼다. 규칙을 주지 않은 처리 구현으로 규칙이 없던 때를 흉내 낸다
+		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
 		long id = save("20261119000001", "전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정", null);
 
-		drain();
+		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
 
 		assertThat(disclosure(id)).containsEntry("type_code", "L1").containsEntry("tone", null);
 		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
@@ -269,15 +273,20 @@ class TableReadIntegrationTest {
 		assertThat(lastRun(ownership).get("result").toString()).contains("NO_READER");
 		assertThat(disclosure(ownership)).containsEntry("tone", null);
 
-		int requeued = queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, handler.readableTypeCodes());
+		// 지분 보고의 규칙만 생긴 때를 흉내 낸다
+		TableReadHandler ownershipOnly = new TableReadHandler(tableReads, bodyReader, impactProperties,
+			List.of(new OwnershipReportReader(impactProperties)));
+
+		int requeued = queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, ownershipOnly.readableTypeCodes());
 
 		assertThat(requeued).isEqualTo(1);
 		assertThat(job(ownership, "READ_TABLE")).containsEntry("status", "PENDING");
 		assertThat(job(conversion, "READ_TABLE")).containsEntry("status", "DONE");
-		drain();
+		new AnalysisWorker(jobs, List.of(ownershipOnly), properties, CLOCK).drain(WorkerGroup.CODE);
 		assertThat(disclosure(ownership)).containsEntry("tone", "POSITIVE").containsEntry("impact", 1);
 		// 다시 읽은 뒤에는 마지막 실행이 "규칙 없음"이 아니라 또 줄 서지 않는다
-		assertThat(queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, handler.readableTypeCodes())).isZero();
+		assertThat(queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, ownershipOnly.readableTypeCodes()))
+			.isZero();
 	}
 
 	@Test
@@ -304,14 +313,170 @@ class TableReadIntegrationTest {
 	}
 
 	@Test
-	void 제목으로_호재가_정해진_공시는_판정을_그대로_두고_요약으로_넘긴다() {
-		long id = save("20261119800004", "주식소각결정", null);
+	void 제목으로_호재가_정해진_공시는_판정을_그대로_두고_표에서_읽은_크기를_적어_요약으로_넘긴다() {
+		long id = save("20261119800004", "주식소각결정", TableFixtures.zip(TableFixtures.CANCEL_COMMON));
 
 		drain();
 
-		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("classified_by", "RULE");
+		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("classified_by", "RULE").containsEntry("impact", 2);
+		// 100,418 ÷ 8,249,830 × 100
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("1.2172");
 		assertThat(job(id, "AI_SUMMARY")).containsEntry("status", "PENDING");
 		assertThat(lastRun(id)).containsEntry("pass_reason", "NEEDS_SUMMARY");
+		assertThat(lastRun(id).get("result").toString()).contains("\"ratio\": 1.2172", "\"impact\": 2", "\"tone\": \"POSITIVE\"");
+	}
+
+	@Test
+	void 제목으로_악재가_정해진_공시도_표의_비율로_크기를_정한다() {
+		long id = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "C2").containsEntry("tone", "NEGATIVE")
+			.containsEntry("classified_by", "RULE").containsEntry("impact", 2);
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("12.15");
+		assertThat(job(id, "AI_SUMMARY")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 자회사의_제목_유형_공시는_크기를_한_단계_낮춘다() {
+		long id = save("20261119800010", "단일판매ㆍ공급계약해지(자회사의 주요경영사항)", TableFixtures.zip(TableFixtures.SUPPLY_CANCELLED));
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 1);
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("12.15");
+	}
+
+	@Test
+	void 전환_청구_행사가_발행주식총수의_1퍼센트_미만이면_표로_정한_중립으로_고치고_끝낸다() {
+		byte[] zip = zipOf(TableFixtures.documentsWithAll(TableFixtures.EXERCISE_PERCENT_IN_VALUE, ">3.14%<", ">0.5%<"));
+		long id = save("20261119800011", "신주인수권행사", zip);
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEUTRAL").containsEntry("impact", null)
+			.containsEntry("classified_by", "TABLE");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("0.5");
+		assertThat(job(id, "READ_TABLE")).containsEntry("outcome", "ENDED");
+		assertThat(count("SELECT count(*) FROM analysis_job")).isEqualTo(1);
+	}
+
+	@Test
+	void 표가_중립으로_고친_제목_유형의_공시를_다시_읽으면_제목의_방향으로_되돌릴_수_있다() {
+		byte[] small = zipOf(TableFixtures.documentsWithAll(TableFixtures.EXERCISE_PERCENT_IN_VALUE, ">3.14%<", ">0.5%<"));
+		long id = save("20261119800013", "신주인수권행사", small);
+		drain();
+		assertThat(disclosure(id)).containsEntry("tone", "NEUTRAL").containsEntry("classified_by", "TABLE");
+		// 원문의 비율(3.14%)로 본문을 바꿔 넣고 다시 돌린다
+		bodies.save(id, TableFixtures.zip(TableFixtures.EXERCISE_PERCENT_IN_VALUE), 1, NOW);
+		queue().rerun(List.of(id), AnalysisStage.READ_TABLE);
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 1).containsEntry("classified_by", "RULE");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("3.14");
+		assertThat(job(id, "AI_SUMMARY")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 크기_없이_지나간_제목_유형의_공시는_규칙이_생긴_뒤_다시_줄_선다() {
+		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		long supply = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");
+		long neutral = save("20261119800012", "[기재정정]주주총회소집결의", null);
+		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
+		assertThat(disclosure(supply)).containsEntry("tone", "NEGATIVE").containsEntry("impact", null);
+		assertThat(job(supply, "READ_TABLE")).containsEntry("outcome", "PASSED");
+
+		int requeued = queue().requeueUnsized(handler.readableTypeCodes());
+
+		assertThat(requeued).isEqualTo(1);
+		assertThat(job(supply, "READ_TABLE")).containsEntry("status", "PENDING");
+		assertThat(job(neutral, "READ_TABLE")).containsEntry("status", "DONE");
+		drain();
+		assertThat(disclosure(supply)).containsEntry("impact", 2).containsEntry("classified_by", "RULE");
+		// 크기가 적혔으니 또 줄 서지 않는다
+		assertThat(queue().requeueUnsized(handler.readableTypeCodes())).isZero();
+	}
+
+	@Test
+	void 앱이_뜰_때_크기_없이_지나간_작업도_다시_줄_세운다() {
+		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		long id = save(TableFixtures.FACILITY, "신규시설투자등");
+		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
+
+		requeue.onStartup();
+
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 대응표_버전이_올라도_제목의_방향이_같으면_표에서_읽은_크기는_그대로다() {
+		long id = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");
+		drain();
+		jdbc.sql("UPDATE disclosure SET title_rule_version = 0 WHERE id = :id").param("id", id).update();
+
+		assertThat(classification.reclassifyOutdated()).isEqualTo(1);
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2).containsEntry("classified_by", "RULE");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("12.15");
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE");
+	}
+
+	@Test
+	void 그_사이_AI가_판정한_공시에는_제목_유형의_크기를_적지_않는다() {
+		long id = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 3, classified_by = 'LLM' WHERE id = :id").param("id", id).update();
+
+		tableReads.saveTitleImpact(id, Tone.NEGATIVE, 2, new BigDecimal("12.15"));
+
+		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("impact", 3).containsEntry("classified_by", "LLM");
+	}
+
+	// ── 보증·대여·차입, 전환가액 조정, 자산 재평가 ──────────────────────
+
+	@Test
+	void 자기자본의_30퍼센트_미만인_채무보증은_표로_정한_중립으로_끝난다() {
+		long id = save(TableFixtures.GUARANTEE_SMALL, "[기재정정]타인에대한채무보증결정");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "H1").containsEntry("tone", "NEUTRAL")
+			.containsEntry("classified_by", "TABLE");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("10.8");
+		assertThat(job(id, "READ_TABLE")).containsEntry("outcome", "ENDED");
+	}
+
+	@Test
+	void 자기자본보다_큰_담보_제공은_악재_2로_적고_요약으로_넘긴다() {
+		long id = save(TableFixtures.COLLATERAL_OVER_EQUITY, "타인에대한담보제공결정");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 2).containsEntry("classified_by", "TABLE");
+		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("213.48");
+		assertThat(job(id, "AI_SUMMARY")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 시가_하락으로_전환가액을_낮추면_악재_1로_적는다() {
+		long id = save(TableFixtures.PRICE_MARKET_DOWN, "전환가액의조정");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "L1").containsEntry("tone", "NEGATIVE").containsEntry("impact", 1)
+			.containsEntry("classified_by", "TABLE").containsEntry("impact_ratio", null);
+		assertThat(job(id, "AI_SUMMARY")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 자산_재평가_결과로_자산이_늘면_호재_1로_적는다() {
+		long id = save(TableFixtures.REVALUATION_GAIN, "자산재평가결과(자율공시)");
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("type_code", "B6").containsEntry("tone", "POSITIVE").containsEntry("impact", 1)
+			.containsEntry("classified_by", "TABLE");
 	}
 
 	@Test
@@ -563,6 +728,22 @@ class TableReadIntegrationTest {
 
 	private long count(String sql) {
 		return jdbc.sql(sql).query(Long.class).single();
+	}
+
+	/** 문서들을 본문 원문(zip)으로 묶는다. 글은 UTF-8로 적는다. */
+	private static byte[] zipOf(List<BodyDocument> documents) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		try (ZipOutputStream zip = new ZipOutputStream(out)) {
+			for (BodyDocument document : documents) {
+				zip.putNextEntry(new ZipEntry(document.fileName()));
+				zip.write(document.markup().getBytes(StandardCharsets.UTF_8));
+				zip.closeEntry();
+			}
+		}
+		catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		return out.toByteArray();
 	}
 
 	/** 문서 하나가 든 본문 원문을 만든다. */

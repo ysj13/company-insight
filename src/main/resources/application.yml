@@ -72,9 +72,27 @@ app:
         large-from: 100         # 이 이상이면 3
         turnaround: 3           # 흑자 전환, 적자 전환
         deficit-widened: 1      # 두 기간 모두 적자이고 적자 폭이 늘었을 때
-      share-increase:           # 유상증자. 신주 수 ÷ 증자 전 발행주식총수(%)
+      share-increase:           # 유상증자, 주식 관련 사채 발행, 전환 청구 행사, 자기사채 매도. 새로 생기는 주식 ÷ 발행주식총수(%)
         medium-from: 5
         large-from: 20
+        exercise-neutral-below: 1   # 전환·신주인수권·교환 청구 행사만. 이보다 작으면 중립
+      share-decrease:           # 주식 소각. 소각 주식 수 ÷ 발행주식총수(%)
+        medium-from: 1
+        large-from: 5
+      amount:                   # 공급계약(매출액 대비), 시설 투자·소송 청구(자기자본 대비). 비율(%)
+        medium-from: 10
+        large-from: 30
+      guarantee:                # 채무보증·담보 제공, 금전 대여. 자기자본 대비(%). 이보다 작으면 중립
+        negative-from: 30       # 이 이상이면 악재 1
+        medium-from: 100        # 이 이상이면 악재 2
+      borrowing:                # 차입. 자기자본 대비(%)
+        negative-from: 50       # 이 이상이면 악재 1. 그 아래는 중립
+      misconduct:               # 횡령·배임·제재
+        embezzlement-minimum: 2 # 횡령·배임은 금액(자기자본 대비)이 작아도 이 크기
+        accounting-violation: 2 # 회계처리기준 위반에 따른 조치. 금액이 없는 서식
+      fixed:                    # 견줄 비율이 없는 것
+        conversion-price-down: 1    # 시가 하락에 따른 전환가액 등의 하향 조정(악재)
+        revaluation-gain: 1         # 자산 재평가로 자산이 늘어남(호재)
       audit:                    # 감사보고서 제출. 여럿에 해당하면 큰 값
         opinion-not-clean: 3    # 감사의견 한정·부적정·의견거절
         going-concern: 2        # 계속기업 존속 불확실성
