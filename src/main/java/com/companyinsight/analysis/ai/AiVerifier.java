@@ -15,9 +15,10 @@ import java.util.regex.Pattern;
  *
  * <p>숫자 대조의 규칙:
  * <ul>
- * <li>금액은 억·조·만 단위로 바꿔 써도 된다. 바꾼 값이 본문 숫자를 그 자릿수로 반올림(또는 버림)한 값과 같아야 한다
- *   (예: 본문 359,812,345,678 → "3,598억"은 맞고 "3,600억"은 틀리다). 본문 표가 천원·백만원·억원·조원 단위인 경우도 본다.
- * <li>비율(%)은 본문 숫자를 그 자릿수로 반올림(또는 버림)한 값과 같아야 한다. AI가 계산한 비율은 본문에 없으므로 틀린다.
+ * <li>금액은 조·억·만(천억, 천만 포함) 단위로 바꿔 써도 된다. 바꾼 값이 본문 숫자를 그 자릿수로 반올림한 값과 같아야 한다.
+ *   버림은 유효숫자가 두 자리 이상일 때만 받는다 (한 자리면 허용 폭이 두 배에 가깝다)
+ *   (예: 본문 359,812,345,678 → "3,598억"은 맞고 "3,600억"은 틀리다). 본문에 천원·백만원·억원·조원이 적혀 있으면 본문 숫자(날짜와 연도처럼 보이는 정수는 빼고)에 그 배수를 곱해서도 본다.
+ * <li>비율(%)은 본문 숫자(날짜의 연·월·일은 뺀다)를 그 자릿수로 반올림한 값과 같아야 한다. AI가 계산한 비율은 본문에 없으므로 틀린다.
  * <li>날짜는 연·월·일이 본문의 날짜와 같아야 한다. 연도 없이 월·일만 쓰면 월·일만 견준다.
  * <li>그 밖의 숫자는 본문에 같은 값이 있어야 한다. 10 이하의 정수(순서, 개수)는 보지 않는다.
  * <li>부호(△, -)는 보지 않는다.
@@ -45,11 +46,25 @@ final class AiVerifier {
 	private static final Pattern YEAR_MONTH = Pattern.compile("(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월(?!\\s*\\d)");
 	private static final Pattern MONTH_DAY = Pattern.compile("(?<!\\d)(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
 
-	/** 단위가 붙은 금액·수량. "1조 2,000억", "120만", "3,598억" */
-	private static final Pattern COMPOUND = Pattern.compile("(?:(?:" + NUM + ")\\s*[조억만천](?![가-힣&&[^원주달]]))(?:\\s*(?:" + NUM + ")\\s*[억만천](?![가-힣&&[^원주달]]))*");
-	private static final Pattern UNIT_PART = Pattern.compile("(" + NUM + ")\\s*([조억만천])");
+	/** 금액·수량의 단위. 두 글자 단위(천억, 천만)를 먼저 본다 */
+	private static final String UNIT = "(?:천억|천만|조|억|만|천)";
+
+	/** 단위가 붙은 금액·수량. "1조 2,000억", "120만", "3,598억에", "9천억", "1억 2천만". 뒤에 붙은 조사는 보지 않는다 */
+	private static final Pattern COMPOUND = Pattern.compile("(?:" + NUM + ")\\s*" + UNIT + "(?:\\s*(?:" + NUM + ")\\s*(?:천억|천만|억|만|천))*"
+			+ "(?:\\s*(?:" + NUM + ")(?=\\s*[원주]))?");
+
+	/** 단위가 붙은 금액 끝에 단위 없이 이어 쓴 나머지 ("8억 7,592만 1,100원"의 1,100) */
+	private static final Pattern TRAILING = Pattern.compile("\\s*(" + NUM + ")\\s*");
+	private static final Pattern UNIT_PART = Pattern.compile("(" + NUM + ")\\s*(" + UNIT + ")");
+
+	/** 연도로 보는 정수의 범위. 표의 금액 단위 배수를 곱하지 않는다 ("2026년"이 2,026억이 되지 않게) */
+	private static final BigDecimal YEAR_FROM = new BigDecimal("1990");
+	private static final BigDecimal YEAR_TO = new BigDecimal("2100");
+
+	/** 버림도 맞는 것으로 볼 가장 적은 유효숫자 수. 유효숫자가 적으면 버림을 받을 때 허용 폭이 너무 넓다 */
+	private static final int TRUNCATION_MIN_DIGITS = 2;
 	private static final Pattern PERCENT = Pattern.compile("(" + NUM + ")\\s*(?:%p|%|퍼센트|％)");
-	private static final Pattern PLAIN = Pattern.compile("(?<![\\d.,])(" + NUM + ")(?![\\d,]|\\.\\d)");
+	private static final Pattern PLAIN = Pattern.compile("(?<!\\d)(?<!\\d[.,])(" + NUM + ")(?!\\d|[.,]\\d)");
 
 	private static final BigDecimal TEN = BigDecimal.TEN;
 
@@ -214,6 +229,12 @@ final class AiVerifier {
 		return new BigDecimal(text.replace(",", ""));
 	}
 
+	/** 유효숫자 수 (앞의 0은 세지 않는다. 3,598 → 4, 1 → 1, 0.5 → 1). */
+	private static int significantDigits(BigDecimal value) {
+		BigDecimal stripped = value.abs().stripTrailingZeros();
+		return stripped.signum() == 0 ? 1 : stripped.precision();
+	}
+
 	private static String date(String year, String month, String day) {
 		return year + "-" + Integer.parseInt(month) + "-" + Integer.parseInt(day);
 	}
@@ -236,19 +257,32 @@ final class AiVerifier {
 			BigDecimal total = BigDecimal.ZERO;
 			BigDecimal smallest = null;
 			int decimals = 0;
+			int end = 0;
 			while (part.find()) {
 				BigDecimal mantissa = number(part.group(1));
 				BigDecimal unit = switch (part.group(2)) {
 					case "조" -> new BigDecimal("1000000000000");
+					case "천억" -> new BigDecimal("100000000000");
 					case "억" -> new BigDecimal("100000000");
+					case "천만" -> new BigDecimal("10000000");
 					case "만" -> new BigDecimal("10000");
 					default -> new BigDecimal("1000");
 				};
 				total = total.add(mantissa.multiply(unit));
 				smallest = unit;
 				decimals = Math.max(0, mantissa.scale());
+				end = part.end();
 			}
-			return smallest == null ? null : new Amount(total, smallest, decimals);
+			if (smallest == null) {
+				return null;
+			}
+			Matcher trailing = TRAILING.matcher(text.substring(end));
+			if (trailing.matches()) {
+				total = total.add(number(trailing.group(1)));
+				smallest = BigDecimal.ONE;
+				decimals = 0;
+			}
+			return new Amount(total, smallest, decimals);
 		}
 	}
 
@@ -261,6 +295,7 @@ final class AiVerifier {
 		private final Set<String> yearMonths = new HashSet<>();
 		private final Set<String> monthDays = new HashSet<>();
 		private final List<BigDecimal> scales = new ArrayList<>(List.of(BigDecimal.ONE));
+		private final List<BigDecimal> nonDateValues = new ArrayList<>();
 
 		static BodyFigures of(String body) {
 			BodyFigures figures = new BodyFigures();
@@ -271,10 +306,12 @@ final class AiVerifier {
 					figures.scales.add(scale.factor());
 				}
 			}
+			StringBuilder withoutDates = new StringBuilder(text);
 			for (Pattern pattern : List.of(FULL_DATE_KO, FULL_DATE_NUM)) {
 				Matcher m = pattern.matcher(text);
 				while (m.find()) {
 					figures.addDate(m.group(1), m.group(2), m.group(3));
+					blank(withoutDates, m.start(), m.end());
 				}
 			}
 			Matcher ym = YEAR_MONTH.matcher(text);
@@ -295,6 +332,11 @@ final class AiVerifier {
 			Matcher plain = Pattern.compile(NUM).matcher(text);
 			while (plain.find()) {
 				figures.add(number(plain.group()));
+			}
+			// 비율은 날짜의 연·월·일과 견주지 않는다 (AI가 계산한 "15%"가 날짜의 15일로 통과하지 않게)
+			Matcher nonDate = Pattern.compile(NUM).matcher(withoutDates);
+			while (nonDate.find()) {
+				figures.nonDateValues.add(number(nonDate.group()).abs());
 			}
 			return figures;
 		}
@@ -319,11 +361,15 @@ final class AiVerifier {
 		/** 단위를 붙인 금액이 본문의 어떤 숫자(표의 단위 배수 포함)를 그 자릿수로 반올림·버림한 값과 같은지. */
 		boolean matchesAmount(Amount amount) {
 			BigDecimal shown = amount.value().divide(amount.unit()).setScale(amount.decimals(), RoundingMode.HALF_UP);
+			boolean truncationOk = significantDigits(shown) >= TRUNCATION_MIN_DIGITS;
 			for (BigDecimal value : values) {
 				for (BigDecimal scale : scales) {
+					if (scale.compareTo(BigDecimal.ONE) != 0 && !scalable(value)) {
+						continue;
+					}
 					BigDecimal inUnit = value.multiply(scale).divide(amount.unit());
 					if (inUnit.setScale(amount.decimals(), RoundingMode.HALF_UP).compareTo(shown) == 0
-							|| inUnit.setScale(amount.decimals(), RoundingMode.DOWN).compareTo(shown) == 0) {
+							|| truncationOk && inUnit.setScale(amount.decimals(), RoundingMode.DOWN).compareTo(shown) == 0) {
 						return true;
 					}
 				}
@@ -331,13 +377,21 @@ final class AiVerifier {
 			return false;
 		}
 
+		/** 표의 금액 단위 배수를 곱해 볼 숫자인지: 날짜의 연·월·일이 아니고, 연도처럼 보이는 정수가 아니다. */
+		private boolean scalable(BigDecimal value) {
+			boolean yearLike = value.stripTrailingZeros().scale() <= 0 && value.compareTo(YEAR_FROM) >= 0
+					&& value.compareTo(YEAR_TO) <= 0;
+			return !yearLike && nonDateValues.stream().anyMatch(v -> v.compareTo(value) == 0);
+		}
+
 		/** 비율이 본문의 어떤 숫자를 그 자릿수로 반올림·버림한 값과 같은지. */
 		boolean matchesRounded(BigDecimal shown) {
 			BigDecimal target = shown.abs();
 			int decimals = Math.max(0, target.scale());
-			for (BigDecimal value : values) {
+			boolean truncationOk = significantDigits(target) >= TRUNCATION_MIN_DIGITS;
+			for (BigDecimal value : nonDateValues) {
 				if (value.setScale(decimals, RoundingMode.HALF_UP).compareTo(target) == 0
-						|| value.setScale(decimals, RoundingMode.DOWN).compareTo(target) == 0) {
+						|| truncationOk && value.setScale(decimals, RoundingMode.DOWN).compareTo(target) == 0) {
 					return true;
 				}
 			}

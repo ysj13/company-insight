@@ -146,14 +146,17 @@ public class AiTargetRepository {
 
 	/**
 	 * 요약을 적는다(있으면 덮어쓴다). 쓴 실행은 같은 트랜잭션에서 방금 기록한 그 단계의 실행이다.
+	 * 공시가 지금 호재·악재일 때만 적는다(요약은 호재·악재 공시에만 있다. AI를 부르는 동안 중립이 됐을 수 있다).
 	 *
 	 * @param stage 요약을 쓴 단계 (AI_JUDGE 또는 AI_SUMMARY)
+	 * @return 적었으면 true
 	 */
-	public void saveSummary(long disclosureId, String stage, String headline, List<String> lines) {
-		jdbc.sql("""
+	public boolean saveSummary(long disclosureId, String stage, String headline, List<String> lines) {
+		return jdbc.sql("""
 				INSERT INTO disclosure_summary (disclosure_id, headline, lines, written_by, run_id, created_at, updated_at)
-				VALUES (:id, :headline, :lines, 'AI',
-				        (SELECT max(id) FROM analysis_run WHERE disclosure_id = :id AND stage = :stage), now(), now())
+				SELECT :id, :headline, :lines, 'AI',
+				       (SELECT max(id) FROM analysis_run WHERE disclosure_id = :id AND stage = :stage), now(), now()
+				 WHERE EXISTS (SELECT 1 FROM disclosure WHERE id = :id AND tone IN ('POSITIVE', 'NEGATIVE'))
 				ON CONFLICT (disclosure_id) DO UPDATE
 				   SET headline = EXCLUDED.headline, lines = EXCLUDED.lines, written_by = EXCLUDED.written_by,
 				       run_id = EXCLUDED.run_id, updated_at = EXCLUDED.updated_at
@@ -162,7 +165,7 @@ public class AiTargetRepository {
 			.param("headline", headline == null || headline.isBlank() ? null : headline.strip())
 			.param("lines", lines.stream().map(String::strip).toArray(String[]::new))
 			.param("stage", stage)
-			.update();
+			.update() > 0;
 	}
 
 	/** AI가 쓴 요약을 지운다. 중립이 됐거나 판정을 보류한 공시는 요약을 보여주지 않는다. 코드가 쓴 요약은 둔다. */

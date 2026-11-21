@@ -57,6 +57,18 @@ class GeminiClientTest {
 	}
 
 	@Test
+	void 틀린_키의_400과_없는_모델의_404는_인증_오류로_본다() {
+		String invalidKey = """
+				{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT",
+				"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID"}]}}
+				""";
+		assertThat(GeminiClient.error(new GeminiClient.Raw(400, invalidKey)).kind()).isEqualTo(ErrorKind.AUTH);
+		assertThat(GeminiClient.error(new GeminiClient.Raw(404, "{}")).kind()).isEqualTo(ErrorKind.AUTH);
+		assertThat(GeminiClient.error(new GeminiClient.Raw(400, "{\"error\":{\"status\":\"INVALID_ARGUMENT\"}}")).kind())
+			.isEqualTo(ErrorKind.BAD_REQUEST);
+	}
+
+	@Test
 	void 오류_메시지에_응답_글을_넣지_않는다() {
 		ExternalApiException e = GeminiClient.error(new GeminiClient.Raw(400, "{\"error\":{\"message\":\"secret-like text\"}}"));
 		assertThat(e.getMessage()).doesNotContain("secret-like");

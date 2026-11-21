@@ -70,8 +70,7 @@ public class AiCaller {
 	 *
 	 * @param versionId 이 호출의 설정 버전 (실행 기록에 남긴다)
 	 * @throws Postpone           실패로 세지 않고 미뤄야 할 때. 담긴 결과를 그대로 돌려준다
-	 * @throws StageFailedException 답이 JSON이 아닐 때 (실패로 센다. 받은 글은 실행 기록에 남긴다)
-	 * @throws ExternalApiException 그 밖의 호출 실패 (실패로 센다)
+	 * @throws StageFailedException 답이 JSON이 아니거나(받은 글은 실행 기록에 남긴다) 미루지 않는 호출 실패일 때 (실패로 센다)
 	 */
 	public Answer call(String system, String user, Map<String, Object> schema, long versionId) {
 		if (!gemini.configured()) {
@@ -85,7 +84,8 @@ public class AiCaller {
 		catch (ExternalApiException e) {
 			StageResult.Deferred deferred = deferredFor(e, clock.instant());
 			if (deferred == null) {
-				throw e;
+				// 실패로 센다. 호출 기록(설정 버전)은 남겨 하루 호출 수를 실행 기록으로 셀 수 있게 한다
+				throw new StageFailedException(e.kind().name(), e.getMessage(), null, AiUsage.withoutTokens(versionId));
 			}
 			throw new Postpone(deferred.withAiUsage(AiUsage.withoutTokens(versionId)));
 		}

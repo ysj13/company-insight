@@ -95,7 +95,7 @@ public class AiSummaryHandler implements StageHandler {
 		Map<String, Object> result = new LinkedHashMap<>();
 		result.put("headline", headline);
 		result.put("summary", lines);
-		List<String> problems = AiVerifier.summaryProblems(body, headline, lines);
+		List<String> problems = AiVerifier.summaryProblems(AiJudgeHandler.verifyText(target, body), headline, lines);
 		result.put("summary_ok", problems.isEmpty());
 		if (!problems.isEmpty()) {
 			result.put("summary_problems", problems);
@@ -114,6 +114,7 @@ public class AiSummaryHandler implements StageHandler {
 		settings.put("model", caller.model());
 		settings.put("system", prompts.summarySystem());
 		settings.put("input", "AiInputs.summaryUser v1");
+		settings.put("schema", AiInputs.summarySchema());
 		return settings;
 	}
 

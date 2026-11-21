@@ -188,7 +188,9 @@ public class AiJudgeHandler implements StageHandler {
 		boolean evidenceOk = AiVerifier.evidenceFound(body, evidence);
 		result.put("evidence_ok", evidenceOk);
 		String heldPicked = pickedType;
-		if (tone == null || !evidenceOk) {
+		// 거둔 정정이 아니라는 답이면 표로 정했던 판정을 쓰므로, AI의 방향·근거가 없어도 보류하지 않는다
+		boolean tableKept = askWithdrawn && Boolean.FALSE.equals(withdrawn) && table.judgedTone() != null;
+		if (!tableKept && (tone == null || !evidenceOk)) {
 			// 판정불가이거나, 근거로 옮긴 구절이 본문에 없다(지어낸 근거일 수 있다)
 			result.put("held", tone == null ? "UNDECIDABLE" : "EVIDENCE_NOT_FOUND");
 			return StageResult.held().withResult(json(result)).withAiUsage(usage).withWrites(() -> {
@@ -207,7 +209,7 @@ public class AiJudgeHandler implements StageHandler {
 			ratio = null;
 			result.put("decided", "WITHDRAWN_CORRECTION");
 		}
-		else if (askWithdrawn && Boolean.FALSE.equals(withdrawn) && table.judgedTone() != null) {
+		else if (tableKept) {
 			// 거둔 정정이 아니다. 표로 정했던 판정을 그대로 쓴다
 			tone = table.judgedTone();
 			impact = tone == Tone.NEUTRAL ? null : table.judgedImpact();
@@ -237,15 +239,16 @@ public class AiJudgeHandler implements StageHandler {
 		Runnable saveJudgment = () -> repository.saveJudgment(id, finalTone, finalImpact, finalRatio, finalBy, finalPicked);
 		if (tone == Tone.NEUTRAL) {
 			return StageResult.ended().withResult(json(result)).withAiUsage(usage).withWrites(() -> {
-				saveJudgment.run();
-				repository.deleteAiSummary(id);
+				if (repository.saveJudgment(id, finalTone, finalImpact, finalRatio, finalBy, finalPicked)) {
+					repository.deleteAiSummary(id);
+				}
 			});
 		}
 		if (CODE_SUMMARY_TYPES.contains(effectiveType)) {
 			result.put("summary_skipped", "CODE_SUMMARY");
 			return StageResult.ended().withResult(json(result)).withAiUsage(usage).withWrites(saveJudgment);
 		}
-		List<String> problems = AiVerifier.summaryProblems(body, headline, lines);
+		List<String> problems = AiVerifier.summaryProblems(verifyText(target, body), headline, lines);
 		result.put("summary_ok", problems.isEmpty());
 		if (!problems.isEmpty()) {
 			result.put("summary_problems", problems);
@@ -253,13 +256,16 @@ public class AiJudgeHandler implements StageHandler {
 				.withResult(json(result))
 				.withAiUsage(usage)
 				.withWrites(() -> {
-					saveJudgment.run();
-					repository.deleteAiSummary(id);
+					if (repository.saveJudgment(id, finalTone, finalImpact, finalRatio, finalBy, finalPicked)) {
+						repository.deleteAiSummary(id);
+					}
 				});
 		}
 		return StageResult.ended().withResult(json(result)).withAiUsage(usage).withWrites(() -> {
-			saveJudgment.run();
-			repository.saveSummary(id, AnalysisStage.AI_JUDGE.name(), headline, lines);
+			// 그 사이 제목·표가 판정했으면 판정을 적지 않고, 요약도 적지 않는다
+			if (repository.saveJudgment(id, finalTone, finalImpact, finalRatio, finalBy, finalPicked)) {
+				repository.saveSummary(id, AnalysisStage.AI_JUDGE.name(), headline, lines);
+			}
 		});
 	}
 
@@ -271,6 +277,8 @@ public class AiJudgeHandler implements StageHandler {
 		settings.put("criteria", prompts.criteriaText());
 		settings.put("cases", prompts.casesText());
 		settings.put("input", "AiInputs.judgeUser v1");
+		// 응답의 모양도 판정을 바꿀 수 있어 버전에 넣는다 (유형 고르기·경우·철회 질문이 모두 있는 모양)
+		settings.put("schema", AiInputs.judgeSchema(List.of("A1"), List.of("CASE"), true));
 		return settings;
 	}
 
@@ -301,6 +309,17 @@ public class AiJudgeHandler implements StageHandler {
 			}
 		}
 		return lines;
+	}
+
+	/**
+	 * 요약을 대조할 글. 본문 앞에 입력 머리글의 접수일을 붙인다(AI가 요약에 접수일을 쓰면 본문에 없어 틀린 것으로 보지 않게).
+	 */
+	static String verifyText(AiTarget target, String body) {
+		if (target.filedOn() == null) {
+			return body;
+		}
+		return "접수일 " + target.filedOn() + " " + target.filedOn().getYear() + "년 " + target.filedOn().getMonthValue() + "월 "
+				+ target.filedOn().getDayOfMonth() + "일\n" + body;
 	}
 
 	static String json(Map<String, Object> result) {

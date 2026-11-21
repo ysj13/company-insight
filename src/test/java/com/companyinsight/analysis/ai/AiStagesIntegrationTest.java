@@ -276,6 +276,43 @@ class AiStagesIntegrationTest {
 	}
 
 	@Test
+	void 그_사이_제목이나_표가_판정한_공시는_부르지_않는다() {
+		long id = saveAndReadTable();
+		jdbc.sql("UPDATE disclosure SET tone = 'NEGATIVE', impact = 2, classified_by = 'RULE' WHERE id = :id").param("id", id).update();
+
+		drainAi();
+
+		assertThat(gemini.calls).isZero();
+		assertThat(lastRun(id).get("result").toString()).contains("NOT_NEEDED");
+		assertThat(disclosure(id)).containsEntry("classified_by", "RULE").containsEntry("impact", 2);
+	}
+
+	@Test
+	void 지분_보고의_요약은_AI가_쓰지_않는다() {
+		disclosures.saveListed(List.of(new Item("00164779", "SK하이닉스", "000660", "Y", "임원ㆍ주요주주특정증권등소유상황보고서",
+				"20261119000099", "SK하이닉스", "20261119", "")));
+		long id = jdbc.sql("SELECT id FROM disclosure WHERE source_key = '20261119000099'").query(Long.class).single();
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 1, classified_by = 'TABLE' WHERE id = :id").param("id", id).update();
+		queue().rerun(List.of(id), AnalysisStage.AI_SUMMARY);
+
+		drainAi();
+
+		assertThat(gemini.calls).isZero();
+		assertThat(lastRun(id).get("result").toString()).contains("CODE_SUMMARY");
+	}
+
+	@Test
+	void 중립인_공시에는_요약을_적지_않는다() {
+		long id = saveAndReadTable();
+		jdbc.sql("UPDATE disclosure SET tone = 'NEUTRAL', impact = NULL, classified_by = 'RULE' WHERE id = :id").param("id", id).update();
+
+		boolean saved = targets.saveSummary(id, "AI_JUDGE", "제목", List.of("문장"));
+
+		assertThat(saved).isFalse();
+		assertThat(count("SELECT count(*) FROM disclosure_summary")).isZero();
+	}
+
+	@Test
 	void 같은_설정이면_설정_버전은_하나다() {
 		saveAndReadTable();
 		saveAndReadTable("20260624000421");

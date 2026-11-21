@@ -61,6 +61,59 @@ class AiVerifierTest {
 	}
 
 	@Test
+	void 단위_뒤에_조사가_붙어도_금액을_본다() {
+		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("영업이익이 83조 3,338억에 달한다."))).isEmpty();
+		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("영업이익이 83조 4,000억을 넘었다."))).containsExactly("83조 4,000억");
+	}
+
+	@Test
+	void 천억_천만_단위도_본다() {
+		assertThat(AiVerifier.unmatchedFigures("계약금액 359,812,345,678원", List.of("9천억 원 계약", "5천만 원")))
+			.containsExactly("9천억", "5천만");
+		// 본문 190,000,000원 → "1억 9천만"은 맞다
+		assertThat(AiVerifier.unmatchedFigures("계약금액 190,000,000원", List.of("1억 9천만 원"))).isEmpty();
+		// 199,000,000원을 "1억 9천만"으로 버린 것은 유효숫자가 두 자리라 받는다
+		assertThat(AiVerifier.unmatchedFigures("계약금액 199,000,000원", List.of("1억 9천만 원"))).isEmpty();
+	}
+
+	@Test
+	void 단위_금액_끝에_이어_쓴_나머지도_금액에_넣는다() {
+		// 진시스템 자기주식 처분 공시의 처분예정금액 875,921,100원을 AI가 "8억 7,592만 1,100원"으로 옮긴 실제 사례
+		String body = "처분예정금액(원) | 875,921,100";
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("8억 7,592만 1,100원 규모"))).isEmpty();
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("8억 7,592만 1,200원 규모"))).containsExactly("8억 7,592만 1,200");
+	}
+
+	@Test
+	void 표의_단위_배수는_연도처럼_작은_숫자에_곱하지_않는다() {
+		String body = "(단위: 억원) 2026년 계약금액 150";
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("계약금액 150억 원"))).isEmpty();
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("계약금액 2,026억 원"))).containsExactly("2,026억");
+	}
+
+	@Test
+	void 버림은_유효숫자가_두_자리_이상일_때만_받는다() {
+		String body = "계약금액 199,000,000원";
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("1억 원"))).containsExactly("1억");
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("2억 원", "1.99억 원"))).isEmpty();
+		// 83,333,818백만원 → 83조 3,338억 (반올림과 버림이 같다)
+		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("83조 3,338억 원"))).isEmpty();
+	}
+
+	@Test
+	void 비율은_날짜의_일과_견주지_않는다() {
+		String body = "이사회 결의일 2026년 10월 15일. 할인율 10.5";
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("할인율은 10.5%다."))).isEmpty();
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("지분 15%를 취득한다."))).containsExactly("15%");
+	}
+
+	@Test
+	void 숫자_뒤에_쉼표가_와도_본다() {
+		assertThat(AiVerifier.unmatchedFigures("매장 300개", List.of("매장 300, 400개"))).containsExactly("400");
+		assertThat(AiVerifier.unmatchedFigures("매장 400개", List.of("매장 300, 400개"))).containsExactly("300");
+	}
+
+	@Test
 	void 어림하거나_틀린_금액은_본문에_없다() {
 		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("영업이익은 83조 4,000억 원이다."))).containsExactly("83조 4,000억");
 		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("영업이익 84조 원"))).containsExactly("84조");

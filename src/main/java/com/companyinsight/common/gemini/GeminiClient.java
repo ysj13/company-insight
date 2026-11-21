@@ -33,6 +33,9 @@ public class GeminiClient {
 
 	private static final JsonMapper JSON = JsonMapper.builder().build();
 
+	/** 틀린 키에 Gemini가 400 응답의 오류 이유로 적는 말 */
+	static final String INVALID_KEY_REASON = "API_KEY_INVALID";
+
 	private final RestClient restClient;
 	private final GeminiProperties properties;
 	private final Clock clock;
@@ -127,9 +130,17 @@ public class GeminiClient {
 		if (status >= 500) {
 			return ExternalApiException.of(SOURCE, ErrorKind.TRANSIENT, code, "서버 오류");
 		}
+		if (status == 400 && raw.body() != null && raw.body().contains(INVALID_KEY_REASON)) {
+			// Gemini는 틀린 키에 401/403이 아니라 400으로 답한다
+			return ExternalApiException.of(SOURCE, ErrorKind.AUTH, code, "인증키가 틀림");
+		}
+		if (status == 404) {
+			// 모델 이름이 없다. 설정 오류라 다음 작업을 꺼내도 같은 답이 온다
+			return ExternalApiException.of(SOURCE, ErrorKind.AUTH, code, "모델을 찾지 못함 (설정의 모델 이름 확인)");
+		}
 		ErrorKind kind = switch (status) {
 			case 401, 403 -> ErrorKind.AUTH;
-			case 400, 404 -> ErrorKind.BAD_REQUEST;
+			case 400 -> ErrorKind.BAD_REQUEST;
 			default -> ErrorKind.UNKNOWN;
 		};
 		return ExternalApiException.of(SOURCE, kind, code, "요청 오류");
