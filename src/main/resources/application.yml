@@ -139,7 +139,6 @@ app:
           RECURRING: 1          # 되풀이되는 우려 안내
           RELIEF: 2             # 벗어남 (호재)
       dissolution: 1            # 해산사유 발생
-      withdrawal: 1             # 제목 꼬리에 철회·취하가 든 공시
       fallback: 1               # 어디에도 없을 때
   financial:
     # 앱이 뜬 직후 재무를 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다

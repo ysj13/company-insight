@@ -46,6 +46,9 @@ final class AiVerifier {
 	private static final Pattern YEAR_MONTH = Pattern.compile("(\\d{4})\\s*년\\s*(\\d{1,2})\\s*월(?!\\s*\\d)");
 	private static final Pattern MONTH_DAY = Pattern.compile("(?<!\\d)(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
 
+	/** 본문이 연도를 두 자리로 줄여 쓴 연·월 ("'17년 12월"). 50 이하는 20xx년, 그 위는 19xx년으로 읽는다 */
+	private static final Pattern SHORT_YEAR_MONTH = Pattern.compile("['’‘](\\d{2})\\s*년\\s*(\\d{1,2})\\s*월");
+
 	/** 금액·수량의 단위. 두 글자 단위(천억, 천만)를 먼저 본다 */
 	private static final String UNIT = "(?:천억|천만|조|억|만|천)";
 
@@ -321,6 +324,11 @@ final class AiVerifier {
 			Matcher md = MONTH_DAY.matcher(text);
 			while (md.find()) {
 				figures.monthDays.add(Integer.parseInt(md.group(1)) + "-" + Integer.parseInt(md.group(2)));
+			}
+			Matcher shortYm = SHORT_YEAR_MONTH.matcher(text);
+			while (shortYm.find()) {
+				int yy = Integer.parseInt(shortYm.group(1));
+				figures.yearMonths.add((yy > 50 ? 1900 + yy : 2000 + yy) + "-" + Integer.parseInt(shortYm.group(2)));
 			}
 			Matcher compound = COMPOUND.matcher(text);
 			while (compound.find()) {

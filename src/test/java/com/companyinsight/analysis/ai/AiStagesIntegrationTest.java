@@ -313,6 +313,124 @@ class AiStagesIntegrationTest {
 	}
 
 	@Test
+	void 날짜만_바뀐_정정은_앞_공시의_판정을_물려받고_요약만_넘긴다() {
+		long original = judgedOriginal();
+		long correction = saveCorrection("20260710000099", original,
+				"[[\"납입일\",\"2026.07.14\",\"2026.07.24\"],[\"신주의 상장 예정일\",\"2026.07.29\",\"2026.08.07\"]]");
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isEqualTo(1); // 앞 공시를 판정한 한 번뿐
+		assertThat(disclosure(correction)).containsEntry("tone", "NEGATIVE").containsEntry("impact", 1)
+			.containsEntry("classified_by", "LLM");
+		assertThat(lastRun(correction)).containsEntry("pass_reason", "INHERITED");
+		assertThat(lastRun(correction).get("result").toString()).contains("\"inherited_from\": " + original);
+		assertThat(job(correction, "AI_SUMMARY")).containsEntry("status", "PENDING");
+	}
+
+	@Test
+	void 금액이_바뀐_정정은_물려받지_않고_AI가_판정한다() {
+		long original = saveAndReadTable();
+		jdbc.sql("UPDATE disclosure SET tone = 'NEGATIVE', impact = 1, classified_by = 'LLM' WHERE id = :id").param("id", original).update();
+		jdbc.sql("UPDATE analysis_job SET run_after = now() + interval '1 day' WHERE disclosure_id = :id").param("id", original).update();
+		long correction = saveCorrection("20260710000098", original,
+				"[[\"납입일\",\"2026.07.14\",\"2026.07.24\"],[\"신주의 발행가액\",\"5,000\",\"4,800\"]]");
+		gemini.answers.add(GOOD_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isEqualTo(1);
+		assertThat(gemini.lastUser).doesNotContain("날짜·일정만 바꿨다");
+		assertThat(lastRun(correction).get("result").toString()).doesNotContain("inherited_from");
+	}
+
+	@Test
+	void 날짜만_바뀐_정정인데_앞_공시가_판정되지_않았으면_그렇다고_알리고_AI가_판정한다() {
+		long original = saveAndReadTable();
+		long correction = saveCorrection("20260710000097", original, "[[\"납입일\",\"2026.07.14\",\"2026.07.24\"]]");
+		jdbc.sql("UPDATE analysis_job SET run_after = now() + interval '1 day' WHERE disclosure_id = :id").param("id", original).update();
+		gemini.answers.add(GOOD_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isEqualTo(1);
+		assertThat(gemini.lastUser).contains("날짜·일정만 바꿨다");
+	}
+
+	@Test
+	void 포괄_제목의_철회_공시는_AI를_부르지_않고_중립이다() {
+		// 실제 공시 이름의 모양: "기타주요경영사항 (제3자 배정 유상증자 결정 철회)"
+		disclosures.saveListed(List.of(new Item("00164779", "SK하이닉스", "000660", "Y", "기타주요경영사항 (제3자 배정 유상증자 결정 철회)",
+				"20261119000098", "SK하이닉스", "20261119", "")));
+		long id = jdbc.sql("SELECT id FROM disclosure WHERE source_key = '20261119000098'").query(Long.class).single();
+		assertThat(jdbc.sql("SELECT type_code FROM disclosure WHERE id = :id").param("id", id).query(String.class).single())
+			.isEqualTo("K1");
+		queue().rerun(List.of(id), AnalysisStage.AI_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isZero();
+		assertThat(disclosure(id)).containsEntry("tone", "NEUTRAL").containsEntry("impact", null).containsEntry("classified_by", "RULE");
+		assertThat(lastRun(id).get("result").toString()).contains("WITHDRAWAL_NEUTRAL");
+	}
+
+	@Test
+	void 앞_공시가_판정된_정정은_그_판정을_AI에_알려_준다() {
+		long original = judgedOriginal();
+		saveCorrection("20260710000096", original, "[[\"신주의 발행가액\",\"5,000\",\"4,800\"]]");
+		gemini.answers.add(GOOD_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.lastUser).contains("앞 공시(원래 결정)는 악재로 판정됐다");
+	}
+
+	@Test
+	void 옛_설정_버전으로_판정된_앞_공시는_물려받지_않는다() {
+		// 앞 공시의 AI 판정이 지금 지시문으로 낸 것이 아니면(실행 기록의 설정 버전이 다르면) 그 판정을 굳히지 않는다
+		long original = saveAndReadTable();
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 1, classified_by = 'LLM' WHERE id = :id").param("id", original).update();
+		jdbc.sql("UPDATE analysis_job SET run_after = now() + interval '1 day' WHERE disclosure_id = :id").param("id", original).update();
+		long correction = saveCorrection("20260710000095", original, "[[\"납입일\",\"2026.07.14\",\"2026.07.24\"]]");
+		gemini.answers.add(GOOD_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isEqualTo(1);
+		assertThat(gemini.lastUser).contains("날짜·일정만 바꿨다").doesNotContain("앞 공시(원래 결정)는");
+		assertThat(disclosure(correction)).containsEntry("tone", "NEGATIVE");
+	}
+
+	@Test
+	void 중립을_물려받으면_요약_없이_끝난다() {
+		long original = saveAndReadTable();
+		jdbc.sql("UPDATE disclosure SET tone = 'NEUTRAL', impact = NULL, classified_by = 'TABLE' WHERE id = :id").param("id", original).update();
+		jdbc.sql("UPDATE analysis_job SET run_after = now() + interval '1 day' WHERE disclosure_id = :id").param("id", original).update();
+		long correction = saveCorrection("20260710000094", original, "[[\"납입일\",\"2026.07.14\",\"2026.07.24\"]]");
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isZero();
+		assertThat(disclosure(correction)).containsEntry("tone", "NEUTRAL").containsEntry("classified_by", "TABLE");
+		assertThat(job(correction, "AI_JUDGE")).containsEntry("outcome", "ENDED");
+		assertThat(count("SELECT count(*) FROM analysis_job WHERE stage = 'AI_SUMMARY'")).isZero();
+	}
+
+	@Test
+	void 제목_꼬리_속성이_없어도_포괄_제목의_이름에_철회가_있으면_중립이다() {
+		disclosures.saveListed(List.of(new Item("00164779", "SK하이닉스", "000660", "Y", "기타주요경영사항 (임상시험계획 자진 철회)",
+				"20261119000097", "SK하이닉스", "20261119", "")));
+		long id = jdbc.sql("SELECT id FROM disclosure WHERE source_key = '20261119000097'").query(Long.class).single();
+		jdbc.sql("UPDATE disclosure SET title_attributes = '{}' WHERE id = :id").param("id", id).update();
+		queue().rerun(List.of(id), AnalysisStage.AI_JUDGE);
+
+		drainJudgeOnly();
+
+		assertThat(gemini.calls).isZero();
+		assertThat(disclosure(id)).containsEntry("tone", "NEUTRAL");
+	}
+
+	@Test
 	void 같은_설정이면_설정_버전은_하나다() {
 		saveAndReadTable();
 		saveAndReadTable("20260624000421");
@@ -357,6 +475,51 @@ class AiStagesIntegrationTest {
 		queue().rerun(List.of(id), AnalysisStage.READ_TABLE);
 		new AnalysisWorker(jobs, List.of(tableRead), properties, CLOCK).drain(WorkerGroup.CODE);
 		assertThat(job(id, "AI_JUDGE")).containsEntry("status", "PENDING");
+		return id;
+	}
+
+	/** 앞 공시를 실제 AI 판정 단계로 판정해 둔다(악재, 지금 설정 버전). 그 공시의 다른 대기 줄은 미룬다. */
+	private long judgedOriginal() {
+		long original = saveAndReadTable();
+		gemini.answers.add(GOOD_JUDGE);
+		drainJudgeOnly();
+		assertThat(disclosure(original)).containsEntry("tone", "NEGATIVE").containsEntry("classified_by", "LLM");
+		jdbc.sql("UPDATE analysis_job SET run_after = now() + interval '1 day' WHERE disclosure_id = :id AND status = 'PENDING'")
+			.param("id", original).update();
+		return original;
+	}
+
+	/** AI 판정만 처리한다 (요약 단계로 넘어간 줄은 꺼내지 않는다). */
+	private void drainJudgeOnly() {
+		GeminiProperties geminiProperties = new GeminiProperties("test-key", null, null, null, null, Duration.ZERO, null);
+		AiCaller caller = new AiCaller(gemini, geminiProperties, CLOCK);
+		new AnalysisWorker(jobs, List.of(new AiJudgeHandler(targets, bodyReader, caller, prompts, versions, sizeRules)),
+				properties, CLOCK).drain(WorkerGroup.AI);
+	}
+
+	/**
+	 * 앞 공시를 고친 [기재정정] 공시를 저장하고, 정정 표를 읽은 표 읽기 실행 기록과 AI 판정 대기 줄을 넣는다.
+	 *
+	 * @param changesJson 정정 표의 바뀐 항목 (항목, 정정 전, 정정 후)의 JSON 배열
+	 */
+	private long saveCorrection(String receiptNo, long predecessor, String changesJson) {
+		disclosures.saveListed(List.of(new Item("00164779", "SK하이닉스", "000660", "Y", "[기재정정]주요사항보고서(유상증자결정)",
+				receiptNo, "SK하이닉스", "20260710", "")));
+		long id = jdbc.sql("SELECT id FROM disclosure WHERE source_key = :key").param("key", receiptNo).query(Long.class).single();
+		bodies.save(id, zip(RIGHTS_THIRD_PARTY), 1, NOW);
+		jdbc.sql("UPDATE disclosure SET corrects_id = :p, correction_link = 'LINKED', bundle_id = :p WHERE id = :id")
+			.param("p", predecessor).param("id", id).update();
+		long jobId = jdbc.sql("""
+				INSERT INTO analysis_job (disclosure_id, stage, status, outcome, priority, run_after, enqueue_reason, created_at, updated_at)
+				VALUES (:id, 'READ_TABLE', 'DONE', 'PASSED', 100, now(), 'NEW', now(), now()) RETURNING id
+				""").param("id", id).query(Long.class).single();
+		jdbc.sql("""
+				INSERT INTO analysis_run (job_id, disclosure_id, stage, started_at, finished_at, outcome, enqueue_reason, pass_reason, result)
+				VALUES (:job, :id, 'READ_TABLE', now(), now(), 'PASSED', 'NEW', 'TONE_BY_AI',
+				        CAST(:result AS jsonb))
+				""").param("job", jobId).param("id", id)
+			.param("result", "{\"items\": {}, \"correction\": {\"changes\": " + changesJson + "}}").update();
+		queue().rerun(List.of(id), AnalysisStage.AI_JUDGE);
 		return id;
 	}
 

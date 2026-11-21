@@ -135,6 +135,14 @@ class AiVerifierTest {
 	}
 
 	@Test
+	void 본문이_두_자리로_줄여_쓴_연도를_풀어_써도_맞다() {
+		// 롯데손해보험 파생상품거래손실발생 공시의 표기: "'17년 12월 ~ '18년 1월 체결"
+		String body = "금리파생상품('17년 12월 ~ '18년 1월 체결)에서 손실 발생";
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("2017년 12월부터 2018년 1월 사이에 체결"))).isEmpty();
+		assertThat(AiVerifier.unmatchedFigures(body, List.of("2019년 12월에 체결"))).containsExactly("2019년 12월");
+	}
+
+	@Test
 	void 작은_정수와_본문에_있는_숫자는_본다() {
 		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("3분기 실적이다.", "전년동기 영업이익은 11,383,390백만원이다."))).isEmpty();
 		assertThat(AiVerifier.unmatchedFigures(BODY, List.of("영업이익 12,345,678백만원"))).containsExactly("12,345,678");
