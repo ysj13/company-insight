@@ -117,6 +117,19 @@ public class AnalysisQueueService {
 	}
 
 	/**
+	 * 본문을 고친 정정 공시 가운데 아직 묶음을 잇지 않은 것의 표 읽기 작업을 대기로 되돌린다.
+	 *
+	 * @return 대기로 되돌린 건수
+	 */
+	public int requeueUnlinkedCorrections() {
+		int requeued = jobs.requeueUnlinkedCorrections(clock.instant());
+		if (requeued > 0) {
+			log.info("분석 대기열: 묶음을 잇지 않은 정정 공시의 표 읽기 작업 {}건을 다시 줄 세웠습니다", requeued);
+		}
+		return requeued;
+	}
+
+	/**
 	 * 끝을 보지 못한 실행을 되돌린다. 앱이 죽으면 꺼낸 작업이 실행 중으로 남으므로,
 	 * 앱이 뜰 때와 몇 분마다 부른다. 되돌린 실행은 실패 한 번으로 센다.
 	 *

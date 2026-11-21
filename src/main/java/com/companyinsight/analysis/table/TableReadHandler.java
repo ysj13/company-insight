@@ -11,12 +11,15 @@ import com.companyinsight.disclosure.ClassifiedBy;
 import com.companyinsight.disclosure.JudgeMethod;
 import com.companyinsight.disclosure.Tone;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -40,6 +43,10 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>읽은 항목과 읽지 못한 항목은 실행 기록의 결과에 남긴다. 뒤 단계(AI 판정, 요약)가 그 값을 받아 쓴다.
  * 본문을 고친 정정 공시는 새 공시처럼 읽는다(본문에 고친 내용 전체가 들어 있다). 다만 정정 표에 철회·취소·해제·취하·
  * 미발생·미체결이 적혀 있으면 원래 결정을 거둔 정정일 수 있어, 코드가 방향을 정하지 않고 AI 판정으로 넘긴다.
+ *
+ * <p>본문을 고친 정정 공시는 어느 갈래로 가든 정정 표(고친 공시의 제출일, 정정 사유, 정정 전·후)도 읽어 실행 기록에 남기고,
+ * 앞 공시(원래 공시나 앞선 정정)와 잇는다({@link CorrectionBundles}). 이어진 묶음에서는 가장 늦게 낸 공시만 회사 판단에 세고,
+ * 그 날짜는 묶음의 최초 제출일이다.
  */
 @Component
 public class TableReadHandler implements StageHandler {
@@ -70,14 +77,19 @@ public class TableReadHandler implements StageHandler {
 
 	private static final JsonMapper JSON = JsonMapper.builder().build();
 
+	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+	};
+
 	private final TableReadRepository repository;
+	private final CorrectionBundles bundles;
 	private final DisclosureBodyReader bodies;
 	private final ImpactProperties impactProperties;
 	private final Map<String, TableReader> readers = new HashMap<>();
 
-	public TableReadHandler(TableReadRepository repository, DisclosureBodyReader bodies, ImpactProperties impactProperties,
-			List<TableReader> tableReaders) {
+	public TableReadHandler(TableReadRepository repository, CorrectionBundles bundles, DisclosureBodyReader bodies,
+			ImpactProperties impactProperties, List<TableReader> tableReaders) {
 		this.repository = repository;
+		this.bundles = bundles;
 		this.bodies = bodies;
 		this.impactProperties = impactProperties;
 		for (TableReader reader : tableReaders) {
@@ -118,6 +130,36 @@ public class TableReadHandler implements StageHandler {
 		if (target.typeCode() == null || target.judgeMethod() == null) {
 			throw new IllegalStateException("유형이 붙지 않은 공시입니다: " + disclosureId);
 		}
+		StageResult.Done done = judge(disclosureId, target, clear);
+		return target.bodyCorrection() ? withCorrection(disclosureId, done) : done;
+	}
+
+	/**
+	 * 정정 공시의 정정 표를 읽어 실행 기록에 더하고, 묶음 잇기를 끝을 기록하는 트랜잭션에 더한다.
+	 * 정정 표도 고친 공시의 제출일도 없으면(저장한 본문이 없을 때 포함) {@code correction: null}로 남기고 묶음에서 뺀다({@code NO_DATE}).
+	 */
+	private StageResult.Done withCorrection(long disclosureId, StageResult.Done done) {
+		Optional<CorrectionTable> correction = bodies.read(disclosureId)
+			.flatMap(documents -> CorrectionTable.read(documents, BodyTables.of(documents)));
+		Map<String, Object> result = new LinkedHashMap<>();
+		if (done.resultJson() != null) {
+			result.putAll(JSON.readValue(done.resultJson(), MAP_TYPE));
+		}
+		result.put("correction", correction.map(CorrectionTable::toResult).orElse(null));
+		LocalDate correctedFiledOn = correction.map(CorrectionTable::correctedFiledOn).orElse(null);
+		List<String> beforeValues = correction.map(c -> c.changes().stream().map(CorrectionTable.Change::before).toList())
+			.orElse(List.of());
+		Runnable writes = done.writes();
+		return done.withResult(JSON.writeValueAsString(result)).withWrites(() -> {
+			if (writes != null) {
+				writes.run();
+			}
+			bundles.link(disclosureId, correctedFiledOn, beforeValues);
+		});
+	}
+
+	/** 공시의 지금 분류에 따라 표를 읽어 판정한다. */
+	private StageResult.Done judge(long disclosureId, TableTarget target, Runnable clear) {
 		if (target.attributes().contains(WITHDRAWAL)) {
 			return StageResult.passed(WITHDRAWAL_TAIL, StageResult.Next.of(AnalysisStage.AI_JUDGE)).withWrites(clear);
 		}
@@ -135,7 +177,7 @@ public class TableReadHandler implements StageHandler {
 	 * 방향은 제목 규칙의 것으로 읽는다. 앞선 실행이 표로 중립을 적어 두었거나(크기의 하한 아래였다) AI가 판정해 둔 공시도
 	 * 제목 규칙의 방향으로 크기를 읽고, AI의 판정은 덮어쓰지 않는다.
 	 */
-	private StageResult byTitle(long disclosureId, TableTarget target) {
+	private StageResult.Done byTitle(long disclosureId, TableTarget target) {
 		Tone tone = target.classifiedBy() == ClassifiedBy.RULE ? target.tone() : target.titleTone();
 		if (tone == null) {
 			return StageResult.passed(NO_TITLE_TONE, StageResult.Next.of(AnalysisStage.AI_JUDGE));
@@ -173,7 +215,7 @@ public class TableReadHandler implements StageHandler {
 	}
 
 	/** 코드가 방향을 정하는 유형. */
-	private StageResult byCode(long disclosureId, TableTarget target) {
+	private StageResult.Done byCode(long disclosureId, TableTarget target) {
 		TableReader reader = readers.get(target.typeCode());
 		if (reader == null || reader.sizeOnly()) {
 			return StageResult.ended().withResult(skipped(NO_READER));

@@ -231,6 +231,32 @@ public class AnalysisJobRepository {
 	}
 
 	/**
+	 * 본문을 고친 정정 공시([기재정정]) 가운데 표 읽기를 끝냈는데 아직 묶음을 잇지 않은 것의 표 읽기 작업을 대기로 되돌린다.
+	 * 정정 표를 읽어 묶음을 잇는 규칙이 생기기 전에 표 읽기를 지난 정정 공시를 다시 읽게 한다.
+	 * 다시 읽으면 이은 결과({@code correction_link})가 적히므로 여러 번 불러도 결과가 같다.
+	 *
+	 * @return 대기로 되돌린 건수
+	 */
+	@Transactional
+	public int requeueUnlinkedCorrections(Instant now) {
+		return jdbc.sql("""
+				UPDATE analysis_job j
+				   SET status = 'PENDING', outcome = NULL, priority = :priority, run_after = :now, attempts = 0,
+				       deferrals = 0, enqueue_reason = :reason, updated_at = :now
+				  FROM disclosure d
+				 WHERE j.stage = :stage AND j.status = 'DONE'
+				   AND d.id = j.disclosure_id AND d.correction_link IS NULL AND NOT d.is_withdrawn
+				   AND position('[기재정정]' in COALESCE(substring(regexp_replace(d.report_name, '[\\s\\u00a0\\u3000]+', '', 'g')
+				                                         from '^((\\[[^]]*\\])+)'), '')) > 0
+				""")
+			.param("priority", AnalysisPriority.BACKLOG)
+			.param("now", at(now))
+			.param("reason", EnqueueReason.RERUN.name())
+			.param("stage", AnalysisStage.READ_TABLE.name())
+			.update();
+	}
+
+	/**
 	 * 공시 한 건의 한 단계를 대기로 만든다. 줄이 없으면 넣고, 있으면 상태가 무엇이든 대기로 되돌린다.
 	 * 실패 횟수와 미룬 횟수는 0으로 돌아간다.
 	 */

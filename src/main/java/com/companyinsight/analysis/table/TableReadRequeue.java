@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * 읽는 규칙이 없어 판정 없이 끝났던 표 읽기 작업을, 그 유형의 규칙이 생긴 뒤 다시 줄 세운다.
  * 제목이 방향을 정하는 유형은 규칙이 없던 때 크기 없이 지나갔으므로, 크기가 빈 공시의 작업을 다시 줄 세운다.
+ * 본문을 고친 정정 공시는 정정 표를 읽어 묶음을 잇기 전에 지나갔으므로, 묶음을 잇지 않은 정정 공시의 작업을 다시 줄 세운다.
  *
  * <p>규칙({@link TableReader})은 코드로 더하므로 새 규칙은 앱을 새로 띄울 때 생긴다. 그래서 앱이 뜬 직후 한 번,
  * 지금 규칙이 있는 유형 가운데 "규칙 없음"으로 끝나 있거나 크기가 빈 채 지나간 작업을 찾아 대기로 되돌린다.
@@ -35,6 +36,7 @@ class TableReadRequeue {
 		try {
 			queue.requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, handler.readableTypeCodes());
 			queue.requeueUnsized(handler.readableTypeCodes());
+			queue.requeueUnlinkedCorrections();
 		}
 		catch (RuntimeException e) {
 			// 다시 줄 세우지 못해도 앱은 떠야 한다. 다음에 띄울 때 다시 시도한다
