@@ -83,7 +83,7 @@ com.companyinsight
 | 인덱스 | `{테이블}_{컬럼}_idx`, unique 제약은 `{테이블}_{컬럼}_uq` | `disclosure_company_date_idx`, `disclosure_source_key_uq` |
 | 마이그레이션 | `V{번호}__{설명}.sql`. 적용된 파일은 수정하지 않고 새 버전을 추가 | `V4__collection_run_error_kind.sql` |
 | API 경로 | `/api/{복수 명사}`, kebab-case | `/api/companies` |
-| 화면 경로 | `/{복수 명사}/{식별자}` | `/companies/005930` |
+| 화면 경로 | `/{복수 명사}/{식별자}`. 회사는 나라와 종목코드 | `/companies/kr/005930` |
 | JSON 필드 | camelCase | `stockCode` |
 | DTO | record. `XxxRequest`, `XxxResponse`, 목록 항목은 `XxxSummary` | `CompanySummary` |
 | 설정 키 | `app.{기능}.{항목}`, kebab-case | `app.dart.api-key` |
