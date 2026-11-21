@@ -9,8 +9,8 @@
 /* 종목 화면 데모.
    머리: 회사 이름 + 판단(색 글자), 종목코드 · 시장 · 기준일
    탭: 공시(AI 요약 카드 + 공시 타임라인) · 개요 · 재무 · 뉴스. 탭은 상단 바 아래에 붙어 따라온다
-   공시 한 건과 뉴스 한 건은 아래에서 올라오는 패널로 본다(넓은 화면도 같다)
-   화면 상태: 불러오는 중(자리 표시), 분석 실패, 불러오기 오류, 공시 없는 회사, 검색 결과 없음. 화면 아래 "데모 화면 상태"로 바꿔 본다.
+   공시 한 건은 아래에서 올라오는 패널로 본다(넓은 화면도 같다). 뉴스 줄은 원문 기사로 바로 간다
+   화면 상태: 불러오는 중(자리 표시), 분석 실패, 수집 지연, 불러오기 오류, 공시 없는 회사, 검색 결과 없음. 화면 아래 "데모 화면 상태"로 바꿔 본다.
    규칙은 DESIGN.md, 부품과 상태 전체는 design-system.html.
    색·간격·모서리·글자 크기는 모두 아래 토큰으로만 쓴다(라이트 모드는 토큰 블록을 하나 더해 붙인다). */
 :root{
@@ -101,12 +101,13 @@ h1{font-size:var(--fs-title);font-weight:800;line-height:1.3;letter-spacing:-.03
 .seg button:hover{border-color:var(--line-selected);background:var(--btn-hover);color:var(--text)}
 .seg button:active{background:var(--btn-press);color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:700}
-/* 칩(누를 수 없는 표시): 호재·악재·중립과 "뉴스". 기호 없이 글자로. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정 */
+/* 칩(누를 수 없는 표시): 호재·악재·중립과 일반 칩(머리의 "업데이트 지연"). 기호 없이 글자로. 면은 불투명 카드색 위에 겹친 옅은 색으로 고정 */
 .tone,.chip{display:inline-flex;align-items:center;gap:var(--s1);height:24px;padding:0 var(--s2);border-radius:var(--r-sm);white-space:nowrap}
 .tone.up{background:linear-gradient(var(--up-soft),var(--up-soft)),var(--card);color:var(--up)}
 .tone.down{background:linear-gradient(var(--down-soft),var(--down-soft)),var(--card);color:var(--down)}
 .tone.flat{background:linear-gradient(var(--flat-soft),var(--flat-soft)),var(--card);color:var(--text-sub)}
 .chip{color:var(--text-sub);border:1px solid var(--line-hover)}
+.co .chip{margin-left:var(--s2);vertical-align:middle} /* 머리의 기준일 옆 "업데이트 지연" */
 /* 입력창 */
 .field{position:relative}
 .field .i{position:absolute;left:var(--s3);top:50%;margin-top:-10px;color:var(--text-faint);pointer-events:none}
@@ -184,6 +185,7 @@ main.inner{display:grid;gap:var(--s6);padding-block:var(--s8) var(--s12)}
 .tl .item:hover{background:var(--fill-hover)} .tl .item:active,.tl .item[aria-current="true"]{background:var(--fill-selected)}
 .tl .lab{display:flex;gap:var(--s2);align-items:baseline} .tl .lab b{font-weight:600;color:var(--text-sub)} .tl .lab .tw{font-weight:600}
 .tl .today .lab,.tl .today .lab b{color:var(--text);font-weight:600}
+.tl .lab b.same{visibility:hidden} /* 같은 날 둘째 줄부터 날짜 자리를 비운다(화면 읽기에는 숨긴 글자로 날짜를 준다) */
 .tl .plan .row-title{color:var(--text-sub)}
 .tl + .empty{margin-top:var(--s3)}
 
@@ -224,12 +226,13 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .chk li b{font-weight:600;text-align:right} .chk li.bad b{color:var(--down)}
 .extlink{display:inline-flex;align-items:center;gap:var(--s1);color:inherit;text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px}
 
-/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 언론사 · 시각 */
+/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 언론사 · 시각. 누르면 원문 기사(새 창) */
 .news{list-style:none;margin:calc(var(--s3) * -1) 0 0;padding:0} /* 첫 줄의 안쪽 여백이 카드 여백과 겹쳐 위가 비어 보이지 않게 */
 .news li + li{border-top:1px solid var(--line)}
 .news a{display:grid;gap:var(--s1);padding:var(--s3);margin:0 calc(var(--s3) * -1);border-radius:var(--r-md);color:inherit;text-decoration:none;transition:background var(--fast)}
 .news a:hover{background:var(--fill-hover)} .news a:active,.news a[aria-current="true"]{background:var(--fill-selected)}
-.news.nlist{margin-top:var(--s1)} /* 전체 뉴스 화면: 월 제목 아래 */
+.news.nlist{margin-top:var(--s1)} /* 전체 뉴스 화면: 찾기 아래 */
+.news .meta .i{margin-left:var(--s1);vertical-align:-3px} /* 원문 기사로 가는 줄(새 창)의 바깥 링크 아이콘 */
 
 /* 전체 공시 화면 */
 .back{margin-bottom:var(--s2)}
@@ -259,14 +262,13 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .is-new{animation:flash 1.2s ease-out}
 @keyframes flash{from{background:var(--fill-selected)}}
 
-/* ───────── 공시 한 건·뉴스 한 건 (아래에서 올라오는 패널) ───────── */
+/* ───────── 공시 한 건 (아래에서 올라오는 패널) ───────── */
 .dv-verdict{display:flex;gap:var(--s1) var(--s2);flex-wrap:wrap;align-items:center}
 .dv-title{margin-top:var(--s3)}
 .dv-title + .meta,.dv-title + .dv-srclink{margin-top:var(--s2)}
 .dv ul{margin:var(--s2) 0 0;padding-left:var(--s4);line-height:1.65}
 .dv .ai-box,.dv .ai-wait{margin-top:var(--s4)}
 .dv .notice{margin-top:var(--s3)}
-.dv .news-src{margin-top:var(--s6)}
 /* 원문 링크: 패널 제목 아래 "날짜 · DART 공시 이름" 줄이 곧 원문 링크(출처 표시와 원문 링크를 한 줄로) */
 .dv-srclink{display:inline-flex;align-items:center;gap:var(--s1);min-height:32px;color:var(--text-sub);text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px;transition:color var(--fast),text-decoration-color var(--fast)}
 .dv-srclink:hover{color:var(--text);text-decoration-color:var(--text-sub)}
@@ -332,7 +334,7 @@ footer{text-align:center;padding-block:var(--s2) var(--s12);line-height:1.8}
   데모 화면 · 회사 이름 말고는 공시, 뉴스, 수치, 요약 모두 예시예요<br>
   공시·재무 출처 금융감독원 전자공시시스템(DART)<br>
   AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.<br>
-  <span class="seg demo-ctl" role="group" aria-label="데모 화면 상태"><button type="button" data-demo="ok" aria-pressed="true">정상</button><button type="button" data-demo="loading" aria-pressed="false">불러오는 중</button><button type="button" data-demo="fail" aria-pressed="false">분석 실패</button><button type="button" data-demo="error" aria-pressed="false">불러오기 오류</button><button type="button" data-demo="empty" aria-pressed="false">공시 없는 회사</button></span>
+  <span class="seg demo-ctl" role="group" aria-label="데모 화면 상태"><button type="button" data-demo="ok" aria-pressed="true">정상</button><button type="button" data-demo="loading" aria-pressed="false">불러오는 중</button><button type="button" data-demo="fail" aria-pressed="false">분석 실패</button><button type="button" data-demo="lag" aria-pressed="false">수집 지연</button><button type="button" data-demo="error" aria-pressed="false">불러오기 오류</button><button type="button" data-demo="empty" aria-pressed="false">공시 없는 회사</button></span>
 </footer>
 
 <!-- 재무 그래프는 Chart.js로 그린다(기술 스택). 주식 구성·매출 구성 막대처럼 칸 너비만 정하면 되는 것은 라이브러리 없이 -->
@@ -374,6 +376,7 @@ const DB = {
    {d:"2026-11-01",tone:"down",imp:1,g:"소송",by:"본문 숫자",t:"소송등의제기ㆍ신청(일정금액이상의청구)",r:"영업비밀 침해 소송 피소, 청구 금액은 자기자본의 0.1%"},
    {d:"2026-10-29",tone:"up",imp:2,g:"공급계약",by:"본문 숫자",t:"단일판매ㆍ공급계약체결",r:"계약 금액이 최근 매출액의 18%",s:["고대역폭 메모리 공급 계약을 체결","계약 금액은 최근 매출액의 18%","계약 기간은 2027년 12월까지"]},
    {d:"2026-10-22",tone:"up",imp:3,g:"실적·재무",by:"본문 숫자",t:"연결재무제표기준영업(잠정)실적(공정공시)",r:"3분기 영업이익이 1년 전보다 71% 증가",s:["3분기 잠정 영업이익이 1년 전보다 71% 증가","분기 기준 사상 최대","매출액은 35% 증가"]},
+   {d:"2026-10-22",tone:"up",imp:1,g:"시설 투자",by:"AI",t:"신규시설투자등(자율공시)",r:"패키징 라인 증설, 투자 금액이 자기자본의 2%"}, /* 같은 날 공시 두 건의 예시 */
    {d:"2026-10-15",tone:"up",imp:2,g:"주주환원",by:"본문 숫자",t:"현금ㆍ현물배당결정",r:"분기 주당 배당금이 1년 전보다 늘어남",s:["분기 현금 배당을 결정","주당 배당금이 1년 전 같은 분기보다 늘어남","배당 기준일은 9월 30일"]},
    {d:"2026-10-08",tone:"flat",imp:0,g:"지분 보고",by:"본문 숫자",t:"주식등의대량보유상황보고서(일반)",r:"대량 보유자의 보유 비율 변동 없음 보고"},
    {d:"2026-09-10",tone:"down",imp:1,g:"기타 경영사항",by:"AI",t:"기타경영사항(자율공시)",r:"생산 라인 일부 점검으로 가동 일시 중단 안내"},
@@ -413,29 +416,31 @@ const DB = {
  /* 공시 없는 회사의 예시(가상의 회사). 검색 목록에는 넣지 않고 "데모 화면 상태"로만 연다 */
  "000000":{name:"새로 상장한 회사(예시)",market:"코스닥",lede:"",hasFin:false,watch:[],events:[]}
 };
-/* 뉴스: [날짜 묶음, 제목, 언론사, 시각, AI 요약(예시, 없으면 "준비 중")]. 회사 이름이 제목에 든 뉴스만 보여준다.
-   제목과 요약은 지어낸 예시(실제 기사 아님). 뉴스 요약은 아직 보류이고, 데모는 넣을 때의 모양을 보여준다 */
+/* 뉴스: [날짜, 제목, 언론사, 시각]. 제목과 언론사는 지어낸 예시(실제 기사 아님).
+   검색 API는 언론사 이름을 주지 않으므로 원문 주소의 도메인을 우리가 둔 언론사 이름 표로 바꾸고, 표에 없으면 도메인을 그대로 쓴다.
+   뉴스는 저장하지 않는다. 탭(화면)을 열 때 네이버 뉴스 검색 API를 회사 이름으로 불러 받은 그대로(최신순) 보여준다.
+   거르거나 순서를 바꾸지 않고, AI에 넣지 않는다(검색 API 이용약관). 그래서 회사와 무관한 기사도 섞여 보인다 */
 const NEWS = {
  "005930":[
-  ["오늘","삼성전자, 반도체 설비 투자 계획 주목","예시경제","2시간 전",["반도체 설비 투자 계획이 업계의 관심을 받고 있다는 내용","투자 규모와 시기는 회사가 확정해 밝히지 않았다고 전함","확정되면 공시로 나올 수 있다고 덧붙임"]],
+  ["오늘","삼성전자, 반도체 설비 투자 계획 주목","예시경제","2시간 전"],
   ["오늘","미국 증시 기술주 혼조, 반도체 지수 하락","예시일보","3시간 전"],
-  ["오늘","삼성전자 협력사와 공급 계약 규모 확대","예시일보","4시간 전",["협력사와 맺은 공급 계약의 규모가 커졌다는 내용","계약 상대와 금액은 기사에서 밝히지 않음","회사의 공식 발표는 아직 없다고 전함"]],
-  ["어제","삼성전자, 신규 공급 계약 체결","예시경제","17:20",["메모리 반도체 공급 계약을 새로 맺었다는 내용","계약 금액은 최근 매출액의 1.2%라고 전함","계약 기간은 2027년 12월까지"]],
-  ["어제","삼성전자 기업설명회 일정 공지","예시일보","09:10",["기업설명회를 연다는 회사의 안내를 전한 내용","날짜는 11월 13일, 3분기 실적과 사업 현황을 설명한다고 전함","참석 대상은 기관투자자와 증권사 분석가"]],
-  ["11.04","삼성전자, 패키징 업체 지분 취득 배경","예시뉴스","15:30",["반도체 패키징 업체의 지분을 취득한 배경을 다룬 내용","공급망 확보가 목적이라는 회사 설명을 전함","취득 금액은 자기자본의 0.4%"]],
+  ["오늘","삼성전자 협력사와 공급 계약 규모 확대","예시일보","4시간 전"],
+  ["어제","삼성전자, 신규 공급 계약 체결","예시경제","17:20"],
+  ["어제","삼성전자 기업설명회 일정 공지","예시일보","09:10"],
+  ["11.04","삼성전자, 패키징 업체 지분 취득 배경","예시뉴스","15:30"],
   ["11.03","반도체 장비 업계, 4분기 수주 전망","예시일보","10:12"],
-  ["10.28","삼성전자 3분기 영업이익 13% 증가","예시뉴스","16:05",["3분기 잠정 영업이익이 1년 전보다 13% 늘었다는 내용","매출액은 7% 늘었다고 전함","확정 실적은 분기보고서로 다시 나온다고 덧붙임"]],
-  ["10.28","삼성전자 3분기 실적 발표 뒤 해석 엇갈려","예시경제","18:30",["3분기 실적 발표 뒤 업계의 해석이 엇갈린다는 내용","메모리 가격 회복을 두고 의견이 나뉜다고 전함","기사에 인용된 의견은 기사 작성자의 정리"]],
-  ["10.24","삼성전자, 중국 공장 장비 반입 제한 안내","예시뉴스","17:05",["중국 공장으로 들이는 일부 장비에 제한이 생겼다는 회사 안내를 전한 내용","생산 영향은 아직 정해지지 않았다고 전함","후속 발표가 나오면 다시 알려질 예정"]],
+  ["10.28","삼성전자 3분기 영업이익 13% 증가","예시뉴스","16:05"],
+  ["10.28","삼성전자 3분기 실적 발표 뒤 해석 엇갈려","예시경제","18:30"],
+  ["10.24","삼성전자, 중국 공장 장비 반입 제한 안내","예시뉴스","17:05"],
   ["10.22","삼성전자 특허 소송 피소 소식","예시경제","11:20"],
-  ["10.21","삼성전자, 해외 업체와 특허 분쟁","예시일보","19:45",["해외 업체가 특허 침해 손해배상 소송을 냈다는 내용","청구 금액은 자기자본의 0.3%라고 전함","회사는 법적 절차로 대응한다고 밝혔다고 전함"]],
-  ["10.16","삼성전자 자기주식 3조 원 취득 결정","예시뉴스","09:30",["보통주 자기주식 3조 원어치를 사들이기로 했다는 내용","취득 기간은 2027년 2월까지라고 전함","회사는 주주환원 정책의 하나라고 설명했다고 전함"]],
+  ["10.21","삼성전자, 해외 업체와 특허 분쟁","예시일보","19:45"],
+  ["10.16","삼성전자 자기주식 3조 원 취득 결정","예시뉴스","09:30"],
   ["10.08","삼성전자, 3분기 잠정실적 발표 일정 안내","예시일보","10:00"],
   ["09.18","삼성전자 특허 소송 1심 판결","예시뉴스","16:20"]],
- "000660":[["오늘","SK하이닉스, 고대역폭 메모리 공급 확대 계획 발표","예시일보","5시간 전",["고대역폭 메모리 공급을 늘릴 계획을 밝혔다는 내용","늘리는 규모와 시기는 기사에서 밝히지 않음","관련 시설 투자는 11월 4일 공시로 나왔다고 전함"]],["11.04","SK하이닉스 분기 실적 설명회 일정 안내","예시뉴스","14:00"]]
+ "000660":[["오늘","SK하이닉스, 고대역폭 메모리 공급 확대 계획 발표","예시일보","5시간 전"],["11.04","SK하이닉스 분기 실적 설명회 일정 안내","예시뉴스","14:00"]]
 };
 const NEWS_TAB = 10; /* 뉴스 탭에는 최근 10건. 나머지는 "전체 뉴스 보기"(다른 화면) */
-/* 전체 뉴스 화면의 예시 데이터: 위 뉴스에 석 달치 지난 뉴스를 섞는다(제목은 지어낸 것, 요약 없음) */
+/* 전체 뉴스 화면의 예시 데이터: 위 뉴스에 석 달치 지난 뉴스를 섞는다(제목은 지어낸 것). 실제로는 API의 쪽 넘김으로 받는다 */
 const NEWS_FILL = ["{n}, 신규 채용 일정 발표","{n} 협력사 간담회 열어","{n}, 친환경 공장 인증 받아","{n} 연구개발 인력 확대","{n}, 해외 법인 설립 추진","{n} 노사 임금 협상 마무리","{n}, 신제품 출시 일정 공개","{n} 사회공헌 기금 전달","{n}, 지역 대학과 인재 양성 협약","{n} 공장 안전 점검 결과 발표"];
 const NEWS_SRC = ["예시경제","예시일보","예시뉴스"];
 const CODES = Object.keys(DB).filter(c=>c!=="000000");
@@ -484,11 +489,11 @@ const AI = `<p class="box-title ai-tag">AI 요약</p>`;
 const NOTICE = `AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.`;
 const DART = "https://dart.fss.or.kr/";
 
-/* view: ok 정상 / loading 불러오는 중 / fail 분석 실패(지난 판단을 보여줌) / error 불러오기 오류
+/* view: ok 정상 / loading 불러오는 중 / fail 분석 실패 / lag 수집 지연(둘 다 지난 판단을 보여줌) / error 불러오기 오류
    tab: disc 공시 / overview 개요 / fin 재무 / news 뉴스 (실제 화면에서는 탭마다 주소가 붙는다) */
 const TABS = [["disc","공시"],["overview","개요"],["fin","재무"],["news","뉴스"]];
 let AF = {tone:"all", g:"all", y:"all", q:"", p:1};
-let NF = {q:"", src:"all", p:1}; /* 전체 뉴스 화면의 거르기 */
+let NF = {q:"", p:1}; /* 전체 뉴스 화면의 찾기와 쪽 */
 let state = { page:"co", tab:"disc", code:"005930", view:"ok", dv:null };
 let lastCode = "005930"; /* "공시 없는 회사"를 보다가 정상으로 돌아올 회사 */
 let opener = null; /* 패널을 연 줄. 닫으면 포커스를 돌려준다 */
@@ -528,30 +533,24 @@ function dvHTML(co, e){
     ${sum}
     ${e.s ? `<p class="notice meta">${NOTICE}</p>` : ""}</div>`;
 }
-/* 뉴스 한 건(패널): 뉴스 칩 → 제목 → 언론사 · 시각 → AI 3줄 요약 → 고지 → 원문 기사 보기.
-   요약은 보류라 데모의 요약은 예시다(넣을 때의 모양). 요약이 없는 기사는 공시 패널과 같은 "준비 중" */
-/* 뉴스 한 건: {d 날짜, t 제목, src 언론사, tm 시각, s AI 요약}. 회사 이름이 제목에 든 것만, 새것부터 */
+/* 뉴스 한 건: {d 날짜, t 제목, src 언론사, tm 시각}. API가 준 순서(최신순) 그대로.
+   패널을 열지 않고, 줄을 누르면 원문 기사로 바로 간다(새 창) */
 const YDAY = DATES[LAST-1];
 const newsCache = {};
 function newsOf(co){
   const code = Object.keys(DB).find(c=>DB[c]===co); if(newsCache[code]) return newsCache[code];
   const raw = NEWS[code]||[], dOf = l => l==="오늘" ? ASOF : l==="어제" ? YDAY : "2026-"+l.replace(".","-");
-  const out = raw.filter(x=>x[1].includes(co.name)).map(x=>({d:dOf(x[0]), t:x[1], src:x[2], tm:x[3], s:x[4]||null}));
+  const out = raw.map(x=>({d:dOf(x[0]), t:x[1], src:x[2], tm:x[3]}));
   if(raw.length){ let seed = [...code].reduce((a,c)=>a*31+c.charCodeAt(0),11) % 9973; const rnd = () => (seed = seed*48271 % 2147483647) / 2147483647;
     for(let t=dnum("2026-09-15"); t>=dnum("2026-06-01"); t -= 2 + Math.floor(rnd()*3)){ const d = new Date(t*864e5).toISOString().slice(0,10), w = new Date(t*864e5).getUTCDay();
       if(w===0||w===6) continue;
-      out.push({d, t:NEWS_FILL[Math.floor(rnd()*NEWS_FILL.length)].replace("{n}",co.name), src:NEWS_SRC[Math.floor(rnd()*3)], tm:`${9+Math.floor(rnd()*9)}:${String(Math.floor(rnd()*6)*10).padStart(2,"0")}`, s:null}); } }
+      out.push({d, t:NEWS_FILL[Math.floor(rnd()*NEWS_FILL.length)].replace("{n}",co.name), src:NEWS_SRC[Math.floor(rnd()*3)], tm:`${9+Math.floor(rnd()*9)}:${String(Math.floor(rnd()*6)*10).padStart(2,"0")}`}); } }
   return (newsCache[code] = out.sort((a,b)=>b.d.localeCompare(a.d)));
 }
 const newsWhen = n => n.d===ASOF ? n.tm : n.d===YDAY ? "어제 "+n.tm : md(n.d)+" "+n.tm;
-const newsHTML = n => `<div class="dv">
-    <div class="dv-verdict meta"><span class="chip">뉴스</span></div>
-    <h2 class="dv-title" id="dv-title">${esc(n.t)}</h2>
-    <p class="meta num">${esc(n.src)} · ${esc(newsWhen(n))}</p>
-    ${n.s ? `<div class="ai-box">${AI}<ul>${n.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div><p class="notice meta">${NOTICE}</p>`
-           : `<p class="ai-wait"><span class="box-title ai-tag">AI 요약</span><span class="meta">준비 중</span></p>`}
-    <a class="btn news-src" href="#" onclick="return false">원문 기사 보기${icon("external","sm")}<span class="sr">(새 창)</span></a></div>`;
-const newsRow = (n,i) => `<li><a href="#" onclick="return false" data-dv="news:${i}"><span class="row-title">${esc(n.t)}</span><span class="meta faint num">${esc(n.src)} · ${esc(newsWhen(n))}</span></a></li>`;
+/* 줄 = 제목 / 언론사 · 시각 + 바깥 링크 아이콘. 누르면 원문 기사(새 창). 데모에서는 예시라 이동하지 않는다 */
+const newsRow = n => `<li><a href="#" target="_blank" rel="noopener" onclick="return false"><span class="row-title">${esc(n.t)}</span><span class="meta faint num">${esc(n.src)} · ${esc(newsWhen(n))}${icon("external","sm")}<span class="sr">(새 창)</span></span></a></li>`;
+const naverSrc = () => srcLine("네이버 뉴스 검색결과"); /* 검색 API 이용약관: 네이버 검색결과임을 표시한다(모양은 네이버 BI 가이드를 따른다) */
 
 /* 이전·다음 (날짜순, 이전 = 더 오래된 것). 종목 화면에서는 모은 공시, 전체 공시 화면에서는 그 목록 순서 */
 function neighbors(co,key){ const l=state.page==="all" ? allEvents(co) : [...co.events].sort((a,b)=>b.d.localeCompare(a.d)), i=l.findIndex(e=>keyOf(e)===key); return { older:l[i+1]||null, newer:l[i-1]||null }; }
@@ -559,15 +558,19 @@ const navBtns = (co,key) => { const {older,newer}=neighbors(co,key);
   return `<button type="button" class="tbtn num" data-step="${older?esc(keyOf(older)):""}" ${older?"":"disabled"}>${icon("prev","sm")}이전 공시${older?" "+md(older.d):""}</button><button type="button" class="tbtn num" data-step="${newer?esc(keyOf(newer)):""}" ${newer?"":"disabled"}>다음 공시${newer?" "+md(newer.d):""}${icon("next","sm")}</button>`; };
 
 /* ───────── 머리와 공시 탭 ───────── */
-const judgeDay = () => state.view==="fail" ? DATES[LAST-1] : ASOF;
+/* 분석 실패·수집 지연: 마지막 예정 작업(공시 수집 또는 저녁 분석)이 실패로 끝나면 지난 판단과 그 기준일을 보여준다.
+   조건이 달력이 아니라 작업의 실패 기록이라 주말·공휴일에는 뜨지 않는다 */
+const late = () => state.view==="fail" || state.view==="lag";
+const judgeDay = () => late() ? DATES[LAST-1] : ASOF;
 function head(co){
   const now = scoreAt(co, judgeDay()), [vText,vCls] = now.hold ? ["판단 보류","hold"] : verdictOf(now.s);
-  return `<div class="co"><div class="nm"><h1>${esc(co.name)}</h1><span class="verdict ${vCls}">${vText}</span></div><div class="meta num">${state.code} · ${co.market} · ${md(judgeDay())} 기준</div></div>`;
+  return `<div class="co"><div class="nm"><h1>${esc(co.name)}</h1><span class="verdict ${vCls}">${vText}</span></div><div class="meta num">${state.code} · ${co.market} · ${md(judgeDay())} 기준${late()?`<span class="chip">업데이트 지연</span>`:""}</div></div>`;
 }
 /* ① AI 요약 카드: 판단의 근거를 문장으로. 판단 이름은 머리에 있다 */
 function aiCard(co){
-  const fail = state.view==="fail", day = judgeDay(), now = scoreAt(co, day);
-  const failBox = fail ? `<div class="fail meta"><span>${md(ASOF)} 공시 분석이 끝나지 않아 ${md(day)} 판단을 보여주고 있어요. 새 공시는 다음 분석 때 반영돼요.</span><button type="button" class="btn" data-retry>${icon("reload")}다시 불러오기</button></div>` : "";
+  const fail = late(), day = judgeDay(), now = scoreAt(co, day);
+  const why = state.view==="lag" ? `${md(ASOF)} 공시를 아직 받지 못해 ${md(day)} 판단을 보여주고 있어요. 공시를 받으면 다시 계산해요.` : `${md(ASOF)} 공시 분석이 끝나지 않아 ${md(day)} 판단을 보여주고 있어요. 새 공시는 다음 분석 때 반영돼요.`;
+  const failBox = fail ? `<div class="fail meta"><span>${why}</span><button type="button" class="btn" data-retry>${icon("reload")}다시 불러오기</button></div>` : "";
   if(now.hold){ /* 판단 보류: AI가 쓴 글이 아니라 보라 칸이 아닌 보통 카드 */
     const none = !co.events.length;
     return `<section class="card" aria-label="판단 보류"><p>${none?"아직 모은 공시가 없어 판단을 내리지 않았어요. 호재나 악재로 판정된 공시가 들어오면 계산해요."
@@ -577,6 +580,7 @@ function aiCard(co){
   return `<section class="aicard" aria-label="AI 요약"><div class="${fail?"stale":""}">${AI}${body}</div>${failBox}<p class="foot meta">${NOTICE}</p></section>`;
 }
 /* ② 공시 타임라인: 최근 30일 호재·악재 공시. 줄 = 날짜 요일 · 호재/악재 / DART 공시 이름(원문 그대로). 누르면 패널에서 요약.
+   같은 날 공시가 여럿이면 둘째 줄부터 날짜 자리를 비운다.
    중립 공시는 "전체 공시 보기"에서 */
 function timeline(co){
   if(!co.events.length) return `<section class="card" aria-label="공시">${emptyBox("아직 모은 공시가 없어요","")}</section>`;
@@ -586,7 +590,7 @@ function timeline(co){
     `<li class="plan"><span class="n" aria-hidden="true"></span><div class="t3"><span class="lab meta num"><b>${md(d)}</b>예정 · D-${dnum(d)-dnum(ASOF)}</span><span class="row-title">${esc(t)}</span></div></li>`).join("");
   const today = `<li class="today"><span class="n" aria-hidden="true"></span><div class="t3"><span class="lab meta num"><b>${md(ASOF)} ${wd(ASOF)}</b>오늘</span></div></li>`;
   const rows = past.map((e,i)=>{ const gap = Math.min(14, dnum(i ? past[i-1].d : ASOF) - dnum(e.d)) * 5;
-    return `<li style="--gap:${gap}px"><span class="n ${e.tone} i${e.imp}" aria-hidden="true"></span><button type="button" class="t3 item" data-dv="${esc(keyOf(e))}"><span class="lab meta num"><b>${md(e.d)} ${wd(e.d)}</b><span class="tw ${e.tone}">${TONE[e.tone]}</span><span class="sr">영향 ${SIZE[e.imp]}</span></span><span class="row-title">${keyOf(e)===newKey?`<span class="new-tag">새</span>`:""}${esc(e.t)}</span></button></li>`; }).join("");
+    return `<li style="--gap:${gap}px"><span class="n ${e.tone} i${e.imp}" aria-hidden="true"></span><button type="button" class="t3 item" data-dv="${esc(keyOf(e))}"><span class="lab meta num">${i && past[i-1].d===e.d ? `<b class="same" aria-hidden="true">${md(e.d)} ${wd(e.d)}</b><span class="sr">${md(e.d)} ${wd(e.d)}</span>` : `<b>${md(e.d)} ${wd(e.d)}</b>`}<span class="tw ${e.tone}">${TONE[e.tone]}</span><span class="sr">영향 ${SIZE[e.imp]}</span></span><span class="row-title">${keyOf(e)===newKey?`<span class="new-tag">새</span>`:""}${esc(e.t)}</span></button></li>`; }).join("");
   return `<section class="card" aria-label="최근 30일 호재·악재 공시"><ol class="tl">${plans}${today}${rows}</ol>
     ${past.length ? "" : emptyBox("최근 30일 호재·악재 공시가 없어요","")}
     <div class="more"><button type="button" class="tbtn" data-all>전체 공시 보기${icon("next","sm")}</button></div></section>`;
@@ -608,12 +612,14 @@ const emptyBox = (title, desc, ic="") => `<div class="empty box">${ic?icon(ic):"
 function overviewTab(co){
   if(!co.hasFin) return sec("", "", emptyBox("아직 모은 개요가 없어요",""));
   const mix = [["가전·스마트폰·네트워크",54],["메모리·시스템 반도체",38],["디스플레이 패널",10],["전장·오디오",5],["부문 간 거래 제거",-7]], mx = Math.max(...mix.map(m=>m[1]));
+  /* 매출 구성: MVP에서는 숨긴다. 이 블록은 넣을 때의 모양이다(MVP 뒤 재무제표 원본(XBRL)의 영업부문 주석으로 채운다) */
   const mixBlk = blk("매출 구성", "2025년 사업보고서", `<ul class="mixbar num">${mix.map(([n,v])=>`<li><span>${n}</span>${v>0?`<i style="width:${(v/mx*100).toFixed(1)}%"></i>`:"<span></span>"}<b${v<0?' class="neg"':""}>${v}%</b></li>`).join("")}</ul>`);
   const holders = [["최대주주 쪽","20.1","20.1","--vz-blue"],["자기주식","2.4","1.6","--vz-orange"],["소액주주","66.0","66.8","--vz-teal"],["그 밖의 주주","11.5","11.5","--vz-rest"]];
   const holdBlk = blk("주주 구성", "2026년 반기보고서", say("최대주주 쪽 지분은 1년 동안 그대로이고, 회사가 가진 자기주식은 1.6%에서 2.4%로 늘었어요.")
     + `<div class="hbar" role="img" aria-label="주주 구성">${holders.map(h=>`<i style="width:${h[1]}%;background:var(${h[3]})"></i>`).join("")}</div>`
     + `<ul class="hleg num">${holders.map(h=>`<li><i style="background:var(${h[3]})"></i><span>${h[0]}</span><b>${h[1]}%</b><span class="meta">1년 전 ${h[2]}%</span></li>`).join("")}</ul>`);
-  /* 주식 수 변화: 증자(감자) 현황 + 전환사채·신주인수권부사채 발행. 아직 주식으로 바뀌지 않은 사채는 "모두 바뀌면"으로 따로 센다 */
+  /* 주식 수 변화: 증자(감자) 현황 + 전환사채·신주인수권부사채 발행. 아직 주식으로 바뀌지 않은 사채는 "모두 바뀌면"으로 따로 센다.
+     "모두 바뀌면"은 정기보고서의 미상환 사채 표 합계(분기 말 기준)이고 MVP 뒤에 더한다. 예시 회사는 사채가 없어 칸이 없다 */
   const shareBlk = blk("주식 수 변화", "최근 3년", say("최근 3년 동안 유상증자나 전환사채 발행이 없어 주식 수가 그대로예요.")
     + strip([["지금 발행주식","59.7억 주"],["3년 전","59.7억 주"]]));
   /* 주의할 점: 문제가 없는 줄은 담담하게, 있는 줄만 악재 색 */
@@ -683,12 +689,13 @@ function initCharts(){
                  y2:{axis:"y",position:"right",grid:{display:false},border:{display:false},ticks:{color:tick,maxTicksLimit:3,callback:x=>x+"%"}} } } })); });
 }
 
-/* 뉴스 탭: 최근 10건. 줄은 제목·언론사·시각. 판단 점수에 넣지 않는다. 누르면 패널. 나머지는 "전체 뉴스 보기"(다른 화면) */
+/* 뉴스 탭: 탭을 열 때 API를 불러 최근 10건. 줄은 제목·언론사·시각. 판단 점수에 넣지 않는다.
+   누르면 원문 기사(새 창). 나머지는 "전체 뉴스 보기"(다른 화면). API를 부르지 못하면 빈 상태 칸으로 알린다 */
 function newsTab(co){
   const l = newsOf(co);
   if(!l.length) return sec("뉴스", "", emptyBox("최근 뉴스가 없어요", ""));
   return sec("뉴스", "", `<ul class="news">${l.slice(0, NEWS_TAB).map(newsRow).join("")}</ul>
-    <div class="more"><button type="button" class="tbtn" data-allnews>전체 뉴스 보기${icon("next","sm")}</button></div>`);
+    <div class="more"><button type="button" class="tbtn" data-allnews>전체 뉴스 보기${icon("next","sm")}</button></div>${naverSrc()}`);
 }
 
 /* ───────── 화면 상태 ───────── */
@@ -760,14 +767,13 @@ function allView(co){
   </section>`;
 }
 
-/* 전체 뉴스 화면: 거르기(제목 찾기, 언론사) + 월별 묶음 + 20건씩 쪽 넘김. 전체 공시 화면과 같은 틀 */
+/* 전체 뉴스 화면: 찾기 + 20건씩 쪽 넘김. 전체 공시 화면과 같은 틀이지만, 받은 그대로 보여주므로 묶음 제목·언론사 거르기·건수가 없다.
+   찾기는 "회사 이름 + 찾는 말"로 API를 다시 부른다(데모는 제목에 든 말로 흉내만 낸다). 쪽마다 API를 부른다 */
 function newsView(co){
-  const all = newsOf(co), srcs = [...new Set(all.map(n=>n.src))].sort(), q = NF.q.trim().replace(/\s/g,"");
-  const l = all.map((n,i)=>[n,i]).filter(([n]) => (NF.src==="all"||n.src===NF.src) && (!q || n.t.replace(/\s/g,"").includes(q)));
+  const all = newsOf(co), q = NF.q.trim().replace(/\s/g,"");
+  const l = all.filter(n => !q || n.t.replace(/\s/g,"").includes(q));
   const pages = Math.max(1, Math.ceil(l.length/APAGE)); NF.p = Math.min(NF.p, pages);
-  let lastM = null;
-  const rows = l.slice((NF.p-1)*APAGE, NF.p*APAGE).map(([n,i])=>{ const m=n.d.slice(0,7), h = m!==lastM ? `${lastM?"</ul>":""}<h2 class="box-title ayear">${m.slice(0,4)}년 ${+m.slice(5)}월</h2><ul class="news nlist">` : ""; lastM=m;
-    return h+newsRow(n,i); }).join("") + (lastM?"</ul>":"");
+  const rows = `<ul class="news nlist">${l.slice((NF.p-1)*APAGE, NF.p*APAGE).map(newsRow).join("")}</ul>`;
   const pg = (n,label=n,dis=false) => `<button type="button" data-npage="${n}" ${n===NF.p&&label===n?'aria-current="page"':""} ${dis?"disabled":""}>${label}</button>`;
   const win = []; for(let i=Math.max(1,NF.p-2); i<=Math.min(pages,NF.p+2); i++) win.push(i);
   const pager = pages>1 ? `<nav class="pager num" aria-label="쪽">${pg(NF.p-1,"이전",NF.p===1)}${win[0]>1?pg(1)+(win[0]>2?"<span class='meta'>…</span>":""):""}${win.map(n=>pg(n)).join("")}${win[win.length-1]<pages?(win[win.length-1]<pages-1?"<span class='meta'>…</span>":"")+pg(pages):""}${pg(NF.p+1,"다음",NF.p===pages)}</nav>` : "";
@@ -775,12 +781,11 @@ function newsView(co){
   <div class="co"><button type="button" class="tbtn back" data-back>${icon("prev","sm")}${esc(co.name)}</button><h1>전체 뉴스</h1></div>
   <section class="card" aria-label="전체 뉴스">
     <div class="af">
-      <div class="search field"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input id="nq" type="search" placeholder="뉴스 제목으로 찾기" value="${esc(NF.q)}" aria-label="뉴스 제목으로 찾기" autocomplete="off"></div>
-      <div class="af-row"><select data-nf="src" aria-label="언론사"><option value="all">언론사 전체</option>${srcs.map(x=>`<option value="${esc(x)}" ${NF.src===x?"selected":""}>${esc(x)}</option>`).join("")}</select></div>
+      <div class="search field"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input id="nq" type="search" placeholder="뉴스 찾기" value="${esc(NF.q)}" aria-label="뉴스 찾기" autocomplete="off"></div>
     </div>
-    <p class="meta acount num">${l.length.toLocaleString("ko-KR")}건</p>
     ${l.length ? rows : emptyBox("맞는 뉴스가 없어요","")}
     ${pager}
+    ${naverSrc()}
   </section>`;
 }
 
@@ -790,17 +795,13 @@ const markCurrent = key => document.querySelectorAll("#app [data-dv]").forEach(b
 function fillDrawer(key){
   const co = DB[state.code];
   $("drawer-co").textContent = co.name;
-  if(key.startsWith("news:")){ const l = newsOf(co), i = +key.slice(5);
-    $("drawer-b").innerHTML = newsHTML(l[i]);
-    const older = l[i+1] ? "news:"+(i+1) : "", newer = i>0 ? "news:"+(i-1) : "";
-    $("drawer-f").innerHTML = `<button type="button" class="tbtn" data-step="${older}" ${older?"":"disabled"}>${icon("prev","sm")}이전 뉴스</button><button type="button" class="tbtn" data-step="${newer}" ${newer?"":"disabled"}>다음 뉴스${icon("next","sm")}</button>`; }
-  else { $("drawer-b").innerHTML = dvHTML(co, findEv(co,key)); $("drawer-f").innerHTML = navBtns(co,key); }
+  $("drawer-b").innerHTML = dvHTML(co, findEv(co,key)); $("drawer-f").innerHTML = navBtns(co,key);
   $("drawer-b").scrollTop = 0;
   markCurrent(key);
 }
 function openDrawer(key, from){
   const co = DB[state.code];
-  if(key.startsWith("news:") ? !newsOf(co)[+key.slice(5)] : !findEv(co,key)) return;
+  if(!findEv(co,key)) return;
   const wasOpen = !!state.dv; state.dv = key; if(from) opener = from;
   fillDrawer(key);
   const d=$("drawer"), s=$("scrim");
@@ -837,7 +838,7 @@ function setDemo(k){
 
 /* ───────── 입력 ───────── */
 document.addEventListener("change",ev=>{ const ds=ev.target.dataset||{};
-  if(ds.af){ AF[ds.af]=ev.target.value; AF.p=1; render(); } else if(ds.nf){ NF[ds.nf]=ev.target.value; NF.p=1; render(); } });
+  if(ds.af){ AF[ds.af]=ev.target.value; AF.p=1; render(); } });
 document.addEventListener("input",ev=>{ const id=ev.target.id; if(id!=="aq" && id!=="nq") return; const F = id==="aq" ? AF : NF;
   F.q=ev.target.value; F.p=1; const pos=ev.target.selectionStart; render(); const i=$(id); i.focus(); i.setSelectionRange(pos,pos); });
 function selectTab(k, focus){ state.tab=k; render();
@@ -848,7 +849,7 @@ document.addEventListener("click",ev=>{
   if(ev.target.id==="scrim"){ dismiss(); return; }
   const tb=ev.target.closest("button[data-tab]"); if(tb){ selectTab(tb.dataset.tab, true); return; }
   if(ev.target.closest("[data-all]")){ state.page="all"; AF={tone:"all",g:"all",y:"all",q:"",p:1}; history.pushState({page:"all"},"","#all"); render(); window.scrollTo(0,0); return; }
-  if(ev.target.closest("[data-allnews]")){ state.page="news"; NF={q:"",src:"all",p:1}; history.pushState({page:"news"},"","#news"); render(); window.scrollTo(0,0); return; }
+  if(ev.target.closest("[data-allnews]")){ state.page="news"; NF={q:"",p:1}; history.pushState({page:"news"},"","#news"); render(); window.scrollTo(0,0); return; }
   if(ev.target.closest("[data-back]")){ if(history.state&&(history.state.page==="all"||history.state.page==="news")) history.back(); else { state.page="co"; render(); } return; }
   const at=ev.target.closest("[data-af-tone]"); if(at){ AF.tone=at.dataset.afTone; AF.p=1; render(); return; }
   const ap=ev.target.closest("[data-page]"); if(ap){ AF.p=+ap.dataset.page; render(); document.querySelector('[aria-label="전체 공시"]').scrollIntoView({block:"start"}); scrollBy(0,-80); return; }
