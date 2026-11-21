@@ -1,8 +1,10 @@
 package com.companyinsight.analysis.table;
 
 import com.companyinsight.analysis.body.BodyDocument;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -104,6 +106,66 @@ record BodyTables(List<TableGrid> tables, List<String> correctionCells) {
 	 */
 	Optional<String> valueOf(String label) {
 		return lastRow(row -> !row.isEmpty() && Cells.label(row.getFirst()).equals(label)).map(Found::firstValue);
+	}
+
+	/**
+	 * 한 항목이 주식 종류(또는 자금 목적)별로 여러 줄일 때, 줄마다 마지막 칸의 숫자를 더한다. 값이 든 줄은 항목에 그대로 적는다
+	 * ("이름: 값 앞의 칸" → 마지막 칸의 글. 값 칸이 여러 칸에 걸쳐 같은 글이 이어지면 그 앞의 칸을 쓴다).
+	 * 같은 항목의 묶음이 여러 번 나오면(정정 공시) 마지막 묶음을 읽는다.
+	 *
+	 * @param labelMatches 첫 칸의 항목 이름({@link Cells#label})이 이 항목인지
+	 * @param name         항목에 적을 이름
+	 * @param items        읽은 항목을 적을 곳
+	 * @return 숫자가 든 줄이 하나도 없으면 비어 있음
+	 */
+	Optional<BigDecimal> sumOfRows(Predicate<String> labelMatches, String name, Map<String, String> items) {
+		Predicate<List<String>> matches = row -> row.size() >= 2 && labelMatches.test(Cells.label(row.getFirst()));
+		Optional<Found> last = lastRow(matches);
+		if (last.isEmpty()) {
+			return Optional.empty();
+		}
+		List<List<String>> rows = last.get().table().rows();
+		// 마지막 줄에서 위로, 같은 항목이 이어지는 묶음의 첫 줄을 찾는다
+		int first = last.get().index();
+		while (first > 0 && matches.test(rows.get(first - 1))) {
+			first--;
+		}
+		BigDecimal total = null;
+		for (int i = first; i <= last.get().index(); i++) {
+			List<String> row = rows.get(i);
+			Optional<BigDecimal> value = Cells.number(row.getLast());
+			if (value.isPresent()) {
+				total = total == null ? value.get() : total.add(value.get());
+				int at = row.size() - 2;
+				while (at > 0 && row.get(at).equals(row.getLast())) {
+					at--;
+				}
+				items.put(name + ": " + row.get(at), row.getLast());
+			}
+		}
+		return Optional.ofNullable(total);
+	}
+
+	/**
+	 * 줄의 어느 칸이든 항목 이름이 이것인 칸의 값: 그 칸 뒤에 처음 나오는, 이름과 다른 칸. 문서에서 마지막에 나온 줄을 읽는다.
+	 * "2. 계약내역 | 매출액대비(%) | 18.23"처럼 묶음 이름 뒤에 항목 이름이 오는 줄에 쓴다.
+	 *
+	 * @param label {@link Cells#label}로 다듬은 항목 이름
+	 * @return 그 칸이 없으면 비어 있음. 칸은 있는데 뒤에 값 칸이 없으면 빈 글
+	 */
+	Optional<String> valueAfterLabel(String label) {
+		Optional<Found> found = lastRow(row -> labelColumn(row, label) >= 0);
+		return found.map(f -> f.valueAfter(labelColumn(f.row(), label)));
+	}
+
+	/** 줄에서 항목 이름이 이것인 첫 칸의 자리. 없으면 -1. */
+	private static int labelColumn(List<String> row, String label) {
+		for (int i = 0; i < row.size(); i++) {
+			if (Cells.label(row.get(i)).equals(label)) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	/**

@@ -31,7 +31,7 @@ public class TableReadRepository {
 	public Optional<TableTarget> findTarget(long disclosureId) {
 		return jdbc.sql("""
 				SELECT d.is_withdrawn, d.tone, d.classified_by, d.type_code, d.title_attributes, d.normalized_title,
-				       COALESCE(r.judge_method, t.judge_method) AS judge_method
+				       COALESCE(r.judge_method, t.judge_method) AS judge_method, COALESCE(r.tone, t.default_tone) AS title_tone
 				  FROM disclosure d
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
 				  LEFT JOIN title_rule r ON r.id = d.title_rule_id
@@ -45,7 +45,8 @@ public class TableReadRepository {
 				rs.getString("type_code"),
 				attributes(rs.getArray("title_attributes")),
 				rs.getString("normalized_title"),
-				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method"))))
+				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method")),
+				rs.getString("title_tone") == null ? null : Tone.valueOf(rs.getString("title_tone"))))
 			.optional();
 	}
 
@@ -67,6 +68,45 @@ public class TableReadRepository {
 				""")
 			.param("tone", tone.name())
 			.param("impact", impact)
+			.param("ratio", ratio)
+			.param("id", disclosureId)
+			.update();
+	}
+
+	/**
+	 * 제목이 방향을 정한 공시에 표에서 읽은 크기와 비율을 적는다. 방향과 판정 주체는 제목 규칙의 것이다.
+	 * 앞선 실행이 표로 중립을 적어 두었으면(크기의 하한 아래였다) 제목의 방향으로 되돌린다.
+	 * 그 사이 방향이 바뀌었거나 AI가 판정했으면 적지 않는다. 같은 값을 다시 적어도 결과가 같다.
+	 *
+	 * @param tone   크기를 읽을 때 본 제목의 방향. 공시의 지금 방향과 같거나, 표가 적은 판정일 때만 적는다
+	 * @param impact 크기(1 이상)
+	 * @param ratio  크기를 정할 때 본 원래 비율(%). 비율 칸을 읽지 못했으면 null
+	 */
+	public void saveTitleImpact(long disclosureId, Tone tone, int impact, BigDecimal ratio) {
+		jdbc.sql("""
+				UPDATE disclosure
+				   SET tone = :tone, impact = :impact, impact_ratio = :ratio, classified_by = 'RULE', updated_at = now()
+				 WHERE id = :id AND ((classified_by = 'RULE' AND tone = :tone) OR classified_by = 'TABLE')
+				""")
+			.param("impact", impact)
+			.param("ratio", ratio)
+			.param("id", disclosureId)
+			.param("tone", tone.name())
+			.update();
+	}
+
+	/**
+	 * 제목이 방향을 정한 공시의 비율이 크기의 하한 아래라 표로 정한 중립으로 고쳐 적는다.
+	 * AI가 판정해 둔 공시는 건드리지 않는다. 같은 값을 다시 적어도 결과가 같다.
+	 *
+	 * @param ratio 크기를 정할 때 본 원래 비율(%)
+	 */
+	public void saveTitleNeutral(long disclosureId, BigDecimal ratio) {
+		jdbc.sql("""
+				UPDATE disclosure
+				   SET tone = 'NEUTRAL', impact = NULL, impact_ratio = :ratio, classified_by = 'TABLE', updated_at = now()
+				 WHERE id = :id AND classified_by IN ('RULE', 'TABLE')
+				""")
 			.param("ratio", ratio)
 			.param("id", disclosureId)
 			.update();
@@ -125,8 +165,10 @@ public class TableReadRepository {
 	 * @param attributes   제목 꼬리가 붙인 속성 (SUBSIDIARY, WITHDRAWAL 등)
 	 * @param title        머리말([기재정정] 등)을 뗀 제목. 아직 분류하지 않았으면 null
 	 * @param judgeMethod  방향을 정하는 방법 (규칙 줄의 값이 먼저, 없으면 유형의 값). 유형이 없으면 null
+	 * @param titleTone    제목 규칙이 정하는 방향 (규칙 줄의 값이 먼저, 없으면 유형의 기본 방향). 정하지 않으면 null.
+	 *                     표가 제목 유형의 방향을 중립으로 고쳐 적은 뒤 다시 읽을 때 원래 방향으로 쓴다
 	 */
 	public record TableTarget(boolean withdrawn, Tone tone, ClassifiedBy classifiedBy, String typeCode, Set<String> attributes,
-			String title, JudgeMethod judgeMethod) {
+			String title, JudgeMethod judgeMethod, Tone titleTone) {
 	}
 }

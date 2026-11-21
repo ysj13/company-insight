@@ -175,6 +175,101 @@ final class TableFixtures {
 	/** 2026-10-23 [기재정정]주식등의대량보유상황보고서(일반). 31.97 → 31.97. 정정 표에 원래 결정을 거뒀다는 뜻의 낱말이 있다 */
 	static final String BLOCK_GENERAL_CORRECTION = "20261023000450";
 
+	// ── 제목으로 방향이 정해지는 유형의 크기 ─────────────────────────────
+
+	/** 라온텍 2026-11-06 단일판매ㆍ공급계약해지. 해지금액 1,326,000,000, 매출액대비(%) 12.15 */
+	static final String SUPPLY_CANCELLED = "20261106900835";
+
+	/** 스튜디오미르 2026-10-27 단일판매ㆍ공급계약체결. 매출액대비(%) 칸이 "-"(계약금액을 공시 유보) */
+	static final String SUPPLY_WITHHELD = "20261027900352";
+
+	/**
+	 * 씨엔플러스 2026-11-05 [기재정정]주요사항보고서(전환사채권발행결정). 정정 전·후 표의 사본(기발행주식총수 대비 비율 11.54, 2.46)이
+	 * 본문 앞에 있다. 본문: 전환에 따라 발행할 주식의 주식총수 대비비율(%) 9.69
+	 */
+	static final String BOND_CORRECTION = "20261105000474";
+
+	/** HD현대 2026-10-27 주요사항보고서(교환사채권발행결정). 교환 대상이 다른 회사의 주식이라 주식총수 대비 비율 칸이 없다 */
+	static final String EXCHANGEABLE_BOND = "20261027000277";
+
+	/** 대원화성 2026-10-20 [첨부추가]주식소각결정. 소각할 보통주식 100,418, 발행주식 총수 보통주식 8,249,830, 종류주식은 "-" */
+	static final String CANCEL_COMMON = "20261020800271";
+
+	/** 한화 2026-11-12 주식소각결정. 소각할 종류주식 8,437(보통주식 "-"), 발행주식 총수 보통주식 53,328,897과 종류주식 14,708,840 */
+	static final String CANCEL_PREFERRED = "20261112800725";
+
+	/** 테크트랜스 2026-11-09 [기재정정]전환주식의전환청구권행사. 발행주식총수 13,536,399, 발행주식총수 대비(%) 19.3 */
+	static final String EXERCISE_LARGE = "20261109600658";
+
+	/** 모아데이타 2026-10-21 신주인수권행사. 항목 이름이 "-발행주식총수 대비"이고 값에 %가 붙는다: 3.14% */
+	static final String EXERCISE_PERCENT_IN_VALUE = "20261021900657";
+
+	/** 모아데이타 2026-11-06 [기재정정]주요사항보고서(자기전환사채매도결정). 주식총수 대비비율(%) 13.89 */
+	static final String TREASURY_BOND_SALE = "20261106000478";
+
+	/** 리노공업 2026-11-10 [기재정정]신규시설투자등. 투자금액 97,182,000,000, 자기자본대비(%) 17.45 */
+	static final String FACILITY = "20261110900420";
+
+	/** 대양금속 2026-11-05 소송등의제기ㆍ신청(일정금액이상의청구). 청구금액 7,000,000,000, 자기자본대비(%) 7.0 */
+	static final String LAWSUIT = "20261105800915";
+
+	/** 피델릭스 2026-10-28 회계처리기준위반행위로인한증권선물위원회의검찰고발등. 금액 칸이 없다 */
+	static final String ACCOUNTING_VIOLATION = "20261028900777";
+
+	/** 케이씨티 2026-10-19 횡령ㆍ배임혐의발생. 발생금액 2,598,159,678, 자기자본대비(%) 7.23 */
+	static final String EMBEZZLEMENT = "20261019900660";
+
+	/** NH투자증권 2026-11-11 벌금등의부과. 자기자본대비(%) 2.57 */
+	static final String PENALTY = "20261111800234";
+
+	// ── 보증·대여·차입 (H1~H3) ──────────────────────────────────────
+
+	/** 에코플라스틱 2026-11-05 [기재정정]타인에대한채무보증결정. 채무자는 종속회사, 채무보증금액 39,000,000,000, 자기자본대비(%) 10.8 */
+	static final String GUARANTEE_SMALL = "20261105900622";
+
+	/** NAVER 2026-10-27 타인에대한채무보증결정. 채무자는 계열회사, 채무보증금액 18,740,000,000,000, 자기자본대비(%) 64.73 */
+	static final String GUARANTEE_LARGE = "20261027800510";
+
+	/** 타임X AI 2026-10-30 타인에대한담보제공결정. 담보설정금액 61,094,000,000, 자기자본대비(%) 213.48 */
+	static final String COLLATERAL_OVER_EQUITY = "20261030901038";
+
+	/** 후성 2026-11-11 금전대여결정. 대여 상대는 자회사, 대여금액 136,000,000,000, 자기자본대비(%) 34.93 */
+	static final String LOAN_LARGE = "20261111800749";
+
+	/** 삼천리 2026-11-05 단기차입금증가결정. 차입금액 100,000,000,000, 자기자본대비(%) 5.31 */
+	static final String BORROWING_SMALL = "20261105800808";
+
+	// ── 전환가액 등 조정 (L1) ────────────────────────────────────────
+
+	/** 디모아 2026-11-09 전환가액의조정. 6회차 2,550 → 2,379, 조정사유 "시가하락에 따른 조정" */
+	static final String PRICE_MARKET_DOWN = "20261109900427";
+
+	/** LSK아이로봇 2026-11-02 전환가액의조정. 10회차 3,535 → 2,988, 조정사유 "시가변동에 따른 전환가액 조정" */
+	static final String PRICE_MARKET_CHANGE_DOWN = "20261102900699";
+
+	/** 비비안 2026-11-06 조정(안내공시). 5회차 12,213 → 6,116, 조정사유 "시가하락 및 무상증자에 따른 전환가액 조정" */
+	static final String PRICE_NOTICE_DOWN = "20261106800725";
+
+	/** 케이엔더블유 2026-10-19 전환가액의조정. 3회차 7,830 → 8,178, 조정사유 "시가상승에 따른 전환가액 조정" */
+	static final String PRICE_UP = "20261019900381";
+
+	/** 멤레이비티 2026-10-29 전환가액의조정. 12회차 1,176 → 5,880, 13회차 784 → 2,744, 조정사유 "- 시가 하락에 따른 전환가액 조정" */
+	static final String PRICE_UP_WITH_DOWN_REASON = "20261029900834";
+
+	/** 대주전자재료 2026-10-19 전환가액의조정. 8회차 110,345 → 106,467, 조정사유 "시가상승에 따른 전환가액의 조정" */
+	static final String PRICE_DOWN_WITH_UP_REASON = "20261019900560";
+
+	/** 대양금속 2026-10-22 [기재정정]조정(안내공시). 24회차 1,289 → 1,285, 조정사유 "시가를 하회하는 발행가액으로 유상증자 신주발행" */
+	static final String PRICE_ANTI_DILUTION = "20261022800539";
+
+	/** 대양금속 2026-10-22 [기재정정]조정(안내공시). 24회차 1,289 → 1,289(정정으로 그대로), 조정사유 "-" */
+	static final String PRICE_BLANK = "20261022800524";
+
+	// ── 자산 재평가 (B6) ──────────────────────────────────────────
+
+	/** 센서뷰 2025-11-19 자산재평가결과(자율공시). 합계: 장부가액 7,334,315,110, 재평가금액 12,123,945,000, 재평가차액 4,789,629,890 */
+	static final String REVALUATION_GAIN = "20251119900179";
+
 	private TableFixtures() {
 	}
 
@@ -245,8 +340,14 @@ final class TableFixtures {
 	static ImpactProperties impact() {
 		return new ImpactProperties(
 			new ImpactProperties.Earnings(new BigDecimal("10"), new BigDecimal("30"), new BigDecimal("100"), 3, 1),
-			new ImpactProperties.ShareIncrease(new BigDecimal("5"), new BigDecimal("20")),
+			new ImpactProperties.ShareIncrease(new BigDecimal("5"), new BigDecimal("20"), new BigDecimal("1")),
+			new ImpactProperties.ShareDecrease(new BigDecimal("1"), new BigDecimal("5")),
+			new ImpactProperties.Amount(new BigDecimal("10"), new BigDecimal("30")),
 			new ImpactProperties.Audit(3, 2, 2),
-			new ImpactProperties.Ownership(new BigDecimal("0.01"), new BigDecimal("0.1"), new BigDecimal("1")), 1);
+			new ImpactProperties.Ownership(new BigDecimal("0.01"), new BigDecimal("0.1"), new BigDecimal("1")),
+			new ImpactProperties.Guarantee(new BigDecimal("30"), new BigDecimal("100")),
+			new ImpactProperties.Borrowing(new BigDecimal("50")),
+			new ImpactProperties.Misconduct(2, 2),
+			new ImpactProperties.Fixed(1, 1), 1);
 	}
 }
