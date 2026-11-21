@@ -13,12 +13,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param byTone     유형마다 호재일 때와 악재일 때의 크기가 다른 것
  * @param cases      AI가 함께 고른 "경우"마다의 크기 (유형 → 경우 이름 → 크기)
  * @param dissolution 해산사유 발생 (회생·파산 유형 안에서 이 서식만 작게)
- * @param withdrawal 앞서 알린 결정·계약을 거두는 공시 (제목 꼬리에 철회·취하)
  * @param fallback   위 어디에도 없을 때 (코드가 표를 읽지 못해 AI로 넘어온 유형 등). 영향도의 틀의 "망설여지면 1"
  */
 @ConfigurationProperties("app.judgment.ai-impact")
 public record AiImpactProperties(Map<String, Integer> fixed, Map<String, ToneSizes> byTone,
-		Map<String, Map<String, Integer>> cases, Integer dissolution, Integer withdrawal, Integer fallback) {
+		Map<String, Map<String, Integer>> cases, Integer dissolution, Integer fallback) {
 
 	/** 크기의 가장 큰 값. 영향도의 틀이 정한 범위다 */
 	static final int MAX_SIZE = 3;
@@ -33,7 +32,6 @@ public record AiImpactProperties(Map<String, Integer> fixed, Map<String, ToneSiz
 		fixed.forEach((type, size) -> requireSize(size, "fixed." + type));
 		cases.forEach((type, byCase) -> byCase.forEach((name, size) -> requireSize(size, "cases." + type + "." + name)));
 		requireSize(dissolution, "dissolution");
-		requireSize(withdrawal, "withdrawal");
 		requireSize(fallback, "fallback");
 	}
 

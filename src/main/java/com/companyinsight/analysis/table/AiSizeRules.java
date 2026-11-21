@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
  *
  * <p>정하는 순서:
  * <ol>
- * <li>제목 꼬리에 철회·취하가 든 공시: 정해 둔 값
  * <li>맞는 유형이 없는 포괄 제목·꼬리 미상·미분류: AI가 고른 값 (없으면 1)
  * <li>비율 유형: 타법인 주식·사채 취득·처분(F4)은 자기자본 대비, 자산·영업 양수도(F5)는 자산총액 대비,
  *   소송 판결(I1)은 자기자본 대비 비율을 본문 표에서 읽어 금액 경계로. 제3자배정 유상증자(D1)는 표 읽기가 계산해 둔
@@ -95,9 +94,6 @@ public class AiSizeRules {
 
 	private Size rawSize(SizeInput input, Map<String, String> ratioItems) {
 		String type = input.typeCode();
-		if (input.withdrawalTail()) {
-			return new Size(ai.withdrawal(), null, "WITHDRAWAL");
-		}
 		if (PICKING_TYPES.contains(type)) {
 			Integer chosen = input.aiSize();
 			int value = chosen == null ? ai.fallback() : Math.max(1, Math.min(AiImpactProperties.MAX_SIZE, chosen));
@@ -137,12 +133,11 @@ public class AiSizeRules {
 	 * @param caseCode       AI가 함께 고른 경우. 없으면 null
 	 * @param subsidiary     자회사의 공시인지
 	 * @param title          머리말을 뗀 제목
-	 * @param withdrawalTail 제목 꼬리에 철회·취하가 든 공시인지
 	 * @param savedRatio     표 읽기가 공시에 적어 둔 원래 비율(%). 없으면 null
 	 * @param aiSize         AI가 고른 크기(맞는 유형이 없는 포괄 제목 등). 없으면 null
 	 */
 	public record SizeInput(String typeCode, Tone tone, String caseCode, boolean subsidiary, String title,
-			boolean withdrawalTail, BigDecimal savedRatio, Integer aiSize) {
+			BigDecimal savedRatio, Integer aiSize) {
 	}
 
 	/**

@@ -35,8 +35,8 @@ class AiSizeRulesTest {
 
 	@Test
 	void 합병은_소규모면_1_아니면_2() {
-		assertThat(size(new SizeInput("F1", Tone.NEGATIVE, "SMALL", false, "합병결정", false, null, null))).isEqualTo(1);
-		assertThat(size(new SizeInput("F1", Tone.NEGATIVE, "NORMAL", false, "합병결정", false, null, null))).isEqualTo(2);
+		assertThat(size(new SizeInput("F1", Tone.NEGATIVE, "SMALL", false, "합병결정", null, null))).isEqualTo(1);
+		assertThat(size(new SizeInput("F1", Tone.NEGATIVE, "NORMAL", false, "합병결정", null, null))).isEqualTo(2);
 	}
 
 	@Test
@@ -53,33 +53,32 @@ class AiSizeRulesTest {
 
 	@Test
 	void 제3자배정은_표_읽기가_적어_둔_신주_비율의_주식_수_경계() {
-		assertThat(size(new SizeInput("D1", Tone.NEGATIVE, null, false, "유상증자결정", false, new BigDecimal("4.99"), null))).isEqualTo(1);
-		assertThat(size(new SizeInput("D1", Tone.NEGATIVE, null, false, "유상증자결정", false, new BigDecimal("20"), null))).isEqualTo(3);
+		assertThat(size(new SizeInput("D1", Tone.NEGATIVE, null, false, "유상증자결정", new BigDecimal("4.99"), null))).isEqualTo(1);
+		assertThat(size(new SizeInput("D1", Tone.NEGATIVE, null, false, "유상증자결정", new BigDecimal("20"), null))).isEqualTo(3);
 	}
 
 	@Test
 	void 해산사유_발생은_회생_유형_안에서도_작게() {
-		assertThat(size(new SizeInput("I3", Tone.NEGATIVE, null, false, "해산사유발생", false, null, null))).isEqualTo(1);
-		assertThat(size(new SizeInput("I3", Tone.NEGATIVE, null, false, "회생절차폐지결정", false, null, null))).isEqualTo(3);
+		assertThat(size(new SizeInput("I3", Tone.NEGATIVE, null, false, "해산사유발생", null, null))).isEqualTo(1);
+		assertThat(size(new SizeInput("I3", Tone.NEGATIVE, null, false, "회생절차폐지결정", null, null))).isEqualTo(3);
 	}
 
 	@Test
 	void 맞는_유형이_없는_포괄_제목은_AI가_고른_값() {
-		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", false, null, 3))).isEqualTo(3);
-		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", false, null, null))).isEqualTo(1);
-		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", false, null, 9))).isEqualTo(3);
+		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", null, 3))).isEqualTo(3);
+		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", null, null))).isEqualTo(1);
+		assertThat(size(new SizeInput("K1", Tone.POSITIVE, null, false, "기타경영사항", null, 9))).isEqualTo(3);
 	}
 
 	@Test
-	void 철회_꼬리는_정해_둔_값_어디에도_없으면_1() {
-		assertThat(size(new SizeInput("E4", Tone.POSITIVE, null, false, "자기주식처분결정(철회)", true, null, null))).isEqualTo(1);
+	void 어디에도_없으면_1() {
 		assertThat(size(input("B1", Tone.NEGATIVE))).isEqualTo(1);
 	}
 
 	@Test
 	void 자회사의_공시는_한_단계_낮춘다() {
-		assertThat(size(new SizeInput("E8", Tone.NEGATIVE, null, true, "감자결정", false, null, null))).isEqualTo(2);
-		assertThat(size(new SizeInput("B3", Tone.POSITIVE, null, true, "계획", false, null, null))).isEqualTo(1);
+		assertThat(size(new SizeInput("E8", Tone.NEGATIVE, null, true, "감자결정", null, null))).isEqualTo(2);
+		assertThat(size(new SizeInput("B3", Tone.POSITIVE, null, true, "계획", null, null))).isEqualTo(1);
 	}
 
 	private int size(SizeInput input) {
@@ -87,7 +86,7 @@ class AiSizeRulesTest {
 	}
 
 	private static SizeInput input(String type, Tone tone) {
-		return new SizeInput(type, tone, null, false, "제목", false, null, null);
+		return new SizeInput(type, tone, null, false, "제목", null, null);
 	}
 
 	/** application.yml의 app.judgment.ai-impact와 같은 값 (키는 묶을 때처럼 소문자로 준다). */
@@ -99,6 +98,6 @@ class AiSizeRulesTest {
 			Map.of("e8", new AiImpactProperties.ToneSizes(2, 3), "i3", new AiImpactProperties.ToneSizes(2, 3)),
 			Map.of("f1", Map.of("small", 1, "normal", 2),
 				"j1", Map.of("delisting", 3, "designation", 2, "recurring", 1, "relief", 2)),
-			1, 1, 1);
+			1, 1);
 	}
 }

@@ -38,12 +38,15 @@ public class AiTargetRepository {
 				SELECT d.is_withdrawn, d.superseded_by, d.tone, d.classified_by, d.type_code, d.picked_type_code,
 				       d.title_attributes, d.normalized_title, d.report_name, d.rcept_date, d.impact_ratio, c.name AS company_name,
 				       COALESCE(r.judge_method, t.judge_method) AS judge_method, t.name AS type_name, pt.name AS picked_type_name,
-				       %s AS body_correction
+				       %s AS body_correction,
+				       d.corrects_id, p.tone AS prev_tone, p.impact AS prev_impact, p.impact_ratio AS prev_ratio,
+				       p.classified_by AS prev_classified_by
 				  FROM disclosure d
 				  JOIN company c ON c.id = d.company_id
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
 				  LEFT JOIN disclosure_type pt ON pt.code = d.picked_type_code
 				  LEFT JOIN title_rule r ON r.id = d.title_rule_id
+				  LEFT JOIN disclosure p ON p.id = d.corrects_id
 				 WHERE d.id = :id
 				""".formatted(IS_BODY_CORRECTION))
 			.param("id", disclosureId)
@@ -64,7 +67,12 @@ public class AiTargetRepository {
 				rs.getBigDecimal("impact_ratio"),
 				rs.getString("company_name"),
 				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method")),
-				rs.getBoolean("body_correction")))
+				rs.getBoolean("body_correction"),
+				new Previous(rs.getObject("corrects_id", Long.class),
+					rs.getString("prev_tone") == null ? null : Tone.valueOf(rs.getString("prev_tone")),
+					rs.getObject("prev_impact", Integer.class),
+					rs.getBigDecimal("prev_ratio"),
+					rs.getString("prev_classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("prev_classified_by")))))
 			.optional();
 	}
 
@@ -202,11 +210,24 @@ public class AiTargetRepository {
 	 * @param companyName    회사 이름
 	 * @param judgeMethod    방향을 정하는 방법 (규칙 줄의 값이 먼저)
 	 * @param bodyCorrection 본문을 고친 정정 공시인지
+	 * @param previous       이 정정이 고친 앞 공시와 그 판정. 정정이 아니거나 잇지 못했으면 id가 null
 	 */
 	public record AiTarget(long id, boolean withdrawn, Long supersededBy, Tone tone, ClassifiedBy classifiedBy, String typeCode,
 			String typeName, String pickedTypeCode, String pickedTypeName, Set<String> attributes, String title,
 			String reportName, LocalDate filedOn, BigDecimal impactRatio, String companyName, JudgeMethod judgeMethod,
-			boolean bodyCorrection) {
+			boolean bodyCorrection, Previous previous) {
+	}
+
+	/**
+	 * 정정 공시가 고친 앞 공시(원래 공시나 앞선 정정)의 판정.
+	 *
+	 * @param id           앞 공시 ID. 잇지 못했으면 null
+	 * @param tone         앞 공시의 방향. 판정되지 않았으면 null
+	 * @param impact       앞 공시의 크기
+	 * @param ratio        앞 공시의 원래 비율(%)
+	 * @param classifiedBy 앞 공시의 판정 주체
+	 */
+	public record Previous(Long id, Tone tone, Integer impact, BigDecimal ratio, ClassifiedBy classifiedBy) {
 	}
 
 	/**

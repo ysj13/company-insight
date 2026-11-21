@@ -32,7 +32,8 @@ import tools.jackson.databind.json.JsonMapper;
  * 크기(영향도)는 AI가 아니라 코드가 정한다({@link AiSizeRules}).
  *
  * <p>여기로 오는 공시: AI가 방향을 정하는 유형(제3자배정 유상증자, 자기주식 처분, 감자, 합병, 타법인 주식 취득 등), 표를 읽지 못한 공시,
- * 제목 꼬리에 철회·취하가 든 공시, 정정 표에 철회 낱말이 있는 정정 공시, 포괄 제목·꼬리 미상·미분류(먼저 유형을 고른다).
+ * 정정 표에 철회 낱말이 있는 정정 공시, 포괄 제목·꼬리 미상·미분류(먼저 유형을 고른다). 제목 꼬리에 철회·취하가 든 공시와
+ * 포괄 제목의 "…철회" 공시도 여기로 오지만 AI를 부르지 않고 중립으로 정한다(원래 결정은 원래 공시로 셌고 철회는 해소로 본다).
  *
  * <p>끝나는 모양:
  * <ul>
@@ -41,6 +42,8 @@ import tools.jackson.databind.json.JsonMapper;
  * <li>중립: 판정을 적고 끝 (요약하지 않는다)
  * <li>판정불가, 또는 근거로 옮긴 구절이 본문에 없음: 판정 보류. 회사 판단에 세지 않는다
  * <li>철회된 공시, 뒤 정정으로 대체된 공시, 그 사이 제목·표가 판정한 공시: 부르지 않고 끝
+ * <li>정정 표의 바뀐 항목이 날짜·일정뿐인 정정이고 앞 공시가 판정돼 있음: 앞 공시의 판정을 물려받고 부르지 않는다
+ *   (호재·악재면 요약만 AI 요약으로). 앞 공시의 판정이 없으면 날짜만 바뀐 정정임을 알려 주고 부른다
  * <li>과부하·한도: 실패로 세지 않고 미룬다
  * </ul>
  * 지분 보고(A2)는 요약을 코드가 쓰는 유형이라 AI가 쓴 요약을 적지 않는다.
@@ -51,10 +54,16 @@ public class AiJudgeHandler implements StageHandler {
 	/** 넘긴 이유: 판정은 했지만 요약의 숫자·날짜가 원문과 맞지 않아 요약만 다시 쓴다 */
 	static final String SUMMARY_UNVERIFIED = "SUMMARY_UNVERIFIED";
 
+	/** 넘긴 이유: 날짜·일정만 바꾼 정정이라 앞 공시의 판정을 물려받았고 요약만 다시 쓴다 */
+	static final String INHERITED = "INHERITED";
+
 	/** 요약을 코드가 쓰는 유형 (지분 보고) */
 	static final Set<String> CODE_SUMMARY_TYPES = Set.of("A2");
 
 	private static final String WITHDRAWAL = "WITHDRAWAL";
+
+	/** 포괄 제목의 공시 이름에서 철회 공시를 알아보는 낱말 */
+	private static final String WITHDRAWAL_WORD = "철회";
 
 	private static final String SUBSIDIARY = "SUBSIDIARY";
 
@@ -104,15 +113,29 @@ public class AiJudgeHandler implements StageHandler {
 			// 그 사이 대응표나 표 읽기가 방향을 정했다
 			return StageResult.ended().withResult(skipped("NOT_NEEDED"));
 		}
+		// 철회·취하 공시(제목 꼬리, 또는 포괄 제목의 "…철회")는 중립. 원래 결정은 원래 공시로 이미 셌고 철회는 해소로 본다
+		boolean withdrawal = target.attributes().contains(WITHDRAWAL)
+				|| AiSizeRules.PICKING_TYPES.contains(target.typeCode()) && target.reportName() != null
+						&& target.reportName().contains(WITHDRAWAL_WORD);
+		if (withdrawal) {
+			return StageResult.ended().withResult("{\"decided\":\"WITHDRAWAL_NEUTRAL\",\"tone\":\"NEUTRAL\"}").withWrites(() -> {
+				if (repository.saveJudgment(id, Tone.NEUTRAL, null, null, ClassifiedBy.RULE, target.pickedTypeCode())) {
+					repository.deleteAiSummary(id);
+				}
+			});
+		}
+		TableContext table = AiInputs.tableContext(repository.lastTableReadResult(id).orElse(null));
+		boolean datesOnlyCorrection = target.bodyCorrection() && AiInputs.datesOnly(table.changes());
+		if (datesOnlyCorrection && target.previous().tone() != null && !table.mayWithdraw()) {
+			return inherit(target, table);
+		}
 		List<BodyDocument> documents = bodies.read(id)
 			.orElseThrow(() -> new IllegalStateException("저장한 본문이 없습니다: " + id));
 		String body = AiInputs.body(documents);
-		TableContext table = AiInputs.tableContext(repository.lastTableReadResult(id).orElse(null));
 
 		boolean picking = AiSizeRules.PICKING_TYPES.contains(target.typeCode()) && target.pickedTypeCode() == null;
 		String effectiveType = target.pickedTypeCode() != null ? target.pickedTypeCode() : target.typeCode();
 		String effectiveName = target.pickedTypeCode() != null ? target.pickedTypeName() : target.typeName();
-		boolean withdrawalTail = target.attributes().contains(WITHDRAWAL);
 		boolean askWithdrawn = table.mayWithdraw();
 		List<TypeChoice> choices = picking ? repository.typeChoices() : List.of();
 		Map<String, String> typeCriteria = new LinkedHashMap<>();
@@ -126,7 +149,7 @@ public class AiJudgeHandler implements StageHandler {
 		Map<String, String> ratioItems = sizeRules.ratioItems(effectiveType, documents);
 
 		String user = AiInputs.judgeUser(target, effectiveType, effectiveName, prompts.criteria(effectiveType), choices,
-				typeCriteria, cases, askWithdrawn, withdrawalTail, table, ratioItems, body);
+				typeCriteria, cases, askWithdrawn, datesOnlyCorrection, table, ratioItems, body);
 		Map<String, Object> schema = AiInputs.judgeSchema(choices.stream().map(TypeChoice::code).toList(),
 				cases.stream().map(CaseOption::code).toList(), askWithdrawn);
 		long versionId = versions.idOf(Bundle.AI_JUDGE, settings());
@@ -137,12 +160,41 @@ public class AiJudgeHandler implements StageHandler {
 		catch (AiCaller.Postpone postpone) {
 			return postpone.deferred();
 		}
-		return decide(target, documents, body, table, picking, effectiveType, ratioItems, withdrawalTail, askWithdrawn,
+		return decide(target, documents, body, table, picking, effectiveType, ratioItems, askWithdrawn,
 				choices, cases, answer);
 	}
 
+	/**
+	 * 날짜·일정만 바꾼 정정은 앞 공시의 판정(방향·크기·비율·주체)을 물려받는다. AI 판정을 부르지 않는다.
+	 * 호재·악재면 요약만 바뀐 날짜로 다시 쓰러 AI 요약으로 넘긴다.
+	 */
+	private StageResult inherit(AiTarget target, TableContext table) {
+		long id = target.id();
+		AiTargetRepository.Previous previous = target.previous();
+		Tone tone = previous.tone();
+		Integer impact = tone == Tone.NEUTRAL ? null : previous.impact();
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("inherited_from", previous.id());
+		result.put("changes", table.changes());
+		result.put("tone", tone.name());
+		result.put("impact", impact);
+		Runnable save = () -> repository.saveJudgment(id, tone, impact, previous.ratio(), previous.classifiedBy(),
+				target.pickedTypeCode());
+		if (tone == Tone.NEUTRAL || CODE_SUMMARY_TYPES.contains(target.typeCode())) {
+			return StageResult.ended().withResult(json(result)).withWrites(() -> {
+				save.run();
+				if (tone == Tone.NEUTRAL) {
+					repository.deleteAiSummary(id);
+				}
+			});
+		}
+		return StageResult.passed(INHERITED, StageResult.Next.of(AnalysisStage.AI_SUMMARY))
+			.withResult(json(result))
+			.withWrites(save);
+	}
+
 	private StageResult decide(AiTarget target, List<BodyDocument> documents, String body, TableContext table, boolean picking,
-			String effectiveTypeBefore, Map<String, String> ratioItemsBefore, boolean withdrawalTail, boolean askWithdrawn,
+			String effectiveTypeBefore, Map<String, String> ratioItemsBefore, boolean askWithdrawn,
 			List<TypeChoice> choices, List<CaseOption> cases, AiCaller.Answer answer) {
 		long id = target.id();
 		JsonNode json = answer.json();
@@ -219,7 +271,7 @@ public class AiJudgeHandler implements StageHandler {
 		}
 		else {
 			Optional<AiSizeRules.Size> size = sizeRules.size(new AiSizeRules.SizeInput(effectiveType, tone, caseCode,
-					target.attributes().contains(SUBSIDIARY), target.title(), withdrawalTail, target.impactRatio(), aiSize),
+					target.attributes().contains(SUBSIDIARY), target.title(), target.impactRatio(), aiSize),
 					ratioItems);
 			impact = size.map(AiSizeRules.Size::impact).orElse(null);
 			ratio = size.map(AiSizeRules.Size::ratio).orElse(null);
