@@ -1,7 +1,7 @@
 # company-insight
 
 국내 상장사의 공시와 뉴스를 읽고, 지금 분위기가 호재 쪽인지 악재 쪽인지를 근거와 함께 보여주는 공개 웹 서비스.
-상세 기획은 `docs/PLAN.md`, 개발 계획(버전·순서)은 `docs/DEVELOPMENT.md`, 화면 데모는 `docs/demo.html`.
+상세 기획은 `docs/PLAN.md`, 개발 계획(버전·순서)은 `docs/DEVELOPMENT.md`, 화면 데모는 `docs/demo.html`, 화면 규칙(색·글자·상태·움직임·문구)은 `docs/DESIGN.md`.
 
 ## 명령어
 
