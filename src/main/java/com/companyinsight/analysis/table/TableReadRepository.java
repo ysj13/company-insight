@@ -31,12 +31,13 @@ public class TableReadRepository {
 	public Optional<TableTarget> findTarget(long disclosureId) {
 		return jdbc.sql("""
 				SELECT d.is_withdrawn, d.tone, d.classified_by, d.type_code, d.title_attributes, d.normalized_title,
-				       COALESCE(r.judge_method, t.judge_method) AS judge_method, COALESCE(r.tone, t.default_tone) AS title_tone
+				       COALESCE(r.judge_method, t.judge_method) AS judge_method, COALESCE(r.tone, t.default_tone) AS title_tone,
+				       %s AS body_correction
 				  FROM disclosure d
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
 				  LEFT JOIN title_rule r ON r.id = d.title_rule_id
 				 WHERE d.id = :id
-				""")
+				""".formatted(CorrectionBundles.IS_BODY_CORRECTION.formatted("d.report_name")))
 			.param("id", disclosureId)
 			.query((rs, n) -> new TableTarget(
 				rs.getBoolean("is_withdrawn"),
@@ -46,7 +47,8 @@ public class TableReadRepository {
 				attributes(rs.getArray("title_attributes")),
 				rs.getString("normalized_title"),
 				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method")),
-				rs.getString("title_tone") == null ? null : Tone.valueOf(rs.getString("title_tone"))))
+				rs.getString("title_tone") == null ? null : Tone.valueOf(rs.getString("title_tone")),
+				rs.getBoolean("body_correction")))
 			.optional();
 	}
 
@@ -167,8 +169,9 @@ public class TableReadRepository {
 	 * @param judgeMethod  방향을 정하는 방법 (규칙 줄의 값이 먼저, 없으면 유형의 값). 유형이 없으면 null
 	 * @param titleTone    제목 규칙이 정하는 방향 (규칙 줄의 값이 먼저, 없으면 유형의 기본 방향). 정하지 않으면 null.
 	 *                     표가 제목 유형의 방향을 중립으로 고쳐 적은 뒤 다시 읽을 때 원래 방향으로 쓴다
+	 * @param bodyCorrection 본문을 고친 정정 공시인지 (보고서명의 머리말에 [기재정정]이 있다)
 	 */
 	public record TableTarget(boolean withdrawn, Tone tone, ClassifiedBy classifiedBy, String typeCode, Set<String> attributes,
-			String title, JudgeMethod judgeMethod, Tone titleTone) {
+			String title, JudgeMethod judgeMethod, Tone titleTone, boolean bodyCorrection) {
 	}
 }

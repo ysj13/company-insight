@@ -67,6 +67,9 @@ class TableReadIntegrationTest {
 	TableReadRepository tableReads;
 
 	@Autowired
+	CorrectionBundles bundles;
+
+	@Autowired
 	DisclosureBodyReader bodyReader;
 
 	@Autowired
@@ -130,6 +133,56 @@ class TableReadIntegrationTest {
 
 		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("impact", 3);
 		assertThat((BigDecimal) disclosure(id).get("impact_ratio")).isEqualByComparingTo("209.17");
+	}
+
+	@Test
+	void 정정_공시는_정정_표를_실행_기록에_남기고_앞_공시와_잇는다() {
+		// 삼성전자 2026-01-29 [기재정정]의 정정 표: "정정관련 공시서류제출일 2026년 1월 8일". 앞 공시는 같은 회사·같은 제목·그날 접수
+		disclosures.saveListed(List.of(new Item("00164779", "SK하이닉스", "000660", "Y", "연결재무제표기준영업(잠정)실적(공정공시)",
+				"20260108800001", "SK하이닉스", "20260108", "")));
+		long original = jdbc.sql("SELECT id FROM disclosure WHERE source_key = '20260108800001'").query(Long.class).single();
+		long id = save(TableFixtures.PRELIM_CORRECTION, "[기재정정]연결재무제표기준영업(잠정)실적(공정공시)");
+
+		drain();
+
+		// 판정은 새 공시처럼 읽은 그대로
+		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("impact", 3);
+		assertThat(bundles.find(id).orElseThrow())
+			.isEqualTo(new CorrectionBundles.BundleState(java.time.LocalDate.of(2026, 1, 8), original, "LINKED", original, null,
+					java.time.LocalDate.of(2026, 1, 8)));
+		assertThat(bundles.find(original).orElseThrow().supersededBy()).isEqualTo(id);
+		assertThat(lastRun(id).get("result").toString()).contains("\"correctedFiledOn\": \"2026-01-08\"",
+				"2025년 4분기 연결재무제표기준영업(잠정)실적(공정공시) 내용 정정", "\"case\": \"PROFIT_UP\"");
+	}
+
+	@Test
+	void 본문이_없는_정정_공시는_고친_공시의_제출일_없이_남는다() {
+		long id = save("20261119800013", "[기재정정]주주총회소집결의", null);
+
+		drain();
+
+		assertThat(job(id, "READ_TABLE")).containsEntry("outcome", "ENDED");
+		assertThat(bundles.find(id).orElseThrow().correctionLink()).isEqualTo("NO_DATE");
+		assertThat(lastRun(id).get("result").toString()).contains("\"correction\": null");
+	}
+
+	@Test
+	void 묶음을_잇기_전에_표_읽기를_지난_정정_공시는_다시_줄_선다() {
+		long id = save(TableFixtures.PRELIM_CORRECTION, "[기재정정]연결재무제표기준영업(잠정)실적(공정공시)");
+		long plain = save(TableFixtures.PRELIM_UP, "연결재무제표기준영업(잠정)실적(공정공시)");
+		drain();
+		// 묶음 잇기가 없던 때에 지나간 모양으로 되돌린다
+		jdbc.sql("UPDATE disclosure SET corrected_filed_on = NULL, first_filed_on = NULL, correction_link = NULL").update();
+
+		int requeued = queue().requeueUnlinkedCorrections();
+
+		assertThat(requeued).isEqualTo(1);
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "PENDING");
+		assertThat(job(plain, "READ_TABLE")).containsEntry("status", "DONE");
+		drain();
+		assertThat(bundles.find(id).orElseThrow().correctionLink()).isEqualTo("NO_PREDECESSOR");
+		// 이은 결과가 적혔으니 또 줄 서지 않는다
+		assertThat(queue().requeueUnlinkedCorrections()).isZero();
 	}
 
 	@Test
@@ -206,7 +259,7 @@ class TableReadIntegrationTest {
 	@Test
 	void 읽는_규칙이_아직_없는_유형은_판정_없이_끝난다() {
 		// 코드가 방향을 정하는 유형은 모두 규칙이 생겼다. 규칙을 주지 않은 처리 구현으로 규칙이 없던 때를 흉내 낸다
-		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		TableReadHandler without = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties, List.of());
 		long id = save("20261119000001", "전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정", null);
 
 		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
@@ -266,7 +319,7 @@ class TableReadIntegrationTest {
 	@Test
 	void 읽는_규칙이_없어_끝났던_작업은_규칙이_생긴_유형만_다시_줄_선다() {
 		// 규칙이 없던 때를 흉내 낸다: 규칙을 하나도 주지 않은 처리 구현으로 돌린다
-		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		TableReadHandler without = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties, List.of());
 		long ownership = save(TableFixtures.INSIDER_BUY, "임원ㆍ주요주주특정증권등소유상황보고서");
 		long conversion = save("20261119000001", "전환가액ㆍ신주인수권행사가액ㆍ교환가액의조정", null);
 		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
@@ -274,7 +327,7 @@ class TableReadIntegrationTest {
 		assertThat(disclosure(ownership)).containsEntry("tone", null);
 
 		// 지분 보고의 규칙만 생긴 때를 흉내 낸다
-		TableReadHandler ownershipOnly = new TableReadHandler(tableReads, bodyReader, impactProperties,
+		TableReadHandler ownershipOnly = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties,
 			List.of(new OwnershipReportReader(impactProperties)));
 
 		int requeued = queue().requeueSkipped(AnalysisStage.READ_TABLE, TableReadHandler.NO_READER, ownershipOnly.readableTypeCodes());
@@ -291,7 +344,7 @@ class TableReadIntegrationTest {
 
 	@Test
 	void 앱이_뜰_때_건너뛴_작업을_다시_줄_세운다() {
-		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		TableReadHandler without = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties, List.of());
 		long id = save(TableFixtures.INSIDER_SELL, "임원ㆍ주요주주특정증권등소유상황보고서");
 		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
 
@@ -395,7 +448,7 @@ class TableReadIntegrationTest {
 	@Test
 	void 크기만_정하는_규칙은_코드로_판정하는_갈래에서_쓰지_않는다() {
 		// 대응표가 바뀌어 소각 공시가 코드로 판정하는 유형의 갈래로 오는 경우를 흉내 낸다
-		TableReadHandler sizeOnly = new TableReadHandler(tableReads, bodyReader, impactProperties,
+		TableReadHandler sizeOnly = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties,
 			List.of(new ShareCancellationReader(impactProperties)));
 		long id = save("20261119800015", "주식소각결정", TableFixtures.zip(TableFixtures.CANCEL_COMMON));
 		jdbc.sql("UPDATE disclosure_type SET judge_method = 'CODE', default_tone = NULL WHERE code = 'E1'").update();
@@ -412,7 +465,7 @@ class TableReadIntegrationTest {
 
 	@Test
 	void 크기_없이_지나간_제목_유형의_공시는_규칙이_생긴_뒤_다시_줄_선다() {
-		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		TableReadHandler without = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties, List.of());
 		long supply = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");
 		long neutral = save("20261119800012", "[기재정정]주주총회소집결의", null);
 		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
@@ -432,7 +485,7 @@ class TableReadIntegrationTest {
 
 	@Test
 	void 앱이_뜰_때_크기_없이_지나간_작업도_다시_줄_세운다() {
-		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
+		TableReadHandler without = new TableReadHandler(tableReads, bundles, bodyReader, impactProperties, List.of());
 		long id = save(TableFixtures.FACILITY, "신규시설투자등");
 		new AnalysisWorker(jobs, List.of(without), properties, CLOCK).drain(WorkerGroup.CODE);
 
