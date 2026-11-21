@@ -226,7 +226,7 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .chk li b{font-weight:600;text-align:right} .chk li.bad b{color:var(--down)}
 .extlink{display:inline-flex;align-items:center;gap:var(--s1);color:inherit;text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px}
 
-/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 출처 · 시각. 누르면 원문 기사(새 창) */
+/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 언론사 · 시각. 누르면 원문 기사(새 창) */
 .news{list-style:none;margin:calc(var(--s3) * -1) 0 0;padding:0} /* 첫 줄의 안쪽 여백이 카드 여백과 겹쳐 위가 비어 보이지 않게 */
 .news li + li{border-top:1px solid var(--line)}
 .news a{display:grid;gap:var(--s1);padding:var(--s3);margin:0 calc(var(--s3) * -1);border-radius:var(--r-md);color:inherit;text-decoration:none;transition:background var(--fast)}
@@ -416,32 +416,33 @@ const DB = {
  /* 공시 없는 회사의 예시(가상의 회사). 검색 목록에는 넣지 않고 "데모 화면 상태"로만 연다 */
  "000000":{name:"새로 상장한 회사(예시)",market:"코스닥",lede:"",hasFin:false,watch:[],events:[]}
 };
-/* 뉴스: [날짜, 제목, 출처(원문 주소의 도메인), 시각]. 제목은 지어낸 예시(실제 기사 아님).
+/* 뉴스: [날짜, 제목, 언론사, 시각]. 제목과 언론사는 지어낸 예시(실제 기사 아님).
+   검색 API는 언론사 이름을 주지 않으므로 원문 주소의 도메인을 우리가 둔 언론사 이름 표로 바꾸고, 표에 없으면 도메인을 그대로 쓴다.
    뉴스는 저장하지 않는다. 탭(화면)을 열 때 네이버 뉴스 검색 API를 회사 이름으로 불러 받은 그대로(최신순) 보여준다.
    거르거나 순서를 바꾸지 않고, AI에 넣지 않는다(검색 API 이용약관). 그래서 회사와 무관한 기사도 섞여 보인다 */
 const NEWS = {
  "005930":[
-  ["오늘","삼성전자, 반도체 설비 투자 계획 주목","economy.example.com","2시간 전"],
-  ["오늘","미국 증시 기술주 혼조, 반도체 지수 하락","daily.example.com","3시간 전"],
-  ["오늘","삼성전자 협력사와 공급 계약 규모 확대","daily.example.com","4시간 전"],
-  ["어제","삼성전자, 신규 공급 계약 체결","economy.example.com","17:20"],
-  ["어제","삼성전자 기업설명회 일정 공지","daily.example.com","09:10"],
-  ["11.04","삼성전자, 패키징 업체 지분 취득 배경","news.example.com","15:30"],
-  ["11.03","반도체 장비 업계, 4분기 수주 전망","daily.example.com","10:12"],
-  ["10.28","삼성전자 3분기 영업이익 13% 증가","news.example.com","16:05"],
-  ["10.28","삼성전자 3분기 실적 발표 뒤 해석 엇갈려","economy.example.com","18:30"],
-  ["10.24","삼성전자, 중국 공장 장비 반입 제한 안내","news.example.com","17:05"],
-  ["10.22","삼성전자 특허 소송 피소 소식","economy.example.com","11:20"],
-  ["10.21","삼성전자, 해외 업체와 특허 분쟁","daily.example.com","19:45"],
-  ["10.16","삼성전자 자기주식 3조 원 취득 결정","news.example.com","09:30"],
-  ["10.08","삼성전자, 3분기 잠정실적 발표 일정 안내","daily.example.com","10:00"],
-  ["09.18","삼성전자 특허 소송 1심 판결","news.example.com","16:20"]],
- "000660":[["오늘","SK하이닉스, 고대역폭 메모리 공급 확대 계획 발표","daily.example.com","5시간 전"],["11.04","SK하이닉스 분기 실적 설명회 일정 안내","news.example.com","14:00"]]
+  ["오늘","삼성전자, 반도체 설비 투자 계획 주목","예시경제","2시간 전"],
+  ["오늘","미국 증시 기술주 혼조, 반도체 지수 하락","예시일보","3시간 전"],
+  ["오늘","삼성전자 협력사와 공급 계약 규모 확대","예시일보","4시간 전"],
+  ["어제","삼성전자, 신규 공급 계약 체결","예시경제","17:20"],
+  ["어제","삼성전자 기업설명회 일정 공지","예시일보","09:10"],
+  ["11.04","삼성전자, 패키징 업체 지분 취득 배경","예시뉴스","15:30"],
+  ["11.03","반도체 장비 업계, 4분기 수주 전망","예시일보","10:12"],
+  ["10.28","삼성전자 3분기 영업이익 13% 증가","예시뉴스","16:05"],
+  ["10.28","삼성전자 3분기 실적 발표 뒤 해석 엇갈려","예시경제","18:30"],
+  ["10.24","삼성전자, 중국 공장 장비 반입 제한 안내","예시뉴스","17:05"],
+  ["10.22","삼성전자 특허 소송 피소 소식","예시경제","11:20"],
+  ["10.21","삼성전자, 해외 업체와 특허 분쟁","예시일보","19:45"],
+  ["10.16","삼성전자 자기주식 3조 원 취득 결정","예시뉴스","09:30"],
+  ["10.08","삼성전자, 3분기 잠정실적 발표 일정 안내","예시일보","10:00"],
+  ["09.18","삼성전자 특허 소송 1심 판결","예시뉴스","16:20"]],
+ "000660":[["오늘","SK하이닉스, 고대역폭 메모리 공급 확대 계획 발표","예시일보","5시간 전"],["11.04","SK하이닉스 분기 실적 설명회 일정 안내","예시뉴스","14:00"]]
 };
 const NEWS_TAB = 10; /* 뉴스 탭에는 최근 10건. 나머지는 "전체 뉴스 보기"(다른 화면) */
 /* 전체 뉴스 화면의 예시 데이터: 위 뉴스에 석 달치 지난 뉴스를 섞는다(제목은 지어낸 것). 실제로는 API의 쪽 넘김으로 받는다 */
 const NEWS_FILL = ["{n}, 신규 채용 일정 발표","{n} 협력사 간담회 열어","{n}, 친환경 공장 인증 받아","{n} 연구개발 인력 확대","{n}, 해외 법인 설립 추진","{n} 노사 임금 협상 마무리","{n}, 신제품 출시 일정 공개","{n} 사회공헌 기금 전달","{n}, 지역 대학과 인재 양성 협약","{n} 공장 안전 점검 결과 발표"];
-const NEWS_SRC = ["economy.example.com","daily.example.com","news.example.com"];
+const NEWS_SRC = ["예시경제","예시일보","예시뉴스"];
 const CODES = Object.keys(DB).filter(c=>c!=="000000");
 
 /* ───────── 날짜 ───────── */
@@ -532,7 +533,7 @@ function dvHTML(co, e){
     ${sum}
     ${e.s ? `<p class="notice meta">${NOTICE}</p>` : ""}</div>`;
 }
-/* 뉴스 한 건: {d 날짜, t 제목, src 출처(도메인), tm 시각}. API가 준 순서(최신순) 그대로.
+/* 뉴스 한 건: {d 날짜, t 제목, src 언론사, tm 시각}. API가 준 순서(최신순) 그대로.
    패널을 열지 않고, 줄을 누르면 원문 기사로 바로 간다(새 창) */
 const YDAY = DATES[LAST-1];
 const newsCache = {};
@@ -547,7 +548,7 @@ function newsOf(co){
   return (newsCache[code] = out.sort((a,b)=>b.d.localeCompare(a.d)));
 }
 const newsWhen = n => n.d===ASOF ? n.tm : n.d===YDAY ? "어제 "+n.tm : md(n.d)+" "+n.tm;
-/* 줄 = 제목 / 출처 · 시각 + 바깥 링크 아이콘. 누르면 원문 기사(새 창). 데모에서는 예시라 이동하지 않는다 */
+/* 줄 = 제목 / 언론사 · 시각 + 바깥 링크 아이콘. 누르면 원문 기사(새 창). 데모에서는 예시라 이동하지 않는다 */
 const newsRow = n => `<li><a href="#" target="_blank" rel="noopener" onclick="return false"><span class="row-title">${esc(n.t)}</span><span class="meta faint num">${esc(n.src)} · ${esc(newsWhen(n))}${icon("external","sm")}<span class="sr">(새 창)</span></span></a></li>`;
 const naverSrc = () => srcLine("네이버 뉴스 검색결과"); /* 검색 API 이용약관: 네이버 검색결과임을 표시한다(모양은 네이버 BI 가이드를 따른다) */
 
@@ -688,7 +689,7 @@ function initCharts(){
                  y2:{axis:"y",position:"right",grid:{display:false},border:{display:false},ticks:{color:tick,maxTicksLimit:3,callback:x=>x+"%"}} } } })); });
 }
 
-/* 뉴스 탭: 탭을 열 때 API를 불러 최근 10건. 줄은 제목·출처·시각. 판단 점수에 넣지 않는다.
+/* 뉴스 탭: 탭을 열 때 API를 불러 최근 10건. 줄은 제목·언론사·시각. 판단 점수에 넣지 않는다.
    누르면 원문 기사(새 창). 나머지는 "전체 뉴스 보기"(다른 화면). API를 부르지 못하면 빈 상태 칸으로 알린다 */
 function newsTab(co){
   const l = newsOf(co);

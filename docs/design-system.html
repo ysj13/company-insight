@@ -221,7 +221,7 @@ button.rel:hover{background:var(--fill-hover)} button.rel:active{background:var(
 .chk li b{font-weight:600;text-align:right} .chk li.bad b{color:var(--down)}
 .extlink{display:inline-flex;align-items:center;gap:var(--s1);color:inherit;text-decoration:underline;text-decoration-color:var(--line-hover);text-underline-offset:3px}
 
-/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 출처 · 시각. 누르면 원문 기사(새 창) */
+/* 뉴스 탭: 날짜 묶음 없이 한 목록. 줄 = 제목 / 언론사 · 시각. 누르면 원문 기사(새 창) */
 .news{list-style:none;margin:calc(var(--s3) * -1) 0 0;padding:0} /* 첫 줄의 안쪽 여백이 카드 여백과 겹쳐 위가 비어 보이지 않게 */
 .news li + li{border-top:1px solid var(--line)}
 .news a{display:grid;gap:var(--s1);padding:var(--s3);margin:0 calc(var(--s3) * -1);border-radius:var(--r-md);color:inherit;text-decoration:none;transition:background var(--fast)}
@@ -522,7 +522,7 @@ td code,.meta code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;fo
           <p class="notice meta">AI 요약은 틀릴 수 있으며 투자 권유가 아니에요.</p></div></div>
         <div class="drawer-f"><button type="button" class="tbtn num"><svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>이전 공시 10.24</button><button type="button" class="tbtn num">다음 공시 11.03<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div></div>
       <p class="meta faint">공시 패널: 호재·악재 칩과 영향 → 쉬운 말 한 줄(제목) → "날짜 · DART 공시 이름" 줄이 곧 원문 링크 → AI 3줄 요약(평문) → 고지. 중립 공시는 요약 자리를 비워요.</p>
-      <div class="card"><ul class="news"><li><a href="#" onclick="return false"><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint num">economy.example.com · 어제 17:20<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6"/><path d="M19 5l-8 8"/><path d="M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10"/></svg></span></a></li></ul><p class="meta faint src">네이버 뉴스 검색결과</p></div>
+      <div class="card"><ul class="news"><li><a href="#" onclick="return false"><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint num">예시경제 · 어제 17:20<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6"/><path d="M19 5l-8 8"/><path d="M17 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 17.5v-9A1.5 1.5 0 0 1 6.5 7H10"/></svg></span></a></li></ul><p class="meta faint src">네이버 뉴스 검색결과</p></div>
       <p class="meta faint">뉴스는 패널을 열지 않아요. 줄을 누르면 원문 기사로 바로 가요(새 창, 바깥 링크 아이콘). 뉴스 검색 결과는 저장하지 않고, 받은 순서 그대로 고치지 않고 보여주며, 목록 아래에 "네이버 뉴스 검색결과"를 밝혀요.</p>
     </div>
   </section>
@@ -632,7 +632,7 @@ const TYPES = [
   ["본문","15 / 400 / 1.6","문단, AI 요약, 묶음의 한 줄 결론",`<span>잠정실적의 영업이익 증가와 자기주식 취득이 최근 공시의 분위기를 이끌고 있어요.</span>`],
   ["칸 제목","13 / 700 / 1.5 · 보조색(AI 이름표는 보라)","AI 칸의 이름표, 전체 공시의 연도",`<span class="box-title ai-tag">AI 요약</span>`],
   ["라벨","13 / 600 / 1.5","칩, 세그먼트, 글자형 버튼",`<span class="tbtn" style="margin:0;padding:0;min-height:0">전체 공시 보기</span>`],
-  ["메타","13 / 400 / 1.5 · 보조색 또는 옅은 색","날짜·고지(보조), 출처(옅은), 요약 띠의 이름, 표",`<span class="meta num">10.28 화 · <span class="up" style="font-weight:600">호재</span></span>`]];
+  ["메타","13 / 400 / 1.5 · 보조색 또는 옅은 색","날짜·고지(보조), 출처·언론사(옅은), 요약 띠의 이름, 표",`<span class="meta num">10.28 화 · <span class="up" style="font-weight:600">호재</span></span>`]];
 $("type-rows").innerHTML = TYPES.map(([n,s,u,ex])=>`<div class="type-row"><div>${ex}</div><div><p class="row-title">${n}</p><p class="meta">${s}<br>${u}</p></div></div>`).join("");
 
 /* 5. 간격 */
@@ -651,7 +651,7 @@ const PARTS = [
   ["탭", s => s==="is-press"||s==="dis"?na:`<span class="tabs" style="border:0;padding:0"><button type="button" class="${s==="sel"?"":s}" aria-selected="${s==="sel"}">재무</button></span>`],
   ["세그먼트", s => `<span class="seg"><button type="button" class="${s==="sel"?"":s}" aria-pressed="${s==="sel"}" ${s==="dis"?"disabled":""}>손익계산서</button></span>`],
   ["입력창", s => s==="sel"||s==="is-press"?na:`<span class="field" style="width:200px;display:block"><svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC.search[2]}</svg><input type="search" class="${s}" placeholder="기업명 또는 종목코드" aria-label="입력창 보기" ${s==="dis"?"disabled":""}></span>`],
-  ["목록 줄", s => s==="dis"?na:`<ul class="news"><li><a href="#" onclick="return false" class="${s==="sel"?"":s}" ${s==="sel"?'aria-current="true"':""}><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint">economy.example.com · 어제 17:20</span></a></li></ul>`],
+  ["목록 줄", s => s==="dis"?na:`<ul class="news"><li><a href="#" onclick="return false" class="${s==="sel"?"":s}" ${s==="sel"?'aria-current="true"':""}><span class="row-title">삼성전자, 신규 공급 계약 체결</span><span class="meta faint">예시경제 · 어제 17:20</span></a></li></ul>`],
   ["글자 링크", s => s==="sel"||s==="is-press"||s==="dis"?na:`<a class="dv-srclink meta ${s}" href="#" onclick="return false">DART 원문 줄${svg(IC.external[2],"sm")}</a>`]];
 $("state-rows").innerHTML = PARTS.map(([n,f])=>`<tr><th>${n}</th>${S.map(s=>cell(f(s))).join("")}</tr>`).join("");
 
