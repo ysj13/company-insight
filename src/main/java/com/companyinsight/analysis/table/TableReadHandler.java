@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -24,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>공시의 지금 분류에 따라 갈린다.
  * <ul>
  * <li>코드가 방향을 정하는 유형이고 읽는 규칙({@link TableReader})이 있음: 표를 읽는다.
- *   중립이면 여기서 끝나고, 호재·악재면 요약을 쓰러 AI 요약으로 넘긴다.
+ *   중립이면 여기서 끝나고, 호재·악재면 요약을 쓰러 AI 요약으로 넘긴다
+ *   (지분 보고처럼 요약도 코드가 읽은 항목으로 쓰는 유형은 호재·악재여도 여기서 끝난다).
  *   방향을 정하는 항목을 읽지 못했거나, 읽은 값이 AI가 정할 경우(제3자배정 유상증자, 자회사의 유상증자)면 AI 판정으로 넘긴다
  * <li>코드가 방향을 정하는 유형인데 읽는 규칙이 아직 없음: 판정 없이 끝낸다. 규칙을 더할 때 그 유형의 작업을 다시 돌린다
  * <li>AI가 방향을 정하는 유형: AI 판정으로 넘긴다
@@ -60,6 +62,9 @@ public class TableReadHandler implements StageHandler {
 	/** 자회사의 공시의 속성 */
 	private static final String SUBSIDIARY = "SUBSIDIARY";
 
+	/** 건너뛴 이유: 코드가 방향을 정하는 유형인데 읽는 규칙이 없다 */
+	static final String NO_READER = "NO_READER";
+
 	private static final JsonMapper JSON = JsonMapper.builder().build();
 
 	private final TableReadRepository repository;
@@ -80,6 +85,11 @@ public class TableReadHandler implements StageHandler {
 				}
 			}
 		}
+	}
+
+	/** 읽는 규칙이 있는 유형 번호. */
+	Set<String> readableTypeCodes() {
+		return Set.copyOf(readers.keySet());
 	}
 
 	@Override
@@ -130,13 +140,13 @@ public class TableReadHandler implements StageHandler {
 	private StageResult byCode(long disclosureId, TableTarget target) {
 		TableReader reader = readers.get(target.typeCode());
 		if (reader == null) {
-			return StageResult.ended().withResult(skipped("NO_READER"));
+			return StageResult.ended().withResult(skipped(NO_READER));
 		}
 		List<BodyDocument> documents = bodies.read(disclosureId)
 			.orElseThrow(() -> new IllegalStateException("저장한 본문이 없습니다: " + disclosureId));
 		boolean subsidiary = target.attributes().contains(SUBSIDIARY);
 		BodyTables tables = BodyTables.of(documents);
-		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary), tables);
+		TableReading read = reader.read(new TableReader.ReadTarget(target.typeCode(), subsidiary, target.title()), tables);
 		if (read.verdict() == TableReading.Verdict.JUDGED && tables.correctionMayWithdraw()) {
 			// 정정 표에 철회·취소가 적혀 있다. 원래 결정을 거둔 정정이면 본문 표의 방향이 뜻을 잃는다
 			read = TableReading.needsAi("CORRECTION_MAY_WITHDRAW", read.ratio(), read.items(), read.unread());
@@ -149,7 +159,7 @@ public class TableReadHandler implements StageHandler {
 		return switch (reading.verdict()) {
 			case JUDGED -> {
 				Runnable write = () -> repository.saveJudgment(disclosureId, reading.tone(), reading.impact(), reading.ratio());
-				yield reading.tone() == Tone.NEUTRAL ? StageResult.ended().withResult(result).withWrites(write)
+				yield reading.tone() == Tone.NEUTRAL || reader.summaryByCode() ? StageResult.ended().withResult(result).withWrites(write)
 						: StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY))
 							.withResult(result)
 							.withWrites(write);

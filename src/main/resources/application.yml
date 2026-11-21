@@ -79,6 +79,10 @@ app:
         opinion-not-clean: 3    # 감사의견 한정·부적정·의견거절
         going-concern: 2        # 계속기업 존속 불확실성
         internal-control: 2     # 내부회계관리제도 비적정
+      ownership:                # 지분 보고. 주주가 한 일이라 가장 큰 크기는 2
+        trade-neutral-below: 0.01   # 매매 순증감 ÷ 발행주식총수(%). 이보다 작으면 중립
+        trade-medium-from: 0.1      # 이 이상이면 2
+        holding-medium-from: 1      # 대량보유상황보고서. 보유비율 증감(%p)이 이 이상이면 2
   financial:
     # 앱이 뜬 직후 재무를 받을 회사의 종목코드(쉼표로 구분). 비워 두면 받지 않는다
     collect-on-startup: ${FINANCIAL_COLLECT_ON_STARTUP:}

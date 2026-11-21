@@ -87,6 +87,22 @@ public class AnalysisQueueService {
 	}
 
 	/**
+	 * 한 단계가 "할 수 없어 건너뜀"으로 끝났던 작업 가운데, 지금은 할 수 있게 된 유형의 것을 다시 돌린다
+	 * (그 유형을 처리하는 코드를 더한 뒤). 과거분과 같은 우선순위라 새 공시보다 뒤에 처리된다. 여러 번 불러도 결과가 같다.
+	 *
+	 * @param skipReason 건너뛴 이유. 그 단계가 실행 기록의 결과에 남긴 값
+	 * @param typeCodes  지금은 처리할 수 있는 유형 번호
+	 * @return 대기로 되돌린 건수
+	 */
+	public int requeueSkipped(AnalysisStage stage, String skipReason, Collection<String> typeCodes) {
+		int requeued = jobs.requeueSkipped(stage, skipReason, typeCodes, clock.instant());
+		if (requeued > 0) {
+			log.info("분석 대기열: 건너뛰었던 {} 작업 {}건을 다시 줄 세웠습니다 (이유: {})", stage, requeued, skipReason);
+		}
+		return requeued;
+	}
+
+	/**
 	 * 끝을 보지 못한 실행을 되돌린다. 앱이 죽으면 꺼낸 작업이 실행 중으로 남으므로,
 	 * 앱이 뜰 때와 몇 분마다 부른다. 되돌린 실행은 실패 한 번으로 센다.
 	 *

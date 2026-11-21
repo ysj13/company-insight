@@ -30,7 +30,7 @@ public class TableReadRepository {
 	 */
 	public Optional<TableTarget> findTarget(long disclosureId) {
 		return jdbc.sql("""
-				SELECT d.is_withdrawn, d.tone, d.classified_by, d.type_code, d.title_attributes,
+				SELECT d.is_withdrawn, d.tone, d.classified_by, d.type_code, d.title_attributes, d.normalized_title,
 				       COALESCE(r.judge_method, t.judge_method) AS judge_method
 				  FROM disclosure d
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
@@ -44,6 +44,7 @@ public class TableReadRepository {
 				rs.getString("classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("classified_by")),
 				rs.getString("type_code"),
 				attributes(rs.getArray("title_attributes")),
+				rs.getString("normalized_title"),
 				rs.getString("judge_method") == null ? null : JudgeMethod.valueOf(rs.getString("judge_method"))))
 			.optional();
 	}
@@ -122,9 +123,10 @@ public class TableReadRepository {
 	 * @param classifiedBy 지금 방향을 정한 주체. 정해지지 않았으면 null
 	 * @param typeCode     유형 번호. 아직 분류하지 않았으면 null
 	 * @param attributes   제목 꼬리가 붙인 속성 (SUBSIDIARY, WITHDRAWAL 등)
+	 * @param title        머리말([기재정정] 등)을 뗀 제목. 아직 분류하지 않았으면 null
 	 * @param judgeMethod  방향을 정하는 방법 (규칙 줄의 값이 먼저, 없으면 유형의 값). 유형이 없으면 null
 	 */
 	public record TableTarget(boolean withdrawn, Tone tone, ClassifiedBy classifiedBy, String typeCode, Set<String> attributes,
-			JudgeMethod judgeMethod) {
+			String title, JudgeMethod judgeMethod) {
 	}
 }

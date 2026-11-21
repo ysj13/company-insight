@@ -168,6 +168,39 @@ public class AnalysisJobRepository {
 	}
 
 	/**
+	 * 한 단계가 "할 수 없어 건너뜀"으로 끝났던 작업 가운데, 지금은 할 수 있게 된 유형의 것을 대기로 되돌린다.
+	 * 건너뛴 이유는 마지막 실행 기록의 결과({@code {"skipped": 이유}})에서 읽는다.
+	 * 그 뒤에 다시 실행돼 다른 결과로 끝난 작업은 마지막 실행이 달라 건드리지 않는다. 여러 번 불러도 결과가 같다.
+	 *
+	 * @param stage      단계
+	 * @param skipReason 건너뛴 이유 (예: NO_READER 읽는 규칙이 없었다)
+	 * @param typeCodes  지금은 처리할 수 있는 유형 번호
+	 * @return 대기로 되돌린 건수
+	 */
+	@Transactional
+	public int requeueSkipped(AnalysisStage stage, String skipReason, Collection<String> typeCodes, Instant now) {
+		if (typeCodes.isEmpty()) {
+			return 0;
+		}
+		return jdbc.sql("""
+				UPDATE analysis_job j
+				   SET status = 'PENDING', outcome = NULL, priority = :priority, run_after = :now, attempts = 0,
+				       deferrals = 0, enqueue_reason = :reason, updated_at = :now
+				  FROM analysis_run r, disclosure d
+				 WHERE j.stage = :stage AND j.status = 'DONE' AND j.outcome = 'ENDED'
+				   AND r.id = j.last_run_id AND r.result ->> 'skipped' = :skipReason
+				   AND d.id = j.disclosure_id AND d.type_code IN (:typeCodes)
+				""")
+			.param("priority", AnalysisPriority.BACKLOG)
+			.param("now", at(now))
+			.param("reason", EnqueueReason.RERUN.name())
+			.param("stage", stage.name())
+			.param("skipReason", skipReason)
+			.param("typeCodes", typeCodes)
+			.update();
+	}
+
+	/**
 	 * 공시 한 건의 한 단계를 대기로 만든다. 줄이 없으면 넣고, 있으면 상태가 무엇이든 대기로 되돌린다.
 	 * 실패 횟수와 미룬 횟수는 0으로 돌아간다.
 	 */
