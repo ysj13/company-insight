@@ -45,28 +45,32 @@ final class AiInputs {
 	/** 날짜 하나 (2026.11.16, 2026-11-16, 2026/11/16, 2026년 11월 16일) */
 	private static final String DATE = "\\d{4}\\s*(?:[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}\\.?|년\\s*\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일)";
 
-	/** 날짜만 적힌 값: 날짜 하나, 또는 "~"나 "부터·까지"로 이은 기간. 요일·시각 표기는 받는다 */
+	/** 날짜 뒤 괄호에 받는 표기: 요일, 예정, 잠정. 그 밖의 괄호(금액, 조건)가 붙으면 날짜만 적힌 값이 아니다 */
+	private static final String DATE_NOTE = "\\((?:[월화수목금토일](?:요일)?|예정|잠정)\\)";
+
+	/** 정정 표에서 읽는 바뀐 항목 줄 수의 상한 ({@code CorrectionTable}과 같다). 여기 닿으면 다 읽지 못했을 수 있다 */
+	static final int CORRECTION_CHANGES_MAX = 40;
+
+	/** 날짜만 적힌 값: 날짜 하나, 또는 "~"나 "부터·까지"로 이은 기간. 괄호는 요일과 예정·잠정 표기만 받는다(시각 표기는 받지 않는다) */
 	private static final Pattern DATE_VALUE = Pattern.compile(
-			"\\s*" + DATE + "(?:\\s*\\([^)]*\\))?(?:\\s*(?:부터|까지|~|-)\\s*(?:" + DATE + ")?(?:\\s*\\([^)]*\\))?(?:\\s*까지)?)?\\s*");
+			"\\s*" + DATE + "(?:\\s*" + DATE_NOTE + ")?(?:\\s*(?:부터|까지|~|-)\\s*(?:" + DATE + ")?(?:\\s*" + DATE_NOTE + ")?(?:\\s*까지)?)?\\s*");
 
 	/**
-	 * 정정 표의 바뀐 항목이 모두 날짜·일정뿐인지. 정정 전·후 값이 날짜(또는 기간)이거나 비어 있으면("-") 날짜 항목으로 본다.
-	 * 바뀐 항목이 없으면 false.
+	 * 정정 표의 바뀐 항목이 모두 날짜·일정뿐인지. 정정 전·후 값이 모두 날짜(또는 기간)여야 한다.
+	 * 빈 칸("-")에서 날짜로 바뀐 줄은 조건이 새로 생긴 것일 수 있어 날짜만 바뀐 것으로 보지 않는다.
+	 * 바뀐 항목이 없거나 정정 표를 다 읽지 못했을 수 있으면(읽은 줄 수가 상한에 닿음) false.
 	 *
 	 * @param changes 정정 표의 바뀐 항목 (항목, 정정 전, 정정 후)
 	 */
 	static boolean datesOnly(List<List<String>> changes) {
-		if (changes.isEmpty()) {
+		if (changes.isEmpty() || changes.size() >= CORRECTION_CHANGES_MAX) {
 			return false;
 		}
 		for (List<String> change : changes) {
 			String before = change.get(1);
 			String after = change.get(2);
-			if (blankValue(before) && blankValue(after)) {
-				return false;
-			}
-			if (!(blankValue(before) || DATE_VALUE.matcher(before).matches())
-					|| !(blankValue(after) || DATE_VALUE.matcher(after).matches())) {
+			if (blankValue(before) || blankValue(after) || !DATE_VALUE.matcher(before).matches()
+					|| !DATE_VALUE.matcher(after).matches()) {
 				return false;
 			}
 		}
@@ -144,11 +148,12 @@ final class AiInputs {
 	 * @param cases          함께 고를 경우. 없으면 빈 목록
 	 * @param askWithdrawn   "원래 결정을 거둔 정정인가"를 물을지
 	 * @param datesOnlyCorrection 정정 표의 바뀐 항목이 날짜·일정뿐인 정정인지 (앞 공시의 판정이 없어 AI가 판정할 때)
+	 * @param previousTone   정정 공시가 고친 앞 공시의 방향 (물려받아도 되는 판정일 때만). 알려 주지 않으면 null
 	 * @param ratioItems     코드가 본문 표에서 읽은 비율 칸
 	 */
 	static String judgeUser(AiTarget target, String effectiveType, String effectiveName, String criteria,
 			List<TypeChoice> choices, Map<String, String> typeCriteria, List<CaseOption> cases, boolean askWithdrawn,
-			boolean datesOnlyCorrection, TableContext table, Map<String, String> ratioItems,
+			boolean datesOnlyCorrection, Tone previousTone, TableContext table, Map<String, String> ratioItems,
 			String body) {
 		StringBuilder text = header(target, effectiveType, effectiveName);
 		text.append("판정 기준: ")
@@ -158,8 +163,8 @@ final class AiInputs {
 		if (target.attributes().contains("SUBSIDIARY")) {
 			text.append("이 공시는 종속회사(자회사)의 일을 알린 것이다.\n");
 		}
-		if (target.bodyCorrection() && target.previous().tone() != null) {
-			text.append("이 정정 공시가 고친 앞 공시(원래 결정)는 ").append(toneWord(target.previous().tone()))
+		if (previousTone != null) {
+			text.append("이 정정 공시가 고친 앞 공시(원래 결정)는 ").append(toneWord(previousTone))
 				.append("로 판정됐다. 정정으로 바뀐 내용이 그 판단을 바꿀 만한 사실이 아니면 같은 방향을 고른다.\n");
 		}
 		if (datesOnlyCorrection) {

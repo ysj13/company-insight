@@ -42,7 +42,8 @@ import tools.jackson.databind.json.JsonMapper;
  * <li>중립: 판정을 적고 끝 (요약하지 않는다)
  * <li>판정불가, 또는 근거로 옮긴 구절이 본문에 없음: 판정 보류. 회사 판단에 세지 않는다
  * <li>철회된 공시, 뒤 정정으로 대체된 공시, 그 사이 제목·표가 판정한 공시: 부르지 않고 끝
- * <li>정정 표의 바뀐 항목이 날짜·일정뿐인 정정이고 앞 공시가 판정돼 있음: 앞 공시의 판정을 물려받고 부르지 않는다
+ * <li>정정 표의 바뀐 항목이 날짜·일정뿐인 정정이고 앞 공시의 판정을 쓸 수 있음(철회되지 않음, AI 판정이면 지금 설정 버전으로 낸 것):
+ *   앞 공시의 판정을 물려받고 부르지 않는다
  *   (호재·악재면 요약만 AI 요약으로). 앞 공시의 판정이 없으면 날짜만 바뀐 정정임을 알려 주고 부른다
  * <li>과부하·한도: 실패로 세지 않고 미룬다
  * </ul>
@@ -125,8 +126,10 @@ public class AiJudgeHandler implements StageHandler {
 			});
 		}
 		TableContext table = AiInputs.tableContext(repository.lastTableReadResult(id).orElse(null));
+		long versionId = versions.idOf(Bundle.AI_JUDGE, settings());
 		boolean datesOnlyCorrection = target.bodyCorrection() && AiInputs.datesOnly(table.changes());
-		if (datesOnlyCorrection && target.previous().tone() != null && !table.mayWithdraw()) {
+		boolean previousUsable = target.bodyCorrection() && !table.mayWithdraw() && target.previous().usable(versionId);
+		if (datesOnlyCorrection && previousUsable) {
 			return inherit(target, table);
 		}
 		List<BodyDocument> documents = bodies.read(id)
@@ -149,10 +152,10 @@ public class AiJudgeHandler implements StageHandler {
 		Map<String, String> ratioItems = sizeRules.ratioItems(effectiveType, documents);
 
 		String user = AiInputs.judgeUser(target, effectiveType, effectiveName, prompts.criteria(effectiveType), choices,
-				typeCriteria, cases, askWithdrawn, datesOnlyCorrection, table, ratioItems, body);
+				typeCriteria, cases, askWithdrawn, datesOnlyCorrection, previousUsable ? target.previous().tone() : null, table,
+				ratioItems, body);
 		Map<String, Object> schema = AiInputs.judgeSchema(choices.stream().map(TypeChoice::code).toList(),
 				cases.stream().map(CaseOption::code).toList(), askWithdrawn);
-		long versionId = versions.idOf(Bundle.AI_JUDGE, settings());
 		AiCaller.Answer answer;
 		try {
 			answer = caller.call(prompts.judgeSystem(), user, schema, versionId);
@@ -178,9 +181,9 @@ public class AiJudgeHandler implements StageHandler {
 		result.put("changes", table.changes());
 		result.put("tone", tone.name());
 		result.put("impact", impact);
-		Runnable save = () -> repository.saveJudgment(id, tone, impact, previous.ratio(), previous.classifiedBy(),
-				target.pickedTypeCode());
-		if (tone == Tone.NEUTRAL || CODE_SUMMARY_TYPES.contains(target.typeCode())) {
+		String picked = target.pickedTypeCode() != null ? target.pickedTypeCode() : previous.pickedType();
+		Runnable save = () -> repository.saveJudgment(id, tone, impact, previous.ratio(), previous.classifiedBy(), picked);
+		if (tone == Tone.NEUTRAL || CODE_SUMMARY_TYPES.contains(picked != null ? picked : target.typeCode())) {
 			return StageResult.ended().withResult(json(result)).withWrites(() -> {
 				save.run();
 				if (tone == Tone.NEUTRAL) {

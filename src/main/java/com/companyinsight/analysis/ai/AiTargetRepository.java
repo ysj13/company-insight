@@ -40,7 +40,10 @@ public class AiTargetRepository {
 				       COALESCE(r.judge_method, t.judge_method) AS judge_method, t.name AS type_name, pt.name AS picked_type_name,
 				       %s AS body_correction,
 				       d.corrects_id, p.tone AS prev_tone, p.impact AS prev_impact, p.impact_ratio AS prev_ratio,
-				       p.classified_by AS prev_classified_by
+				       p.classified_by AS prev_classified_by, p.is_withdrawn AS prev_withdrawn, p.picked_type_code AS prev_picked,
+				       (SELECT x.setting_version_id FROM analysis_run x
+				         WHERE x.disclosure_id = p.id AND x.stage = 'AI_JUDGE' AND x.outcome IN ('ENDED', 'PASSED')
+				         ORDER BY x.id DESC LIMIT 1) AS prev_version
 				  FROM disclosure d
 				  JOIN company c ON c.id = d.company_id
 				  LEFT JOIN disclosure_type t ON t.code = d.type_code
@@ -72,7 +75,10 @@ public class AiTargetRepository {
 					rs.getString("prev_tone") == null ? null : Tone.valueOf(rs.getString("prev_tone")),
 					rs.getObject("prev_impact", Integer.class),
 					rs.getBigDecimal("prev_ratio"),
-					rs.getString("prev_classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("prev_classified_by")))))
+					rs.getString("prev_classified_by") == null ? null : ClassifiedBy.valueOf(rs.getString("prev_classified_by")),
+					rs.getBoolean("prev_withdrawn"),
+					rs.getString("prev_picked"),
+					rs.getObject("prev_version", Long.class))))
 			.optional();
 	}
 
@@ -226,8 +232,25 @@ public class AiTargetRepository {
 	 * @param impact       앞 공시의 크기
 	 * @param ratio        앞 공시의 원래 비율(%)
 	 * @param classifiedBy 앞 공시의 판정 주체
+	 * @param withdrawn    앞 공시가 철회됐는지
+	 * @param pickedType   앞 공시에 AI가 고른 유형. 없으면 null
+	 * @param judgeVersionId 앞 공시를 판정한 마지막 AI 판정 실행의 설정 버전. AI가 판정하지 않았으면 null
 	 */
-	public record Previous(Long id, Tone tone, Integer impact, BigDecimal ratio, ClassifiedBy classifiedBy) {
+	public record Previous(Long id, Tone tone, Integer impact, BigDecimal ratio, ClassifiedBy classifiedBy, boolean withdrawn,
+			String pickedType, Long judgeVersionId) {
+
+		/**
+		 * 이 판정을 정정 공시가 물려받거나 AI에 알려 줘도 되는지. 판정이 있고, 앞 공시가 철회되지 않았고,
+		 * AI가 낸 판정이면 지금 모델·지시문 버전으로 낸 것이어야 한다(옛 기준의 판정을 굳히지 않게. 대체된 앞 공시는 다시 판정되지 않는다).
+		 *
+		 * @param currentVersionId 지금 AI 판정의 설정 버전
+		 */
+		public boolean usable(long currentVersionId) {
+			if (tone == null || withdrawn) {
+				return false;
+			}
+			return classifiedBy != ClassifiedBy.LLM || judgeVersionId != null && judgeVersionId == currentVersionId;
+		}
 	}
 
 	/**
