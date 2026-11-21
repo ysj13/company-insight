@@ -96,6 +96,23 @@ public class TableReadRepository {
 	}
 
 	/**
+	 * 제목이 방향을 정한 공시의 비율이 크기의 하한 아래라 표로 정한 중립으로 고쳐 적는다.
+	 * AI가 판정해 둔 공시는 건드리지 않는다. 같은 값을 다시 적어도 결과가 같다.
+	 *
+	 * @param ratio 크기를 정할 때 본 원래 비율(%)
+	 */
+	public void saveTitleNeutral(long disclosureId, BigDecimal ratio) {
+		jdbc.sql("""
+				UPDATE disclosure
+				   SET tone = 'NEUTRAL', impact = NULL, impact_ratio = :ratio, classified_by = 'TABLE', updated_at = now()
+				 WHERE id = :id AND classified_by IN ('RULE', 'TABLE')
+				""")
+			.param("ratio", ratio)
+			.param("id", disclosureId)
+			.update();
+	}
+
+	/**
 	 * 코드가 방향을 정하지 못한 공시의 비율만 적는다. 앞선 실행이 표로 정해 둔 판정이 있으면 지운다
 	 * (읽는 규칙을 고친 뒤 다시 돌렸을 때 옛 판정이 남지 않게). 다른 주체의 판정은 건드리지 않는다.
 	 *

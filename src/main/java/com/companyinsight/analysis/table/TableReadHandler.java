@@ -132,10 +132,11 @@ public class TableReadHandler implements StageHandler {
 	 * 제목으로 판정하는 유형. 방향은 이미 정해져 있다. 크기를 읽는 규칙이 있으면 표에서 크기를 읽는다.
 	 *
 	 * <p>정정 표에 철회 낱말이 있어도 방향은 제목이 정한 그대로 둔다(제목이 방향을 정하는 유형이다). 자회사의 공시면 크기를 낮춘다.
-	 * 앞선 실행이 표로 중립을 적어 두었으면(크기의 하한 아래였다) 제목 규칙의 방향으로 다시 읽는다.
+	 * 방향은 제목 규칙의 것으로 읽는다. 앞선 실행이 표로 중립을 적어 두었거나(크기의 하한 아래였다) AI가 판정해 둔 공시도
+	 * 제목 규칙의 방향으로 크기를 읽고, AI의 판정은 덮어쓰지 않는다.
 	 */
 	private StageResult byTitle(long disclosureId, TableTarget target) {
-		Tone tone = target.classifiedBy() == ClassifiedBy.TABLE ? target.titleTone() : target.tone();
+		Tone tone = target.classifiedBy() == ClassifiedBy.RULE ? target.tone() : target.titleTone();
 		if (tone == null) {
 			return StageResult.passed(NO_TITLE_TONE, StageResult.Next.of(AnalysisStage.AI_JUDGE));
 		}
@@ -143,7 +144,7 @@ public class TableReadHandler implements StageHandler {
 			return StageResult.ended();
 		}
 		TableReader reader = readers.get(target.typeCode());
-		if (reader == null) {
+		if (reader == null || !reader.sizeOnly()) {
 			return StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY));
 		}
 		List<BodyDocument> documents = bodies.read(disclosureId)
@@ -164,7 +165,7 @@ public class TableReadHandler implements StageHandler {
 			// 크기의 하한 아래다. 표로 정한 중립으로 고쳐 적는다
 			return StageResult.ended()
 				.withResult(result)
-				.withWrites(() -> repository.saveJudgment(disclosureId, Tone.NEUTRAL, null, reading.ratio()));
+				.withWrites(() -> repository.saveTitleNeutral(disclosureId, reading.ratio()));
 		}
 		return StageResult.passed(NEEDS_SUMMARY, StageResult.Next.of(AnalysisStage.AI_SUMMARY))
 			.withResult(result)
@@ -174,7 +175,7 @@ public class TableReadHandler implements StageHandler {
 	/** 코드가 방향을 정하는 유형. */
 	private StageResult byCode(long disclosureId, TableTarget target) {
 		TableReader reader = readers.get(target.typeCode());
-		if (reader == null) {
+		if (reader == null || reader.sizeOnly()) {
 			return StageResult.ended().withResult(skipped(NO_READER));
 		}
 		List<BodyDocument> documents = bodies.read(disclosureId)

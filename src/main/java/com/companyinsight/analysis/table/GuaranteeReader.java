@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
  * 운영자금 차입으로 보고 중립이다. 보증·대여는 일정 비율부터 악재 1, 더 크면 악재 2이고, 차입은 자기 사업에 쓰는 돈이라 더 높은 비율부터 악재 1이다.
  * 상대방이 자회사인지는 가리지 않는다(회사가 글로 적은 칸이라 코드로 나누기 어렵다).
  *
- * <p>비율 칸을 읽지 못하면 방향을 추측하지 않고 AI가 읽게 한다.
+ * <p>비율 규칙은 실제 표본으로 표를 확인한 서식(채무보증, 담보제공, 금전대여, 단기차입금 증가)에만 쓴다.
+ * 단기차입금 감소(상환)는 빚이 줄어드는 일이라 기준표대로 중립이다. 표를 확인하지 않은 서식(채무인수, 선급금 지급, 증권대여,
+ * 채무면제 등)은 추측하지 않고 AI가 읽게 한다. 비율 칸을 읽지 못해도 AI가 읽는다.
  */
 @Component
 class GuaranteeReader implements TableReader {
@@ -44,12 +46,22 @@ class GuaranteeReader implements TableReader {
 		return Set.of("H1", "H2", "H3");
 	}
 
+	/** 비율 규칙을 쓰는 서식: 제목에 이 낱말이 든다 */
+	private static final List<String> CHECKED_FORMS = List.of("채무보증", "담보제공", "금전대여", "단기차입금증가");
+
 	@Override
 	public TableReading read(ReadTarget target, BodyTables tables) {
 		Map<String, String> items = new LinkedHashMap<>();
 		List<String> unread = new ArrayList<>();
 		for (String label : ITEMS) {
 			tables.valueAfterLabel(label).filter(value -> !Cells.isBlank(value)).ifPresent(value -> items.put(label, value));
+		}
+		String title = Cells.compact(target.title());
+		if (title.contains("단기차입금감소")) {
+			return TableReading.neutral("REPAYMENT", null, items, unread);
+		}
+		if (CHECKED_FORMS.stream().noneMatch(title::contains)) {
+			return TableReading.needsAi("UNCHECKED_FORM", null, items, unread);
 		}
 		Optional<String> cell = tables.valueAfterLabel(EQUITY_RATIO);
 		cell.ifPresent(value -> items.put(EQUITY_RATIO, value));

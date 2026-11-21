@@ -49,6 +49,18 @@ class ShareCancellationReaderTest {
 	}
 
 	@Test
+	void 소각_비율의_경계는_이상_미만이다() {
+		// 100,418 ÷ 10,041,800 = 정확히 1%, 100,418 ÷ 2,008,360 = 정확히 5%
+		BodyTables at1 = TableFixtures.tablesWith(TableFixtures.CANCEL_COMMON, ">8,249,830<", ">10,041,800<", 1);
+		BodyTables at5 = TableFixtures.tablesWith(TableFixtures.CANCEL_COMMON, ">8,249,830<", ">2,008,360<", 1);
+
+		assertThat(reader.read(TARGET, at1).ratio()).isEqualByComparingTo("1.0000");
+		assertThat(reader.read(TARGET, at1).impact()).isEqualTo(2);
+		assertThat(reader.read(TARGET, at5).ratio()).isEqualByComparingTo("5.0000");
+		assertThat(reader.read(TARGET, at5).impact()).isEqualTo(3);
+	}
+
+	@Test
 	void 발행주식_총수가_비면_크기_1이고_읽지_못한_항목에_남긴다() {
 		BodyTables tables = TableFixtures.tablesWith(TableFixtures.CANCEL_COMMON, ">8,249,830<", ">-<", 1);
 

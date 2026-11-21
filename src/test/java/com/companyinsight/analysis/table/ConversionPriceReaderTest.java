@@ -39,23 +39,31 @@ class ConversionPriceReaderTest {
 	}
 
 	@Test
-	void 안내공시_서식도_읽고_시가_하락과_무상증자가_함께면_악재다() {
+	void 안내공시_서식도_읽고_시가_하락과_무상증자가_함께_적히면_AI가_읽는다() {
+		// 가액이 내려간 몫 가운데 무상증자에 따른 비례 조정과 시가 하락의 몫을 표로 나눌 수 없다
 		TableReading reading = reader.read(TARGET, TableFixtures.tables(TableFixtures.PRICE_NOTICE_DOWN));
 
-		assertThat(reading.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(reading.verdict()).isEqualTo(Verdict.NEEDS_AI);
+		assertThat(reading.caseCode()).isEqualTo("MIXED_REASON");
 		assertThat(reading.items()).containsEntry("회차 5: 조정 전 → 후", "12,213 → 6,116");
 	}
 
 	@Test
-	void 가액이_오르면_중립이다() {
+	void 시가_상승으로_가액이_오르면_중립이다() {
 		TableReading up = reader.read(TARGET, TableFixtures.tables(TableFixtures.PRICE_UP));
-		// 사유는 시가 하락이지만 두 회차 모두 가액이 올랐다(1,176 → 5,880, 784 → 2,744)
-		TableReading upWithDownReason = reader.read(TARGET, TableFixtures.tables(TableFixtures.PRICE_UP_WITH_DOWN_REASON));
 
 		assertThat(up.tone()).isEqualTo(Tone.NEUTRAL);
 		assertThat(up.caseCode()).isEqualTo("PRICE_UP");
-		assertThat(upWithDownReason.tone()).isEqualTo(Tone.NEUTRAL);
-		assertThat(upWithDownReason.items()).containsEntry("회차 12: 조정 전 → 후", "1,176 → 5,880")
+	}
+
+	@Test
+	void 가액이_올랐는데_사유가_시가_하락이면_AI가_읽는다() {
+		// 두 회차 모두 가액이 올랐다(1,176 → 5,880, 784 → 2,744). 주식 병합이 끼면 가액만으로 하향 조정인지 알 수 없다
+		TableReading reading = reader.read(TARGET, TableFixtures.tables(TableFixtures.PRICE_UP_WITH_DOWN_REASON));
+
+		assertThat(reading.verdict()).isEqualTo(Verdict.NEEDS_AI);
+		assertThat(reading.caseCode()).isEqualTo("REASON_MISMATCH");
+		assertThat(reading.items()).containsEntry("회차 12: 조정 전 → 후", "1,176 → 5,880")
 			.containsEntry("회차 13: 조정 전 → 후", "784 → 2,744");
 	}
 
@@ -77,13 +85,23 @@ class ConversionPriceReaderTest {
 	}
 
 	@Test
-	void 조정사유가_비면_읽지_못한_것으로_답한다() {
+	void 가액이_그대로면_사유가_비어도_중립이다() {
 		TableReading reading = reader.read(TARGET, TableFixtures.tables(TableFixtures.PRICE_BLANK));
+
+		assertThat(reading.tone()).isEqualTo(Tone.NEUTRAL);
+		assertThat(reading.caseCode()).isEqualTo("NO_CHANGE");
+		assertThat(reading.items()).containsEntry("회차 24: 조정 전 → 후", "1,289 → 1,289");
+	}
+
+	@Test
+	void 가액이_바뀌었는데_사유가_비면_읽지_못한_것으로_답한다() {
+		BodyTables tables = TableFixtures.tablesWith(TableFixtures.PRICE_MARKET_DOWN, "시가하락에 따른 조정", "-", 1);
+
+		TableReading reading = reader.read(TARGET, tables);
 
 		assertThat(reading.verdict()).isEqualTo(Verdict.UNREADABLE);
 		assertThat(reading.caseCode()).isEqualTo("NO_REASON");
 		assertThat(reading.unread()).containsExactly("조정사유");
-		assertThat(reading.items()).containsEntry("회차 24: 조정 전 → 후", "1,289 → 1,289");
 	}
 
 	@Test

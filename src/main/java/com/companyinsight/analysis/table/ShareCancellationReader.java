@@ -32,6 +32,11 @@ class ShareCancellationReader implements TableReader {
 	}
 
 	@Override
+	public boolean sizeOnly() {
+		return true;
+	}
+
+	@Override
 	public Set<String> typeCodes() {
 		return Set.of("E1");
 	}

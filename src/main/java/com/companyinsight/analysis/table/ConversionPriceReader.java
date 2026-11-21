@@ -15,11 +15,13 @@ import org.springframework.stereotype.Component;
  *
  * <p>"조정에 관한 사항"의 회차별 조정 전·후 가액과 "조정사유"로 정한다.
  * <ul>
- * <li>가액이 내려갔고 사유가 시가 하락(리픽싱)이면 악재다. 같은 사채로 더 많은 주식이 나온다. 사유가 "시가 변동"이어도 가액이 내려갔으면 같다
- * <li>가액이 올랐거나 그대로면 중립이다
+ * <li>가액이 내려갔고 사유가 시가 하락(리픽싱)뿐이면 악재다. 같은 사채로 더 많은 주식이 나온다. 사유가 "시가 변동"이어도 가액이 내려갔으면 같다
+ * <li>가액이 그대로면 중립이다
+ * <li>가액이 올랐고 사유에 시가 하락이 없으면(시가 상승, 병합 등) 중립이다
  * <li>가액이 내려갔어도 사유가 주식 병합·무상증자·저가 유상증자처럼 주식 수에 맞춘 비례 조정뿐이면 중립이다
- * <li>가액은 내려갔는데 사유가 시가 상승이거나, 회차마다 오르내림이 다르면 표끼리 어긋나 AI가 읽는다
- * <li>가액이나 사유를 읽지 못했거나 정해 두지 않은 사유면 읽지 못한 것으로 답한다
+ * <li>AI가 읽는 것: 시가 하락과 비례 조정이 사유에 함께 적힘(어느 몫이 큰지 표로 알 수 없다), 가액이 올랐는데 사유가 시가 하락
+ *   (병합이 끼어 가액을 견줄 수 없다), 가액이 내려갔는데 사유가 시가 상승, 회차마다 오르내림이 다름
+ * <li>가액을 읽지 못했거나, 가액이 바뀌었는데 사유가 비었거나 정해 두지 않은 사유면 읽지 못한 것으로 답한다
  * </ul>
  * 크기는 비율 없이 정해 둔 값이다.
  */
@@ -63,12 +65,10 @@ class ConversionPriceReader implements TableReader {
 		List<BigDecimal[]> prices = prices(tables, items);
 		if (prices.isEmpty()) {
 			unread.add("조정 전·후 가액");
-		}
-		if (Cells.isBlank(reason)) {
-			unread.add(REASON);
-		}
-		if (!unread.isEmpty()) {
-			return TableReading.unreadable(prices.isEmpty() ? "NO_PRICES" : "NO_REASON", items, unread);
+			if (Cells.isBlank(reason)) {
+				unread.add(REASON);
+			}
+			return TableReading.unreadable("NO_PRICES", items, unread);
 		}
 
 		int down = 0;
@@ -78,23 +78,34 @@ class ConversionPriceReader implements TableReader {
 			down += compared < 0 ? 1 : 0;
 			up += compared > 0 ? 1 : 0;
 		}
+		if (down == 0 && up == 0) {
+			return TableReading.neutral("NO_CHANGE", null, items, unread);
+		}
+		if (Cells.isBlank(reason)) {
+			unread.add(REASON);
+			return TableReading.unreadable("NO_REASON", items, unread);
+		}
 		if (down > 0 && up > 0) {
 			return TableReading.needsAi("MIXED_DIRECTION", null, items, unread);
-		}
-		if (down == 0) {
-			return TableReading.neutral(up > 0 ? "PRICE_UP" : "NO_CHANGE", null, items, unread);
 		}
 		String words = Cells.compact(reason).toLowerCase(java.util.Locale.ROOT);
 		boolean marketDown = MARKET_DOWN.stream().anyMatch(words::contains);
 		boolean marketUp = MARKET_UP.stream().anyMatch(words::contains);
+		boolean proportional = PROPORTIONAL.stream().anyMatch(words::contains);
+		if (up > 0) {
+			// 가액이 올랐는데 사유가 시가 하락이면 병합 등이 끼어 가액을 견줄 수 없다
+			return marketDown ? TableReading.needsAi("REASON_MISMATCH", null, items, unread)
+					: TableReading.neutral("PRICE_UP", null, items, unread);
+		}
 		if (marketDown && !marketUp) {
-			return TableReading.judged(Tone.NEGATIVE, size, "MARKET_DOWN", null, items, unread);
+			return proportional ? TableReading.needsAi("MIXED_REASON", null, items, unread)
+					: TableReading.judged(Tone.NEGATIVE, size, "MARKET_DOWN", null, items, unread);
 		}
 		if (marketUp) {
 			// 가액은 내려갔는데 사유는 시가 상승이다
 			return TableReading.needsAi("REASON_MISMATCH", null, items, unread);
 		}
-		if (PROPORTIONAL.stream().anyMatch(words::contains)) {
+		if (proportional) {
 			return TableReading.neutral("PROPORTIONAL", null, items, unread);
 		}
 		unread.add(REASON);

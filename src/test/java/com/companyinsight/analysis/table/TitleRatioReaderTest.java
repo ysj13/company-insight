@@ -147,6 +147,25 @@ class TitleRatioReaderTest {
 	}
 
 	@Test
+	void 경계값은_이상_미만이다() {
+		TableReading amount10 = reader.read(target("C2", "단일판매ㆍ공급계약해지", Tone.NEGATIVE),
+			TableFixtures.tablesWith(TableFixtures.SUPPLY_CANCELLED, ">12.15<", ">10.00<", 1));
+		TableReading amountBelow10 = reader.read(target("C2", "단일판매ㆍ공급계약해지", Tone.NEGATIVE),
+			TableFixtures.tablesWith(TableFixtures.SUPPLY_CANCELLED, ">12.15<", ">9.99<", 1));
+		TableReading exercise1 = reader.read(target("L2", "신주인수권행사", Tone.NEGATIVE),
+			TableFixtures.tablesWith(TableFixtures.EXERCISE_PERCENT_IN_VALUE, ">3.14%<", ">1.00%<", 1));
+		TableReading share5 = reader.read(target("L2", "신주인수권행사", Tone.NEGATIVE),
+			TableFixtures.tablesWith(TableFixtures.EXERCISE_PERCENT_IN_VALUE, ">3.14%<", ">5.00%<", 1));
+
+		assertThat(amount10.impact()).isEqualTo(2);
+		assertThat(amountBelow10.impact()).isEqualTo(1);
+		// 1%는 하한 이상이라 중립이 아니고 크기 1
+		assertThat(exercise1.tone()).isEqualTo(Tone.NEGATIVE);
+		assertThat(exercise1.impact()).isEqualTo(1);
+		assertThat(share5.impact()).isEqualTo(2);
+	}
+
+	@Test
 	void 제목이_방향을_정하지_않은_공시는_읽지_않는다() {
 		assertThatThrownBy(() -> reader.read(target("C1", "단일판매ㆍ공급계약체결", Tone.NEUTRAL),
 			TableFixtures.tables(TableFixtures.SUPPLY_CANCELLED)))

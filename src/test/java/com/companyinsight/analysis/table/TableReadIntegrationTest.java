@@ -380,6 +380,37 @@ class TableReadIntegrationTest {
 	}
 
 	@Test
+	void AI가_판정해_둔_제목_유형_공시는_표가_중립으로_덮어쓰지_않는다() {
+		byte[] small = zipOf(TableFixtures.documentsWithAll(TableFixtures.EXERCISE_PERCENT_IN_VALUE, ">3.14%<", ">0.5%<"));
+		long id = save("20261119800014", "신주인수권행사", small);
+		// 옛 유형에서 AI가 판정해 둔 것이 재분류 뒤에도 남은 경우를 흉내 낸다
+		jdbc.sql("UPDATE disclosure SET tone = 'POSITIVE', impact = 2, classified_by = 'LLM' WHERE id = :id").param("id", id).update();
+
+		drain();
+
+		assertThat(disclosure(id)).containsEntry("tone", "POSITIVE").containsEntry("impact", 2).containsEntry("classified_by", "LLM");
+		assertThat(lastRun(id).get("result").toString()).contains("\"case\": \"SMALL_EXERCISE\"");
+	}
+
+	@Test
+	void 크기만_정하는_규칙은_코드로_판정하는_갈래에서_쓰지_않는다() {
+		// 대응표가 바뀌어 소각 공시가 코드로 판정하는 유형의 갈래로 오는 경우를 흉내 낸다
+		TableReadHandler sizeOnly = new TableReadHandler(tableReads, bodyReader, impactProperties,
+			List.of(new ShareCancellationReader(impactProperties)));
+		long id = save("20261119800015", "주식소각결정", TableFixtures.zip(TableFixtures.CANCEL_COMMON));
+		jdbc.sql("UPDATE disclosure_type SET judge_method = 'CODE', default_tone = NULL WHERE code = 'E1'").update();
+		try {
+			new AnalysisWorker(jobs, List.of(sizeOnly), properties, CLOCK).drain(WorkerGroup.CODE);
+		}
+		finally {
+			jdbc.sql("UPDATE disclosure_type SET judge_method = 'TITLE', default_tone = 'POSITIVE' WHERE code = 'E1'").update();
+		}
+
+		assertThat(job(id, "READ_TABLE")).containsEntry("status", "DONE").containsEntry("outcome", "ENDED");
+		assertThat(lastRun(id).get("result").toString()).contains("NO_READER");
+	}
+
+	@Test
 	void 크기_없이_지나간_제목_유형의_공시는_규칙이_생긴_뒤_다시_줄_선다() {
 		TableReadHandler without = new TableReadHandler(tableReads, bodyReader, impactProperties, List.of());
 		long supply = save(TableFixtures.SUPPLY_CANCELLED, "단일판매ㆍ공급계약해지");

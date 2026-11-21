@@ -27,6 +27,14 @@ interface TableReader {
 	TableReading read(ReadTarget target, BodyTables tables);
 
 	/**
+	 * 제목이 방향을 정한 공시의 크기만 정하는 규칙인지. 그런 규칙은 제목으로 판정하는 유형에서만 쓰고,
+	 * 방향을 정하는 규칙은 코드로 판정하는 유형에서만 쓴다(대응표가 바뀌어 갈래가 어긋나면 규칙이 없는 것으로 본다).
+	 */
+	default boolean sizeOnly() {
+		return false;
+	}
+
+	/**
 	 * 이 유형의 요약을 AI가 아니라 코드가 읽은 항목으로 쓰는지. 그런 유형은 방향이 호재·악재로 정해져도 AI 요약으로 넘기지 않는다.
 	 */
 	default boolean summaryByCode() {
