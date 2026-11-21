@@ -80,15 +80,20 @@ public class AnalysisWorker {
 		try {
 			result = handlers.get(job.stage()).handle(job);
 		}
+		catch (StageFailedException e) {
+			log.warn("분석 작업 실패: job={}, stage={}, {} {}", job.id(), job.stage(), e.errorKind(), e.getMessage());
+			recordFailure(job, e.errorKind(), null, e.getMessage(), e.resultJson(), e.aiUsage());
+			return true;
+		}
 		catch (ExternalApiException e) {
 			// 메시지에 소스·분류·코드가 들어 있다. 스택은 필요 없다
 			log.warn("분석 작업 실패: job={}, stage={}, {}", job.id(), job.stage(), e.getMessage());
-			recordFailure(job, e.kind().name(), e.code(), e.getMessage());
+			recordFailure(job, e.kind().name(), e.code(), e.getMessage(), null, null);
 			return true;
 		}
 		catch (RuntimeException e) {
 			log.error("분석 작업 실패: job={}, stage={}", job.id(), job.stage(), e);
-			recordFailure(job, AnalysisJobRepository.INTERNAL, null, e.toString());
+			recordFailure(job, AnalysisJobRepository.INTERNAL, null, e.toString(), null, null);
 			return true;
 		}
 
@@ -101,7 +106,7 @@ public class AnalysisWorker {
 					if (!deferred.until().isAfter(now)) {
 						// 지금이나 과거로 미루면 같은 작업을 곧바로 다시 집어 끝나지 않는다
 						deferred = new StageResult.Deferred(now.plus(properties.retryDelay()), deferred.wholeGroup(),
-							deferred.kind(), deferred.code(), deferred.message());
+							deferred.kind(), deferred.code(), deferred.message(), deferred.aiUsage());
 					}
 					jobs.defer(job, deferred, now);
 					if (deferred.wholeGroup()) {
@@ -119,15 +124,16 @@ public class AnalysisWorker {
 		catch (RuntimeException e) {
 			// 끝을 기록하는 트랜잭션이 되돌려졌다. 작업은 아직 실행 중이므로 실패로 적는다
 			log.error("분석 작업의 끝을 기록하지 못했습니다: job={}, stage={}", job.id(), job.stage(), e);
-			recordFailure(job, AnalysisJobRepository.INTERNAL, null, e.toString());
+			recordFailure(job, AnalysisJobRepository.INTERNAL, null, e.toString(), null, null);
 		}
 		return true;
 	}
 
-	private void recordFailure(AnalysisJob job, String errorKind, String errorCode, String error) {
+	private void recordFailure(AnalysisJob job, String errorKind, String errorCode, String error, String resultJson,
+			AiUsage aiUsage) {
 		Instant now = clock.instant();
 		try {
-			jobs.fail(job, errorKind, errorCode, error, now.plus(properties.retryDelay()),
+			jobs.fail(job, errorKind, errorCode, error, resultJson, aiUsage, now.plus(properties.retryDelay()),
 				AnalysisQueueService.MAX_ATTEMPTS, now);
 		}
 		catch (LockLostException e) {

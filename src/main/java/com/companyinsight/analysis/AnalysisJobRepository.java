@@ -52,9 +52,11 @@ public class AnalysisJobRepository {
 
 	private static final String INSERT_RUN = """
 		INSERT INTO analysis_run (job_id, disclosure_id, stage, started_at, finished_at, outcome, enqueue_reason,
-		                          pass_reason, error_kind, error_code, error, result)
+		                          pass_reason, error_kind, error_code, error, result, setting_version_id, input_tokens,
+		                          output_tokens)
 		VALUES (:jobId, :disclosureId, :stage, :startedAt, :finishedAt, :outcome, :reason,
-		        :passReason, :errorKind, :errorCode, :error, CAST(:result AS jsonb))
+		        :passReason, :errorKind, :errorCode, :error, CAST(:result AS jsonb), :settingVersionId, :inputTokens,
+		        :outputTokens)
 		RETURNING id
 		""";
 
@@ -317,7 +319,7 @@ public class AnalysisJobRepository {
 	@Transactional
 	public void complete(AnalysisJob job, StageResult.Done done, Instant now) {
 		long runId = insertRun(job, now, done.outcome(), cut(done.passReason(), PASS_REASON_MAX), null, null, null,
-			done.resultJson());
+			done.resultJson(), done.aiUsage());
 		int updated = jdbc.sql("""
 				UPDATE analysis_job
 				   SET status = 'DONE', outcome = :outcome, locked_at = NULL, last_run_id = :runId, updated_at = :now
@@ -356,7 +358,21 @@ public class AnalysisJobRepository {
 	@Transactional
 	public void fail(AnalysisJob job, String errorKind, String errorCode, String error, Instant retryAt,
 			int maxAttempts, Instant now) {
-		countFailure(job, RunOutcome.FAILED, errorKind, errorCode, error, retryAt, maxAttempts, now);
+		countFailure(job, RunOutcome.FAILED, errorKind, errorCode, error, null, null, retryAt, maxAttempts, now);
+	}
+
+	/**
+	 * 실패를 기록한다. 실행 기록에 남길 것(대조에 실패한 AI의 답 등)과 AI 호출 기록을 함께 남긴다.
+	 *
+	 * @param resultJson 실행 기록에 남길 것. 없으면 null
+	 * @param aiUsage    AI 호출 기록. 없으면 null
+	 * @throws LockLostException 그 사이 잠금이 풀렸을 때. 아무것도 기록되지 않는다
+	 * @see #fail(AnalysisJob, String, String, String, Instant, int, Instant)
+	 */
+	@Transactional
+	public void fail(AnalysisJob job, String errorKind, String errorCode, String error, String resultJson,
+			AiUsage aiUsage, Instant retryAt, int maxAttempts, Instant now) {
+		countFailure(job, RunOutcome.FAILED, errorKind, errorCode, error, resultJson, aiUsage, retryAt, maxAttempts, now);
 	}
 
 	/**
@@ -367,7 +383,7 @@ public class AnalysisJobRepository {
 	@Transactional
 	public void defer(AnalysisJob job, StageResult.Deferred deferred, Instant now) {
 		long runId = insertRun(job, now, RunOutcome.DEFERRED, null, deferred.kind() == null ? null : deferred.kind().name(),
-			deferred.code(), deferred.message(), null);
+			deferred.code(), deferred.message(), null, deferred.aiUsage());
 		int updated = jdbc.sql("""
 				UPDATE analysis_job
 				   SET status = 'PENDING', deferrals = LEAST(deferrals + 1, :deferralsMax), run_after = :until,
@@ -432,7 +448,7 @@ public class AnalysisJobRepository {
 				rs.getObject("locked_at", OffsetDateTime.class).toInstant()))
 			.list();
 		for (AnalysisJob job : lost) {
-			countFailure(job, RunOutcome.LOST, INTERNAL, null, "끝을 기록하지 못한 실행", now, maxAttempts, now);
+			countFailure(job, RunOutcome.LOST, INTERNAL, null, "끝을 기록하지 못한 실행", null, null, now, maxAttempts, now);
 		}
 		return lost.size();
 	}
@@ -459,8 +475,8 @@ public class AnalysisJobRepository {
 
 	/** 실패 한 번을 실행 기록과 작업에 적는다. 잠금이 그대로인 줄만 고친다. */
 	private void countFailure(AnalysisJob job, RunOutcome outcome, String errorKind, String errorCode, String error,
-			Instant retryAt, int maxAttempts, Instant now) {
-		long runId = insertRun(job, now, outcome, null, errorKind, errorCode, error, null);
+			String resultJson, AiUsage aiUsage, Instant retryAt, int maxAttempts, Instant now) {
+		long runId = insertRun(job, now, outcome, null, errorKind, errorCode, error, resultJson, aiUsage);
 		int updated = jdbc.sql("""
 				UPDATE analysis_job
 				   SET status = CASE WHEN attempts + 1 >= :maxAttempts THEN 'FAILED' ELSE 'PENDING' END,
@@ -481,7 +497,7 @@ public class AnalysisJobRepository {
 	}
 
 	private long insertRun(AnalysisJob job, Instant now, RunOutcome outcome, String passReason, String errorKind,
-			String errorCode, String error, String resultJson) {
+			String errorCode, String error, String resultJson, AiUsage aiUsage) {
 		return jdbc.sql(INSERT_RUN)
 			.param("jobId", job.id())
 			.param("disclosureId", job.disclosureId())
@@ -495,6 +511,9 @@ public class AnalysisJobRepository {
 			.param("errorCode", cut(errorCode, ERROR_CODE_MAX))
 			.param("error", cut(error, ERROR_MAX))
 			.param("result", resultJson)
+			.param("settingVersionId", aiUsage == null ? null : aiUsage.settingVersionId())
+			.param("inputTokens", aiUsage == null ? null : aiUsage.inputTokens())
+			.param("outputTokens", aiUsage == null ? null : aiUsage.outputTokens())
 			.query(Long.class)
 			.single();
 	}

@@ -11,7 +11,7 @@ public sealed interface StageResult {
 
 	/** 이 단계에서 끝났다. 다음 단계가 없다. */
 	static Done ended() {
-		return new Done(RunOutcome.ENDED, null, null, List.of(), null);
+		return new Done(RunOutcome.ENDED, null, null, List.of(), null, null);
 	}
 
 	/**
@@ -21,17 +21,17 @@ public sealed interface StageResult {
 	 * @param next       줄 세울 단계. 하나 이상
 	 */
 	static Done passed(String passReason, Next... next) {
-		return new Done(RunOutcome.PASSED, passReason, null, List.of(next), null);
+		return new Done(RunOutcome.PASSED, passReason, null, List.of(next), null, null);
 	}
 
 	/** 본문이 없는 공시다. */
 	static Done noBody() {
-		return new Done(RunOutcome.NO_BODY, null, null, List.of(), null);
+		return new Done(RunOutcome.NO_BODY, null, null, List.of(), null, null);
 	}
 
 	/** 판정을 보류한다. */
 	static Done held() {
-		return new Done(RunOutcome.HELD, null, null, List.of(), null);
+		return new Done(RunOutcome.HELD, null, null, List.of(), null, null);
 	}
 
 	/**
@@ -43,7 +43,7 @@ public sealed interface StageResult {
 	 * @param message 설명
 	 */
 	static Deferred deferred(Instant until, ErrorKind kind, String code, String message) {
-		return new Deferred(until, false, kind, code, message);
+		return new Deferred(until, false, kind, code, message, null);
 	}
 
 	/**
@@ -51,7 +51,7 @@ public sealed interface StageResult {
 	 * 하루 한도처럼 다음 작업을 꺼내도 같은 답이 올 때 쓴다.
 	 */
 	static Deferred deferredAll(Instant until, ErrorKind kind, String code, String message) {
-		return new Deferred(until, true, kind, code, message);
+		return new Deferred(until, true, kind, code, message, null);
 	}
 
 	/**
@@ -62,9 +62,10 @@ public sealed interface StageResult {
 	 * @param resultJson 실행 기록에 남길 것(JSON 글). 없으면 null
 	 * @param next       줄 세울 다음 단계. 넘겼을 때만 있고, 넘겼으면 하나 이상이다
 	 * @param writes     끝을 기록하는 트랜잭션 안에서 함께 실행할 DB 쓰기 (본문 저장, 공시의 판정 고치기 등). 없으면 null
+	 * @param aiUsage    AI를 불렀으면 그 기록. 아니면 null
 	 */
-	record Done(RunOutcome outcome, String passReason, String resultJson, List<Next> next, Runnable writes)
-			implements StageResult {
+	record Done(RunOutcome outcome, String passReason, String resultJson, List<Next> next, Runnable writes,
+			AiUsage aiUsage) implements StageResult {
 
 		public Done {
 			next = List.copyOf(next);
@@ -78,12 +79,17 @@ public sealed interface StageResult {
 
 		/** 실행 기록에 남길 것을 더한다. */
 		public Done withResult(String json) {
-			return new Done(outcome, passReason, json, next, writes);
+			return new Done(outcome, passReason, json, next, writes, aiUsage);
 		}
 
 		/** 끝을 기록하는 트랜잭션 안에서 함께 실행할 DB 쓰기를 더한다. */
 		public Done withWrites(Runnable dbWrites) {
-			return new Done(outcome, passReason, resultJson, next, dbWrites);
+			return new Done(outcome, passReason, resultJson, next, dbWrites, aiUsage);
+		}
+
+		/** AI 호출 기록을 더한다. */
+		public Done withAiUsage(AiUsage usage) {
+			return new Done(outcome, passReason, resultJson, next, writes, usage);
 		}
 	}
 
@@ -95,9 +101,15 @@ public sealed interface StageResult {
 	 * @param kind       미룬 이유의 분류
 	 * @param code       외부 소스의 원래 코드. 없으면 null
 	 * @param message    설명
+	 * @param aiUsage    AI를 불렀으면 그 기록(응답을 받지 못해 토큰은 없다). 아니면 null
 	 */
-	record Deferred(Instant until, boolean wholeGroup, ErrorKind kind, String code, String message)
+	record Deferred(Instant until, boolean wholeGroup, ErrorKind kind, String code, String message, AiUsage aiUsage)
 			implements StageResult {
+
+		/** AI 호출 기록을 더한다. */
+		public Deferred withAiUsage(AiUsage usage) {
+			return new Deferred(until, wholeGroup, kind, code, message, usage);
+		}
 	}
 
 	/**
